@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, NavLink } from 'react-router-dom'
 import './Navbar.css'
 
 function Navbar() {
@@ -31,9 +31,14 @@ function Navbar() {
 
         {/* Center Navigation */}
         <div className="navbar-menu">
-          <Link to="/games" className="navbar-link">
+          <NavLink
+            to="/games"
+            className={({ isActive }) =>
+              `navbar-link${isActive ? ' active' : ''}`
+            }
+          >
             Games
-          </Link>
+          </NavLink>
         </div>
 
         {/* Right Navigation */}

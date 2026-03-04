@@ -16,13 +16,16 @@
   --text-color: var(--text-color-dark);
 
   --primary-gradient-dark: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  --primary-gradient-light: linear-gradient(135deg, #00ffcc 0%, #00ccff 100%);
+  --primary-gradient-light: linear-gradient(135deg, #667eea 0%, #764ba2 100%); /* same purple for light theme */
   --primary-gradient: var(--primary-gradient-dark);
 
   /* single-color fallback for text/buttons */
   --primary-color-dark: #667eea;
-  --primary-color-light: #00aaff;
+  --primary-color-light: #667eea; /* identical purple in both themes */
   --primary-color: var(--primary-color-dark);
+
+  /* hover shade for links/buttons */
+  --primary-hover: #5a4cc2;
 
   --card-bg-dark: #0f1220;
   --card-bg-light: #ffffff;
@@ -38,6 +41,7 @@ body.light {
   --text-color: var(--text-color-light);
   --primary-gradient: var(--primary-gradient-light);
   --primary-color: var(--primary-color-light);
+  --primary-hover: #5a4cc2;
   --card-bg: var(--card-bg-light);
   --input-bg: var(--input-bg-light);
 }
