@@ -3,9 +3,9 @@
   line-height: 1.5;
   font-weight: 400;
 
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #f5f7fa;
+  color-scheme: dark;
+  color: rgba(255, 255, 255, 0.95);
+  background-color: #0b0715;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -15,11 +15,15 @@
 
 a {
   font-weight: 500;
-  color: #667eea;
+  color: #bfc8ff;
   text-decoration: inherit;
 }
 a:hover {
-  color: #764ba2;
+  color: #fff;
+}
+
+#root {
+  width: 100%;
 }
 
 body {
@@ -27,7 +31,7 @@ body {
   display: flex;
   min-width: 320px;
   min-height: 100vh;
-  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  background: linear-gradient(135deg, #090312 0%, #140521 50%, #1b0630 100%);
 }
 
 #root {
