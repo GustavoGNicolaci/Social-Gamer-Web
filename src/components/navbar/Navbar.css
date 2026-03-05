@@ -176,7 +176,7 @@
   left: 50%;
   width: 0;
   height: 0;
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(102, 126, 234, 0.3);
   border-radius: 50%;
   transform: translate(-50%, -50%);
   transition: width 0.6s, height 0.6s;
@@ -198,27 +198,47 @@
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
 }
 
-.register-btn {
+.auth-btn {
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.05));
   color: white;
   border: 2px solid rgba(255, 255, 255, 0.3);
 }
 
-.register-btn:hover {
+.auth-btn:hover {
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.25), rgba(255, 255, 255, 0.15));
   border-color: rgba(255, 255, 255, 0.5);
-}
-
-.login-btn {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), white);
-  color: #667eea;
-  border: 2px solid white;
-}
-
-.login-btn:hover {
-  background: linear-gradient(135deg, white, rgba(255, 255, 255, 0.85));
-  color: #764ba2;
+  transform: translateY(-3px);
   box-shadow: 0 12px 24px rgba(102, 126, 234, 0.3);
+}
+
+/* User Avatar Button */
+.user-avatar-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2px solid white;
+  background: transparent;
+  cursor: pointer;
+  padding: 2px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.user-avatar-btn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 8px 20px rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.8);
+}
+
+.user-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
 }
 
 /* Theme Button */
@@ -301,13 +321,7 @@
     font-size: 0.9rem;
   }
 
-  .register-btn span {
-    display: none;
-  }
 
-  .register-btn {
-    padding: 0.6rem 0.8rem;
-  }
 }
 
 @media (max-width: 480px) {
@@ -347,17 +361,12 @@
     font-size: 0.8rem;
   }
 
-  .login-btn span,
-  .register-btn span {
+  .auth-btn span {
     display: none;
   }
 
-  .login-btn {
+  .auth-btn {
     padding: 0.5rem 0.6rem;
-  }
-
-  .register-btn {
-    display: none;
   }
 
   .theme-btn {

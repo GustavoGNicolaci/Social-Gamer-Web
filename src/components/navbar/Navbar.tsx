@@ -7,6 +7,8 @@ function Navbar() {
   const [theme, setTheme] = useState<'dark' | 'light'>(() =>
     document.body.classList.contains('light') ? 'light' : 'dark'
   )
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [userAvatar] = useState<string | null>(null)
 
   useEffect(() => {
     if (theme === 'light') {
@@ -56,12 +58,16 @@ function Navbar() {
           <button className="theme-btn" onClick={toggleTheme} title="Alternar tema">
             <span className="theme-icon">{theme === 'dark' ? '☀️' : '🌙'}</span>
           </button>
-          <Link to="/register" className="navbar-button register-btn">
-            <span>Registrar</span>
-          </Link>
-          <Link to="/login" className="navbar-button login-btn">
-            <span>Login</span>
-          </Link>
+          
+          {isLoggedIn && userAvatar ? (
+            <button className="user-avatar-btn" onClick={() => setIsLoggedIn(false)}>
+              <img src={userAvatar} alt="Avatar do usuário" className="user-avatar-img" />
+            </button>
+          ) : (
+            <Link to="/login" className="navbar-button auth-btn">
+              <span>Login/Registro</span>
+            </Link>
+          )}
         </div>
       </div>
     </nav>
