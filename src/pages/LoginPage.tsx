@@ -52,7 +52,7 @@ function LoginPage() {
           </form>
 
           <div className="login-footer">
-            <p>Não tem conta? <a href="#signup">Registre-se aqui</a></p>
+            <p>Não tem conta? <a href="/register">Registre-se aqui</a></p>
             <p><a href="#forgot">Esqueceu sua senha?</a></p>
           </div>
         </div>
