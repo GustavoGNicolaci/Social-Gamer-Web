@@ -75,6 +75,7 @@ body.light {
 .page-container {
   flex: 1;
   padding: 2rem;
+  padding-top: calc(2rem + 80px);
   animation: fadeIn 0.3s ease-in;
 }
 

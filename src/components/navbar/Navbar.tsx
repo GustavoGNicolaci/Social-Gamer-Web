@@ -26,28 +26,41 @@ function Navbar() {
         {/* Logo */}
         <Link to="/" className="navbar-logo">
           <span className="logo-icon">🎮</span>
-          Social Gamer
+          <span className="logo-text">Social Gamer</span>
         </Link>
 
         {/* Center Navigation */}
         <div className="navbar-menu">
+          <NavLink
+            to="/"
+            className={({ isActive }) =>
+              `navbar-link${isActive ? ' active' : ''}`
+            }
+          >
+            <span className="nav-text">Home</span>
+            <span className="nav-underline"></span>
+          </NavLink>
           <NavLink
             to="/games"
             className={({ isActive }) =>
               `navbar-link${isActive ? ' active' : ''}`
             }
           >
-            Games
+            <span className="nav-text">Games</span>
+            <span className="nav-underline"></span>
           </NavLink>
         </div>
 
         {/* Right Navigation */}
         <div className="navbar-right">
-          <button className="theme-btn" onClick={toggleTheme}>
-            {theme === 'dark' ? 'Light' : 'Dark'}
+          <button className="theme-btn" onClick={toggleTheme} title="Alternar tema">
+            <span className="theme-icon">{theme === 'dark' ? '☀️' : '🌙'}</span>
           </button>
+          <Link to="/register" className="navbar-button register-btn">
+            <span>Registrar</span>
+          </Link>
           <Link to="/login" className="navbar-button login-btn">
-            Login
+            <span>Login</span>
           </Link>
         </div>
       </div>
