@@ -339,7 +339,12 @@ body.light {
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.3s ease;
-  font-size: 1.5rem;
+}
+
+.avatar-image {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
 }
 
 .avatar-btn:hover {

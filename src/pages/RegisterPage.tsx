@@ -1,22 +1,23 @@
 import { useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
+import reactLogo from '../assets/react.svg'
 
 interface AvatarIcon {
   id: string
-  emoji: string
+  image: string
   name: string
 }
 
 const DEFAULT_AVATARS: AvatarIcon[] = [
-  { id: 'warrior', emoji: '🗡️', name: 'Guerreiro' },
-  { id: 'wizard', emoji: '🧙', name: 'Mago' },
-  { id: 'archer', emoji: '🏹', name: 'Arqueiro' },
-  { id: 'rogue', emoji: '🐱', name: 'Gatuno' },
-  { id: 'paladin', emoji: '⚔️', name: 'Paladino' },
-  { id: 'ranger', emoji: '🦌', name: 'Caçador' },
-  { id: 'cleric', emoji: '✨', name: 'Clérigo' },
-  { id: 'bard', emoji: '🎸', name: 'Bardo' },
+  { id: 'warrior', image: reactLogo, name: 'Guerreiro' },
+  { id: 'wizard', image: reactLogo, name: 'Mago' },
+  { id: 'archer', image: reactLogo, name: 'Arqueiro' },
+  { id: 'rogue', image: reactLogo, name: 'Gatuno' },
+  { id: 'paladin', image: reactLogo, name: 'Paladino' },
+  { id: 'ranger', image: reactLogo, name: 'Caçador' },
+  { id: 'cleric', image: reactLogo, name: 'Clérigo' },
+  { id: 'bard', image: reactLogo, name: 'Bardo' },
 ]
 
 function RegisterPage() {
@@ -221,7 +222,7 @@ function RegisterPage() {
                     }}
                     title={avatar.name}
                   >
-                    <span className="avatar-emoji">{avatar.emoji}</span>
+                    <img src={avatar.image} alt={avatar.name} className="avatar-image" />
                   </button>
                 ))}
               </div>
