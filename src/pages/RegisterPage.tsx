@@ -212,10 +212,7 @@ function RegisterPage() {
     <div className="page-container">
       <div className="register-container">
         <div className="register-box">
-          <div className="box-header">
-            <div className="icon-circle">🛡️</div>
-            <h1>Criar Conta</h1>
-          </div>
+          <h1>Criar Conta</h1>
           <p>Junte-se à comunidade!</p>
 
           <form onSubmit={handleRegister}>
