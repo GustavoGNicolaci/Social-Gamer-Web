@@ -18,6 +18,7 @@
   --primary-gradient-dark: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   --primary-gradient-light: linear-gradient(135deg, #667eea 0%, #764ba2 100%); /* same purple for light theme */
   --primary-gradient: var(--primary-gradient-dark);
+  /*--primary-gradient-hover: linear-gradient(135deg, #5a4cc2 0%, #6b3fa8 100%);*/
 
   /* single-color fallback for text/buttons */
   --primary-color-dark: #667eea;
