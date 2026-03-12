@@ -212,11 +212,16 @@ function RegisterPage() {
     <div className="page-container">
       <div className="register-container">
         <div className="register-box">
-          <h1>Criar Conta 🎮</h1>
-          <p>Junte-se à comunidade e comece a jogar!</p>
+          <div className="box-header">
+            <div className="icon-circle">🛡️</div>
+            <h1>Criar Conta</h1>
+          </div>
+          <p>Junte-se à comunidade!</p>
 
           <form onSubmit={handleRegister}>
             {/* Username */}
+            <div className="form-columns">
+              <div className="left-column">
             <div className="form-group">
               <label htmlFor="username">Nome de usuário</label>
               <input
@@ -292,6 +297,8 @@ function RegisterPage() {
                 <span className="error-message">{errors.confirmPassword}</span>
               )}
             </div>
+            </div> {/* end left-column */}
+            <div className="right-column">
 
             {/* Avatar Selection */}
             <div className="form-group">
@@ -350,6 +357,8 @@ function RegisterPage() {
                 </button>
               </div>
             )}
+            </div> {/* end right-column */}
+            </div> {/* end form-columns */}
 
             {errors.submit && <div className="error-banner">{errors.submit}</div>}
 

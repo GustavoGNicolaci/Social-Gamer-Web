@@ -31,8 +31,8 @@ function LoginPage() {
     <div className="page-container">
       <div className="login-container">
         <div className="login-box">
-          <h1>Login 🎮</h1>
-          <p>Entre em sua conta para começar a jogar</p>
+          <h1>Login</h1>
+          <p>Entre em sua conta</p>
 
           <form onSubmit={handleLogin}>
             {errorMessage && <div className="error-banner">{errorMessage}</div>}
