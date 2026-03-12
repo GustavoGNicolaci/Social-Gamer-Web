@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Link, NavLink } from 'react-router-dom'
+import { Link, NavLink, useNavigate } from 'react-router-dom'
+import { useAuth } from '../../contexts/AuthContext'
 import './Navbar.css'
 
 function Navbar() {
@@ -7,8 +8,14 @@ function Navbar() {
   const [theme, setTheme] = useState<'dark' | 'light'>(() =>
     document.body.classList.contains('light') ? 'light' : 'dark'
   )
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
-  const [userAvatar] = useState<string | null>(null)
+
+  const { user, profile, logout } = useAuth()
+  const navigate = useNavigate()
+  const [showMenu, setShowMenu] = useState(false)
+
+  // determine avatar url to display
+  const avatarUrl = profile?.avatar_url || ''
+  const displayName = profile?.username || user?.email || ''
 
   useEffect(() => {
     if (theme === 'light') {
@@ -58,11 +65,36 @@ function Navbar() {
           <button className="theme-btn" onClick={toggleTheme} title="Alternar tema">
             <span className="theme-icon">{theme === 'dark' ? '☀️' : '🌙'}</span>
           </button>
-          
-          {isLoggedIn && userAvatar ? (
-            <button className="user-avatar-btn" onClick={() => setIsLoggedIn(false)}>
-              <img src={userAvatar} alt="Avatar do usuário" className="user-avatar-img" />
-            </button>
+
+          {user ? (
+            <div className="user-menu">
+              <button
+                className="user-avatar-btn"
+                onClick={() => setShowMenu((prev) => !prev)}
+                title="Perfil"
+              >
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt="Avatar do usuário" className="user-avatar-img" />
+                ) : (
+                  <span className="avatar-placeholder">👤</span>
+                )}
+                <span className="user-name">{displayName}</span>
+              </button>
+              {showMenu && (
+                <div className="user-dropdown">
+                  <button
+                    className="logout-btn"
+                    onClick={async () => {
+                      await logout()
+                      setShowMenu(false)
+                      navigate('/')
+                    }}
+                  >
+                    Sair
+                  </button>
+                </div>
+              )}
+            </div>
           ) : (
             <Link to="/login" className="navbar-button auth-btn">
               <span>Login/Registro</span>

@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
+import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../supabase-client'
 import reactLogo from '../assets/react.svg'
 
@@ -22,6 +23,16 @@ const DEFAULT_AVATARS: AvatarIcon[] = [
 ]
 
 function RegisterPage() {
+  const { user } = useAuth()
+  const navigate = useNavigate()
+
+  // if already logged in, send to home
+  useEffect(() => {
+    if (user) {
+      navigate('/')
+    }
+  }, [user, navigate])
+
   const [formData, setFormData] = useState({
     username: '',
     name: '',
@@ -34,7 +45,6 @@ function RegisterPage() {
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
   const [useCustomPhoto, setUseCustomPhoto] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
-  const navigate = useNavigate()
 
   const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
@@ -149,10 +159,15 @@ function RegisterPage() {
       }
 
       // 2. se houver foto customizada, enviar para storage
-      let avatarUrl: string | null = selectedAvatar
+      // determine final avatar URL - if user chose a default icon, use its image
+      let avatarUrl: string | null = null
       if (useCustomPhoto && photoFile) {
         const uploadedUrl = await uploadAvatar(photoFile, user.id)
         if (uploadedUrl) avatarUrl = uploadedUrl
+      } else {
+        // find the image associated with the selected default avatar id
+        const found = DEFAULT_AVATARS.find((a) => a.id === selectedAvatar)
+        avatarUrl = found ? found.image : null
       }
 
       // 3. inserir perfil na tabela usuarios
@@ -178,7 +193,12 @@ function RegisterPage() {
       }
 
       // redireciona após registro bem-sucedido
-      navigate('/login')
+      // se a sessão já estiver ativa (usuário logado automaticamente), vai para home
+      if (signUpData.session) {
+        navigate('/')
+      } else {
+        navigate('/login')
+      }
     } catch (error) {
       console.error('Erro ao registrar:', error)
       setErrors((prev) => ({
@@ -211,7 +231,7 @@ function RegisterPage() {
               {errors.username && <span className="error-message">{errors.username}</span>}
             </div>
 
-          {/* Nome */}
+            {/* Nome */}
             <div className="form-group">
               <label htmlFor="name">Nome Completo</label>
               <input
@@ -341,9 +361,9 @@ function RegisterPage() {
           <div className="register-footer">
             <p>
               Já tem conta?{' '}
-              <a href="/login" className="register-link">
+              <Link to="/login" className="register-link">
                 Faça login aqui
-              </a>
+              </Link>
             </p>
           </div>
         </div>

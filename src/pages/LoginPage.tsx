@@ -1,16 +1,29 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { useNavigate, Link } from 'react-router-dom'
+import { useAuth } from '../contexts/AuthContext'
 
 function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const navigate = useNavigate()
+  const { login, user } = useAuth()
 
-  const handleLogin = (e: React.FormEvent) => {
+  useEffect(() => {
+    if (user) {
+      navigate('/')
+    }
+  }, [user, navigate])
+
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    // Aqui você implementaria a lógica de autenticação real
-    console.log('Login attempt:', { email, password })
-    // Redirecionar para home após login bem-sucedido
+    setErrorMessage(null)
+
+    const { error } = await login(email, password)
+    if (error) {
+      setErrorMessage(error.message || 'Falha no login')
+      return
+    }
     navigate('/')
   }
 
@@ -20,8 +33,9 @@ function LoginPage() {
         <div className="login-box">
           <h1>Login 🎮</h1>
           <p>Entre em sua conta para começar a jogar</p>
-          
+
           <form onSubmit={handleLogin}>
+            {errorMessage && <div className="error-banner">{errorMessage}</div>}
             <div className="form-group">
               <label htmlFor="email">Email</label>
               <input
@@ -52,7 +66,7 @@ function LoginPage() {
           </form>
 
           <div className="login-footer">
-            <p>Não tem conta? <a href="/register">Registre-se aqui</a></p>
+            <p>Não tem conta? <Link to="/register">Registre-se aqui</Link></p>
             <p><a href="#forgot">Esqueceu sua senha?</a></p>
           </div>
         </div>
