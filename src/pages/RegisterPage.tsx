@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { supabase } from '../supabase-client'
 import reactLogo from '../assets/react.svg'
 
 interface AvatarIcon {
@@ -22,6 +23,7 @@ const DEFAULT_AVATARS: AvatarIcon[] = [
 
 function RegisterPage() {
   const [formData, setFormData] = useState({
+    username: '',
     name: '',
     email: '',
     password: '',
@@ -40,7 +42,6 @@ function RegisterPage() {
       ...prev,
       [name]: value,
     }))
-    // Clear error for this field when user starts typing
     if (errors[name]) {
       setErrors((prev) => ({
         ...prev,
@@ -61,6 +62,7 @@ function RegisterPage() {
       }
 
       setPhotoFile(file)
+      setUseCustomPhoto(true)
       const reader = new FileReader()
       reader.onloadend = () => {
         setPhotoPreview(reader.result as string)
@@ -76,8 +78,11 @@ function RegisterPage() {
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {}
 
+    if (!formData.username.trim()) {
+      newErrors.username = 'Nome de usuário é obrigatório'
+    }
     if (!formData.name.trim()) {
-      newErrors.name = 'Nome é obrigatório'
+      newErrors.name = 'Nome completo é obrigatório'
     }
     if (!formData.email.trim()) {
       newErrors.email = 'Email é obrigatório'
@@ -99,6 +104,24 @@ function RegisterPage() {
     return Object.keys(newErrors).length === 0
   }
 
+  const uploadAvatar = async (file: File, userId: string): Promise<string | null> => {
+    const filePath = `avatars/${userId}-${Date.now()}`
+    const { error } = await supabase.storage
+      .from('avatars')
+      .upload(filePath, file)
+
+    if (error) {
+      console.error('Error uploading avatar:', error.message)
+      return null
+    }
+
+    const { data } = await supabase.storage
+      .from('avatars')
+      .getPublicUrl(filePath)
+
+    return data.publicUrl
+  }
+
   const handleRegister = async (e: FormEvent) => {
     e.preventDefault()
 
@@ -107,26 +130,54 @@ function RegisterPage() {
     }
 
     try {
-      // TODO: Integrar com Supabase
-      const registrationData = {
-        name: formData.name,
+      // 1. criar conta no auth do Supabase
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
-        avatar: useCustomPhoto ? 'custom' : selectedAvatar,
-        photo: photoFile || null,
-      }
-
-      console.log('Registrando usuário:', {
-        name: registrationData.name,
-        email: registrationData.email,
-        avatar: registrationData.avatar,
-        hasPhoto: !!registrationData.photo,
       })
 
-      // Simular sucesso por enquanto
-      // await registerWithSupabase(registrationData)
+      if (signUpError) {
+        console.error('Error signing up:', signUpError.message)
+        setErrors((prev) => ({ ...prev, submit: signUpError.message }))
+        return
+      }
 
-      // Redirecionar para login após registro bem-sucedido
+      const user = signUpData.user
+      if (!user) {
+        setErrors((prev) => ({ ...prev, submit: 'Falha ao criar usuário' }))
+        return
+      }
+
+      // 2. se houver foto customizada, enviar para storage
+      let avatarUrl: string | null = selectedAvatar
+      if (useCustomPhoto && photoFile) {
+        const uploadedUrl = await uploadAvatar(photoFile, user.id)
+        if (uploadedUrl) avatarUrl = uploadedUrl
+      }
+
+      // 3. inserir perfil na tabela usuarios
+      const { error: insertError } = await supabase.from('usuarios').insert({
+        id: user.id,
+        username: formData.username,
+        nome_completo: formData.name,
+        avatar_url: avatarUrl,
+        bio: '',
+        data_cadastro: new Date().toISOString(),
+        configuracoes_privacidade: {},
+      })
+
+      if (insertError) {
+        console.error('Error inserting profile:', insertError.message)
+        // handle duplicate username constraint
+        if (insertError.details?.includes('Key (username)')) {
+          setErrors((prev) => ({ ...prev, username: 'Nome de usuário já existe' }))
+        } else {
+          setErrors((prev) => ({ ...prev, submit: insertError.message }))
+        }
+        return
+      }
+
+      // redireciona após registro bem-sucedido
       navigate('/login')
     } catch (error) {
       console.error('Erro ao registrar:', error)
@@ -145,14 +196,29 @@ function RegisterPage() {
           <p>Junte-se à comunidade e comece a jogar!</p>
 
           <form onSubmit={handleRegister}>
-            {/* Nome */}
+            {/* Username */}
             <div className="form-group">
-              <label htmlFor="name">Nome</label>
+              <label htmlFor="username">Nome de usuário</label>
+              <input
+                type="text"
+                id="username"
+                name="username"
+                placeholder="Seu username (único)"
+                value={formData.username}
+                onChange={handleInputChange}
+                className={errors.username ? 'input-error' : ''}
+              />
+              {errors.username && <span className="error-message">{errors.username}</span>}
+            </div>
+
+          {/* Nome */}
+            <div className="form-group">
+              <label htmlFor="name">Nome Completo</label>
               <input
                 type="text"
                 id="name"
                 name="name"
-                placeholder="Seu nome ou nickname"
+                placeholder="Seu Nome Completo"
                 value={formData.name}
                 onChange={handleInputChange}
                 className={errors.name ? 'input-error' : ''}
