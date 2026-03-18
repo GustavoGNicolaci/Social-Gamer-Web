@@ -10,7 +10,7 @@ function HomePage() {
       rating: 5,
       review: 'Uma obra-prima! A narrativa é incrível e os gráficos ainda impressionam.',
       time: '2 horas atrás',
-      avatar: '🎮'
+      avatar: ''
     },
     {
       id: 2,
@@ -19,7 +19,7 @@ function HomePage() {
       rating: 4,
       review: 'Muito bom, mas teve alguns bugs no lançamento. Vale a pena agora com as atualizações.',
       time: '5 horas atrás',
-      avatar: '👾'
+      avatar: ''
     },
     {
       id: 3,
@@ -28,15 +28,15 @@ function HomePage() {
       rating: 5,
       review: 'Jogo viciante! Mecânicas perfeitas e replayability alta.',
       time: '1 dia atrás',
-      avatar: '🕹️'
+      avatar: ''
     }
   ];
 
   // Mock data for trending games
   const trendingGames = [
-    { id: 1, name: 'Elden Ring', genre: 'RPG', rating: 4.8, icon: '⚔️' },
-    { id: 2, name: 'Baldur\'s Gate 3', genre: 'RPG', rating: 4.9, icon: '🧙' },
-    { id: 3, name: 'God of War Ragnarök', genre: 'Ação', rating: 4.7, icon: '🪓' }
+    { id: 1, name: 'Elden Ring', genre: 'RPG', rating: 4.8, icon: '' },
+    { id: 2, name: 'Baldur\'s Gate 3', genre: 'RPG', rating: 4.9, icon: '' },
+    { id: 3, name: 'God of War Ragnarök', genre: 'Ação', rating: 4.7, icon: '' }
   ];
 
   return (
