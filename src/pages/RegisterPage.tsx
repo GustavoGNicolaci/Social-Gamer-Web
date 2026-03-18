@@ -115,9 +115,9 @@ function RegisterPage() {
   }
 
   const uploadAvatar = async (file: File, userId: string): Promise<string | null> => {
-    const filePath = `avatars/${userId}-${Date.now()}`
+    const filePath = `${userId}/avatars/${Date.now()}-${file.name}`
     const { error } = await supabase.storage
-      .from('avatars')
+      .from('user-uploads')
       .upload(filePath, file)
 
     if (error) {
@@ -126,7 +126,7 @@ function RegisterPage() {
     }
 
     const { data } = await supabase.storage
-      .from('avatars')
+      .from('user-uploads')
       .getPublicUrl(filePath)
 
     return data.publicUrl
