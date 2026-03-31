@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { supabase } from '../supabase-client';
 
 interface Game {
@@ -43,24 +44,20 @@ function GamesPage() {
   return (
     <div className="page-container">
       <div className="page-content">
-        <h1>Jogos Populares 🎮</h1>
-        <p>Veja os jogos mais jogados em nossa comunidade</p>
-        
+        <h1>Jogos</h1>
+        <p>Confira os jogos cadastrados no nosso catálogo</p>
+
         <div className="games-grid">
           {games.map((game) => (
-            <div key={game.id} className="game-card">
-              <div className="game-header">
-                {game.capa_url && <img src={game.capa_url} alt={game.titulo} className="game-cover" />}
-                <h3>{game.titulo}</h3>
-              </div>
-              <div className="game-info">
-                <p><strong>Desenvolvedores:</strong> {Array.isArray(game.desenvolvedores) ? game.desenvolvedores.join(', ') : game.desenvolvedores}</p>
-                <p><strong>Gêneros:</strong> {Array.isArray(game.generos) ? game.generos.join(', ') : game.generos}</p>
-                <p><strong>Data de Lançamento:</strong> {new Date(game.data_lancamento).toLocaleDateString('pt-BR')}</p>
-                <p><strong>Plataformas:</strong> {Array.isArray(game.plataformas) ? game.plataformas.join(', ') : game.plataformas}</p>
-                <p><strong>Descrição:</strong> {game.descricao}</p>
-              </div>
-              <button className="game-button">Ver Comunidade</button>
+            <div key={game.id} className="game-card minimal">
+              {game.capa_url && <img src={game.capa_url} alt={game.titulo} className="game-cover" />}
+              <h3>{game.titulo}</h3>
+              <p className="game-tags">
+                {Array.isArray(game.generos) ? game.generos.join(', ') : game.generos}
+              </p>
+              <Link to={`/games/${game.id}`} className="game-button">
+                Ver mais detalhes
+              </Link>
             </div>
           ))}
         </div>
