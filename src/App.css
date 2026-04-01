@@ -184,6 +184,24 @@ body.light {
   margin-bottom: 1rem;
 }
 
+/* Game tags */
+.game-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.genre-chip {
+  background: var(--primary-gradient);
+  color: white;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  display: inline-block;
+}
+
 /* Pagination */
 .pagination {
   display: flex;

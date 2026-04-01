@@ -293,8 +293,10 @@ function GamesPage() {
                 <div key={game.id} className="game-card minimal">
                   {game.capa_url && <img src={game.capa_url} alt={game.titulo} className="game-cover" />}
                   <h3>{game.titulo}</h3>
-                  <p className="game-tags">
-                    {displayedGenres.join(', ')}
+                  <div className="game-tags">
+                    {displayedGenres.map((genre, index) => (
+                      <span key={index} className="genre-chip">{genre}</span>
+                    ))}
                     {hasMoreGenres && (
                       <button
                         className="more-genres-btn"
@@ -306,7 +308,7 @@ function GamesPage() {
                         +
                       </button>
                     )}
-                  </p>
+                  </div>
                   <Link to={`/games/${game.id}`} className="game-button">
                     Ver mais detalhes
                   </Link>
