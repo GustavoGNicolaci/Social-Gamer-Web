@@ -184,6 +184,39 @@ body.light {
   margin-bottom: 1rem;
 }
 
+/* Pagination */
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 2rem;
+}
+
+.pagination button {
+  background: var(--primary-gradient);
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.pagination button:hover:not(:disabled) {
+  opacity: 0.8;
+}
+
+.pagination button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pagination span {
+  color: var(--text-color);
+  font-size: 1rem;
+}
+
 /* Detalhes do Jogo */
 .game-details {
   display: grid;

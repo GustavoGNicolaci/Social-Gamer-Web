@@ -24,6 +24,8 @@ function GamesPage() {
   const [customGenre, setCustomGenre] = useState('');
   const [customPlatform, setCustomPlatform] = useState('');
   const [customDeveloper, setCustomDeveloper] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 9;
 
   useEffect(() => {
     const fetchGames = async () => {
@@ -55,6 +57,10 @@ function GamesPage() {
     };
   }, [filtersDropdownOpen]);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, selectedGenres, selectedPlatforms, selectedDevelopers]);
+
   const allGenres = Array.from(new Set(games.flatMap((game) => (Array.isArray(game.generos) ? game.generos : game.generos ? [game.generos] : [])))).sort();
   const allPlatforms = Array.from(new Set(games.flatMap((game) => (Array.isArray(game.plataformas) ? game.plataformas : game.plataformas ? [game.plataformas] : [])))).sort();
   const allDevelopers = Array.from(new Set(games.flatMap((game) => (Array.isArray(game.desenvolvedores) ? game.desenvolvedores : game.desenvolvedores ? [game.desenvolvedores] : [])))).sort();
@@ -69,6 +75,11 @@ function GamesPage() {
     const developerMatch = selectedDevelopers.length === 0 || selectedDevelopers.every((s) => developers.some((d) => d.toLowerCase().includes(s.toLowerCase())));
     return titleMatch && genreMatch && platformMatch && developerMatch;
   });
+
+  const totalPages = Math.ceil(filteredGames.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const gamesToDisplay = filteredGames.slice(startIndex, endIndex);
 
   if (loading) {
     return (
@@ -269,10 +280,10 @@ function GamesPage() {
         </div>
 
         <div className="games-grid">
-          {filteredGames.length === 0 ? (
+          {gamesToDisplay.length === 0 ? (
             <p>Nenhum jogo encontrado. Tente outro filtro.</p>
           ) : (
-            filteredGames.map((game) => (
+            gamesToDisplay.map((game) => (
               <div key={game.id} className="game-card minimal">
                 {game.capa_url && <img src={game.capa_url} alt={game.titulo} className="game-cover" />}
                 <h3>{game.titulo}</h3>
@@ -286,6 +297,14 @@ function GamesPage() {
             ))
           )}
         </div>
+
+        {totalPages > 1 && (
+          <div className="pagination">
+            <button onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1}>Anterior</button>
+            <span>Página {currentPage} de {totalPages}</span>
+            <button onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages}>Próxima</button>
+          </div>
+        )}
       </div>
     </div>
   );
