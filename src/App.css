@@ -189,7 +189,7 @@ body.light {
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 1rem;
+  gap: 0.5rem;
   margin-top: 2rem;
 }
 
@@ -197,10 +197,12 @@ body.light {
   background: var(--primary-gradient);
   color: white;
   border: none;
-  padding: 0.5rem 1rem;
-  border-radius: 5px;
+  padding: 0.5rem 0.75rem;
+  border-radius: 4px;
   cursor: pointer;
-  transition: opacity 0.2s;
+  transition: all 0.2s;
+  min-width: 40px;
+  text-align: center;
 }
 
 .pagination button:hover:not(:disabled) {
@@ -212,9 +214,10 @@ body.light {
   cursor: not-allowed;
 }
 
-.pagination span {
-  color: var(--text-color);
-  font-size: 1rem;
+.pagination button.active {
+  background: var(--primary-color);
+  font-weight: bold;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 /* Detalhes do Jogo */
