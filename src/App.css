@@ -439,8 +439,8 @@ body.light {
 
 .game-button.small {
   width: auto;
-  padding: 0.5rem 0.7rem;
-  font-size: 0.82rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.9rem;
 }
 
 .genre-chip-row {
@@ -455,12 +455,13 @@ body.light {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  background: rgba(102, 126, 234, 0.2);
-  border: 1px solid rgba(102, 126, 234, 0.35);
+  background: var(--primary-gradient);
+  border: 1px solid rgba(102, 126, 234, 0.5);
   border-radius: 999px;
   color: #fff;
-  padding: 0.38rem 0.65rem;
-  font-size: 0.78rem;
+  padding: 0.4rem 0.8rem;
+  font-size: 0.85rem;
+  font-weight: 500;
 }
 
 .year-filter {
@@ -481,6 +482,22 @@ body.light {
 
 .year-input::placeholder {
   color: rgba(255, 255, 255, 0.7);
+}
+
+.genre-chip button {
+  background: transparent;
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  line-height: 1;
+  font-size: 0.9rem;
+  padding: 0;
+  opacity: 0.8;
+  transition: opacity 0.2s ease;
+}
+
+.genre-chip button:hover {
+  opacity: 1;
 }
 
 /* Login Container */
