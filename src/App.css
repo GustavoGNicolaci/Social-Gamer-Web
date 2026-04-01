@@ -184,6 +184,114 @@ body.light {
   margin-bottom: 1rem;
 }
 
+/* Detalhes do Jogo */
+.game-details {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.game-banner {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+  min-height: 320px;
+}
+
+.game-banner-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.5s ease;
+}
+
+.game-banner:hover .game-banner-image {
+  transform: scale(1.03);
+}
+
+.game-banner-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0,0,0,0.06) 0%, rgba(0,0,0,0.75) 80%);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 1.5rem;
+}
+
+.game-banner-overlay h1 {
+  margin: 0;
+  font-size: 2rem;
+  line-height: 1.1;
+}
+
+.game-genres {
+  font-size: 0.95rem;
+  opacity: 0.85;
+  margin-top: 0.35rem;
+}
+
+.game-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+}
+
+.game-meta-item {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  padding: 0.9rem 1rem;
+}
+
+.game-meta-item span {
+  display: block;
+  color: rgba(255,255,255,0.75);
+  font-size: 0.82rem;
+  margin-bottom: 0.2rem;
+}
+
+.game-meta-item strong {
+  color: #fff;
+  font-size: 0.98rem;
+}
+
+.game-description {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  padding: 1rem;
+}
+
+.game-description h2 {
+  margin-top: 0;
+  color: #fff;
+  font-size: 1.25rem;
+}
+
+.game-description p {
+  margin: 0.7rem 0 0;
+  color: rgba(255,255,255,0.92);
+  line-height: 1.6;
+}
+
+.game-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.game-button.secondary {
+  background: transparent;
+  color: #b5c5ff;
+  border-color: rgba(181, 197, 255, 0.6);
+}
+
+.game-button.secondary:hover {
+  background: rgba(181, 197, 255, 0.12);
+}
+
+
 .game-info {
   padding: 1.5rem;
 }
@@ -209,6 +317,28 @@ body.light {
 
 .game-button:hover {
   opacity: 0.9;
+}
+
+.games-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+  align-items: center;
+}
+
+.game-search-input {
+  flex: 1;
+  min-width: 180px;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.22);
+  color: #fff;
+}
+
+.game-search-input::placeholder {
+  color: rgba(255, 255, 255, 0.7);
 }
 
 /* Login Container */

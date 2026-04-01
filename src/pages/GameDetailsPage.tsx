@@ -6,7 +6,7 @@ interface Game {
   id: number;
   titulo: string;
   capa_url: string;
-  desenvolvedores: string[] | string;
+  desenvolvedora: string[] | string;
   generos: string[] | string;
   data_lancamento: string;
   descricao: string;
@@ -50,15 +50,38 @@ function GameDetailsPage() {
 
   return (
     <div className="page-container">
-      <div className="page-content">
-        <h1>{game.titulo}</h1>
-        {game.capa_url && <img src={game.capa_url} alt={game.titulo} className="game-cover" />}
-        <p><strong>Gêneros:</strong> {Array.isArray(game.generos) ? game.generos.join(', ') : game.generos}</p>
-        <p><strong>Desenvolvedores:</strong> {Array.isArray(game.desenvolvedores) ? game.desenvolvedores.join(', ') : game.desenvolvedores}</p>
-        <p><strong>Plataformas:</strong> {Array.isArray(game.plataformas) ? game.plataformas.join(', ') : game.plataformas}</p>
-        <p><strong>Data de lançamento:</strong> {new Date(game.data_lancamento).toLocaleDateString('pt-BR')}</p>
-        <p><strong>Descrição:</strong> {game.descricao}</p>
-        <Link to="/games" className="game-button">Voltar</Link>
+      <div className="page-content game-details">
+        <section className="game-banner">
+          {game.capa_url && <img src={game.capa_url} alt={game.titulo} className="game-banner-image" />}
+          <div className="game-banner-overlay">
+            <h1>{game.titulo}</h1>
+            <p className="game-genres">{Array.isArray(game.generos) ? game.generos.join(' • ') : game.generos}</p>
+          </div>
+        </section>
+
+        <section className="game-meta">
+          <div className="game-meta-item">
+            <span>Desenvolvedora</span>
+            <strong>{Array.isArray(game.desenvolvedora) ? game.desenvolvedora.join(', ') : game.desenvolvedora}</strong>
+          </div>
+          <div className="game-meta-item">
+            <span>Plataformas</span>
+            <strong>{Array.isArray(game.plataformas) ? game.plataformas.join(', ') : game.plataformas}</strong>
+          </div>
+          <div className="game-meta-item">
+            <span>Data de lançamento</span>
+            <strong>{new Date(game.data_lancamento).toLocaleDateString('pt-BR')}</strong>
+          </div>
+        </section>
+
+        <section className="game-description">
+          <h2>Descrição</h2>
+          <p>{game.descricao}</p>
+        </section>
+
+        <div className="game-actions">
+          <Link to="/games" className="game-button secondary">Voltar</Link>
+        </div>
       </div>
     </div>
   );
