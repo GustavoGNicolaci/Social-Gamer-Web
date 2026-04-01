@@ -17,7 +17,9 @@ function GamesPage() {
   const [games, setGames] = useState<Game[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [genreFilter, setGenreFilter] = useState('');
+  const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
+  const [genreDropdownOpen, setGenreDropdownOpen] = useState(false);
+  const [customGenre, setCustomGenre] = useState('');
 
   useEffect(() => {
     const fetchGames = async () => {
@@ -25,7 +27,6 @@ function GamesPage() {
       if (error) {
         console.error('Erro ao buscar jogos:', error);
       } else {
-        console.log('Dados dos jogos:', data);
         setGames(data || []);
       }
       setLoading(false);
@@ -33,10 +34,12 @@ function GamesPage() {
     fetchGames();
   }, []);
 
+  const allGenres = Array.from(new Set(games.flatMap((game) => (Array.isArray(game.generos) ? game.generos : game.generos ? [game.generos] : [])))).sort();
+
   const filteredGames = games.filter((game) => {
     const titleMatch = game.titulo.toLowerCase().includes(search.toLowerCase());
     const genres = Array.isArray(game.generos) ? game.generos : game.generos ? [game.generos] : [];
-    const genreMatch = genreFilter ? genres.some((g) => g.toLowerCase().includes(genreFilter.toLowerCase())) : true;
+    const genreMatch = selectedGenres.length === 0 || selectedGenres.every((s) => genres.some((g) => g.toLowerCase().includes(s.toLowerCase())));
     return titleMatch && genreMatch;
   });
 
@@ -64,14 +67,56 @@ function GamesPage() {
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Pesquisar por título..."
           />
-          <input
-            type="text"
-            value={genreFilter}
-            className="game-search-input"
-            onChange={(e) => setGenreFilter(e.target.value)}
-            placeholder="Filtrar por gênero..."
-          />
-          <button className="game-button" onClick={() => { setSearch(''); setGenreFilter(''); }}>
+
+          <div className="genre-filter-dropdown">
+            <button className="genre-filter-button" onClick={() => setGenreDropdownOpen((prev) => !prev)}>
+              Filtro de gêneros
+            </button>
+            {genreDropdownOpen && (
+              <div className="genre-dropdown-menu">
+                <div className="genre-list">
+                  {allGenres.map((genre) => (
+                    <label key={genre} className="genre-option">
+                      <input
+                        type="checkbox"
+                        checked={selectedGenres.includes(genre)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedGenres((prev) => [...prev, genre]);
+                          } else {
+                            setSelectedGenres((prev) => prev.filter((g) => g !== genre));
+                          }
+                        }}
+                      />
+                      {genre}
+                    </label>
+                  ))}
+                </div>
+                <div className="genre-add-row">
+                  <input
+                    type="text"
+                    value={customGenre}
+                    onChange={(e) => setCustomGenre(e.target.value)}
+                    placeholder="Adicionar gênero..."
+                  />
+                  <button
+                    className="game-button small"
+                    onClick={() => {
+                      const genreTrimmed = customGenre.trim();
+                      if (genreTrimmed && !selectedGenres.includes(genreTrimmed)) {
+                        setSelectedGenres((prev) => [...prev, genreTrimmed]);
+                      }
+                      setCustomGenre('');
+                    }}
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <button className="game-button small" onClick={() => { setSearch(''); setSelectedGenres([]); setGenreDropdownOpen(false); }}>
             Limpar
           </button>
         </div>
