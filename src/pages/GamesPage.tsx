@@ -34,6 +34,23 @@ function GamesPage() {
     fetchGames();
   }, []);
 
+  useEffect(() => {
+    const closeOnOutsideClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.genre-filter-dropdown')) {
+        setGenreDropdownOpen(false);
+      }
+    };
+
+    if (genreDropdownOpen) {
+      document.addEventListener('mousedown', closeOnOutsideClick);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', closeOnOutsideClick);
+    };
+  }, [genreDropdownOpen]);
+
   const allGenres = Array.from(new Set(games.flatMap((game) => (Array.isArray(game.generos) ? game.generos : game.generos ? [game.generos] : [])))).sort();
 
   const filteredGames = games.filter((game) => {
@@ -67,6 +84,17 @@ function GamesPage() {
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Pesquisar por título..."
           />
+
+          <div className="genre-chip-row">
+            {selectedGenres.map((genre) => (
+              <span key={genre} className="genre-chip">
+                {genre}
+                <button type="button" onClick={() => setSelectedGenres((prev) => prev.filter((g) => g !== genre))}>
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
 
           <div className="genre-filter-dropdown">
             <button className="genre-filter-button" onClick={() => setGenreDropdownOpen((prev) => !prev)}>
