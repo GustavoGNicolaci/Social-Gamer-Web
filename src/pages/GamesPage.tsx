@@ -18,8 +18,12 @@ function GamesPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
-  const [genreDropdownOpen, setGenreDropdownOpen] = useState(false);
+  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([]);
+  const [selectedDevelopers, setSelectedDevelopers] = useState<string[]>([]);
+  const [filtersDropdownOpen, setFiltersDropdownOpen] = useState(false);
   const [customGenre, setCustomGenre] = useState('');
+  const [customPlatform, setCustomPlatform] = useState('');
+  const [customDeveloper, setCustomDeveloper] = useState('');
 
   useEffect(() => {
     const fetchGames = async () => {
@@ -37,27 +41,33 @@ function GamesPage() {
   useEffect(() => {
     const closeOnOutsideClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      if (!target.closest('.genre-filter-dropdown')) {
-        setGenreDropdownOpen(false);
+      if (!target.closest('.filters-dropdown')) {
+        setFiltersDropdownOpen(false);
       }
     };
 
-    if (genreDropdownOpen) {
+    if (filtersDropdownOpen) {
       document.addEventListener('mousedown', closeOnOutsideClick);
     }
 
     return () => {
       document.removeEventListener('mousedown', closeOnOutsideClick);
     };
-  }, [genreDropdownOpen]);
+  }, [filtersDropdownOpen]);
 
   const allGenres = Array.from(new Set(games.flatMap((game) => (Array.isArray(game.generos) ? game.generos : game.generos ? [game.generos] : [])))).sort();
+  const allPlatforms = Array.from(new Set(games.flatMap((game) => (Array.isArray(game.plataformas) ? game.plataformas : game.plataformas ? [game.plataformas] : [])))).sort();
+  const allDevelopers = Array.from(new Set(games.flatMap((game) => (Array.isArray(game.desenvolvedores) ? game.desenvolvedores : game.desenvolvedores ? [game.desenvolvedores] : [])))).sort();
 
   const filteredGames = games.filter((game) => {
     const titleMatch = game.titulo.toLowerCase().includes(search.toLowerCase());
     const genres = Array.isArray(game.generos) ? game.generos : game.generos ? [game.generos] : [];
     const genreMatch = selectedGenres.length === 0 || selectedGenres.every((s) => genres.some((g) => g.toLowerCase().includes(s.toLowerCase())));
-    return titleMatch && genreMatch;
+    const platforms = Array.isArray(game.plataformas) ? game.plataformas : game.plataformas ? [game.plataformas] : [];
+    const platformMatch = selectedPlatforms.length === 0 || selectedPlatforms.every((s) => platforms.some((p) => p.toLowerCase().includes(s.toLowerCase())));
+    const developers = Array.isArray(game.desenvolvedores) ? game.desenvolvedores : game.desenvolvedores ? [game.desenvolvedores] : [];
+    const developerMatch = selectedDevelopers.length === 0 || selectedDevelopers.every((s) => developers.some((d) => d.toLowerCase().includes(s.toLowerCase())));
+    return titleMatch && genreMatch && platformMatch && developerMatch;
   });
 
   if (loading) {
@@ -85,68 +95,177 @@ function GamesPage() {
             placeholder="Pesquisar por título..."
           />
 
-          <div className="genre-chip-row">
-            {selectedGenres.map((genre) => (
-              <span key={genre} className="genre-chip">
-                {genre}
-                <button type="button" onClick={() => setSelectedGenres((prev) => prev.filter((g) => g !== genre))}>
-                  ×
-                </button>
-              </span>
-            ))}
-          </div>
-
-          <div className="genre-filter-dropdown">
-            <button className="genre-filter-button" onClick={() => setGenreDropdownOpen((prev) => !prev)}>
-              Filtro de gêneros
+          <div className="filters-dropdown">
+            <button className="genre-filter-button" onClick={() => setFiltersDropdownOpen((prev) => !prev)}>
+              Filtros
             </button>
-            {genreDropdownOpen && (
-              <div className="genre-dropdown-menu">
-                <div className="genre-list">
-                  {allGenres.map((genre) => (
-                    <label key={genre} className="genre-option">
-                      <input
-                        type="checkbox"
-                        checked={selectedGenres.includes(genre)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedGenres((prev) => [...prev, genre]);
-                          } else {
-                            setSelectedGenres((prev) => prev.filter((g) => g !== genre));
-                          }
-                        }}
-                      />
-                      {genre}
-                    </label>
-                  ))}
+            {filtersDropdownOpen && (
+              <div className="filters-dropdown-menu">
+                <div className="filter-section">
+                  <h4>Gêneros</h4>
+                  <div className="genre-list">
+                    {allGenres.map((genre) => (
+                      <label key={genre} className="genre-option">
+                        <input
+                          type="checkbox"
+                          checked={selectedGenres.includes(genre)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedGenres((prev) => [...prev, genre]);
+                            } else {
+                              setSelectedGenres((prev) => prev.filter((g) => g !== genre));
+                            }
+                          }}
+                        />
+                        {genre}
+                      </label>
+                    ))}
+                  </div>
+                  <div className="genre-add-row">
+                    <input
+                      type="text"
+                      value={customGenre}
+                      onChange={(e) => setCustomGenre(e.target.value)}
+                      placeholder="Adicionar gênero..."
+                    />
+                    <button
+                      className="game-button small"
+                      onClick={() => {
+                        const genreTrimmed = customGenre.trim();
+                        if (genreTrimmed && !selectedGenres.includes(genreTrimmed)) {
+                          setSelectedGenres((prev) => [...prev, genreTrimmed]);
+                        }
+                        setCustomGenre('');
+                      }}
+                    >
+                      +
+                    </button>
+                  </div>
                 </div>
-                <div className="genre-add-row">
-                  <input
-                    type="text"
-                    value={customGenre}
-                    onChange={(e) => setCustomGenre(e.target.value)}
-                    placeholder="Adicionar gênero..."
-                  />
-                  <button
-                    className="game-button small"
-                    onClick={() => {
-                      const genreTrimmed = customGenre.trim();
-                      if (genreTrimmed && !selectedGenres.includes(genreTrimmed)) {
-                        setSelectedGenres((prev) => [...prev, genreTrimmed]);
-                      }
-                      setCustomGenre('');
-                    }}
-                  >
-                    +
-                  </button>
+
+                <div className="filter-section">
+                  <h4>Plataformas</h4>
+                  <div className="genre-list">
+                    {allPlatforms.map((platform) => (
+                      <label key={platform} className="genre-option">
+                        <input
+                          type="checkbox"
+                          checked={selectedPlatforms.includes(platform)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedPlatforms((prev) => [...prev, platform]);
+                            } else {
+                              setSelectedPlatforms((prev) => prev.filter((p) => p !== platform));
+                            }
+                          }}
+                        />
+                        {platform}
+                      </label>
+                    ))}
+                  </div>
+                  <div className="genre-add-row">
+                    <input
+                      type="text"
+                      value={customPlatform}
+                      onChange={(e) => setCustomPlatform(e.target.value)}
+                      placeholder="Adicionar plataforma..."
+                    />
+                    <button
+                      className="game-button small"
+                      onClick={() => {
+                        const platformTrimmed = customPlatform.trim();
+                        if (platformTrimmed && !selectedPlatforms.includes(platformTrimmed)) {
+                          setSelectedPlatforms((prev) => [...prev, platformTrimmed]);
+                        }
+                        setCustomPlatform('');
+                      }}
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+
+                <div className="filter-section">
+                  <h4>Desenvolvedoras</h4>
+                  <div className="genre-list">
+                    {allDevelopers.map((developer) => (
+                      <label key={developer} className="genre-option">
+                        <input
+                          type="checkbox"
+                          checked={selectedDevelopers.includes(developer)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedDevelopers((prev) => [...prev, developer]);
+                            } else {
+                              setSelectedDevelopers((prev) => prev.filter((d) => d !== developer));
+                            }
+                          }}
+                        />
+                        {developer}
+                      </label>
+                    ))}
+                  </div>
+                  <div className="genre-add-row">
+                    <input
+                      type="text"
+                      value={customDeveloper}
+                      onChange={(e) => setCustomDeveloper(e.target.value)}
+                      placeholder="Adicionar desenvolvedora..."
+                    />
+                    <button
+                      className="game-button small"
+                      onClick={() => {
+                        const developerTrimmed = customDeveloper.trim();
+                        if (developerTrimmed && !selectedDevelopers.includes(developerTrimmed)) {
+                          setSelectedDevelopers((prev) => [...prev, developerTrimmed]);
+                        }
+                        setCustomDeveloper('');
+                      }}
+                    >
+                      +
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
           </div>
 
-          <button className="game-button small" onClick={() => { setSearch(''); setSelectedGenres([]); setGenreDropdownOpen(false); }}>
+          <button className="game-button small" onClick={() => { 
+            setSearch(''); 
+            setSelectedGenres([]); 
+            setSelectedPlatforms([]); 
+            setSelectedDevelopers([]); 
+            setFiltersDropdownOpen(false); 
+          }}>
             Limpar
           </button>
+        </div>
+
+        <div className="genre-chip-row">
+          {selectedGenres.map((genre) => (
+            <span key={genre} className="genre-chip">
+              {genre}
+              <button type="button" onClick={() => setSelectedGenres((prev) => prev.filter((g) => g !== genre))}>
+                ×
+              </button>
+            </span>
+          ))}
+          {selectedPlatforms.map((platform) => (
+            <span key={platform} className="genre-chip">
+              {platform}
+              <button type="button" onClick={() => setSelectedPlatforms((prev) => prev.filter((p) => p !== platform))}>
+                ×
+              </button>
+            </span>
+          ))}
+          {selectedDevelopers.map((developer) => (
+            <span key={developer} className="genre-chip">
+              {developer}
+              <button type="button" onClick={() => setSelectedDevelopers((prev) => prev.filter((d) => d !== developer))}>
+                ×
+              </button>
+            </span>
+          ))}
         </div>
 
         <div className="games-grid">
