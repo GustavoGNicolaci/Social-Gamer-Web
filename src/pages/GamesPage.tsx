@@ -26,6 +26,8 @@ function GamesPage() {
   const [customDeveloper, setCustomDeveloper] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 9;
+  const [showGenresModal, setShowGenresModal] = useState(false);
+  const [selectedGameGenres, setSelectedGameGenres] = useState<string[]>([]);
 
   useEffect(() => {
     const fetchGames = async () => {
@@ -283,18 +285,34 @@ function GamesPage() {
           {gamesToDisplay.length === 0 ? (
             <p>Nenhum jogo encontrado. Tente outro filtro.</p>
           ) : (
-            gamesToDisplay.map((game) => (
-              <div key={game.id} className="game-card minimal">
-                {game.capa_url && <img src={game.capa_url} alt={game.titulo} className="game-cover" />}
-                <h3>{game.titulo}</h3>
-                <p className="game-tags">
-                  {Array.isArray(game.generos) ? game.generos.join(', ') : game.generos}
-                </p>
-                <Link to={`/games/${game.id}`} className="game-button">
-                  Ver mais detalhes
-                </Link>
-              </div>
-            ))
+            gamesToDisplay.map((game) => {
+              const genres = Array.isArray(game.generos) ? game.generos : [game.generos];
+              const displayedGenres = genres.slice(0, 3);
+              const hasMoreGenres = genres.length > 3;
+              return (
+                <div key={game.id} className="game-card minimal">
+                  {game.capa_url && <img src={game.capa_url} alt={game.titulo} className="game-cover" />}
+                  <h3>{game.titulo}</h3>
+                  <p className="game-tags">
+                    {displayedGenres.join(', ')}
+                    {hasMoreGenres && (
+                      <button
+                        className="more-genres-btn"
+                        onClick={() => {
+                          setSelectedGameGenres(genres);
+                          setShowGenresModal(true);
+                        }}
+                      >
+                        +
+                      </button>
+                    )}
+                  </p>
+                  <Link to={`/games/${game.id}`} className="game-button">
+                    Ver mais detalhes
+                  </Link>
+                </div>
+              );
+            })
           )}
         </div>
 
@@ -311,6 +329,20 @@ function GamesPage() {
               </button>
             ))}
             <button onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages}>Próxima</button>
+          </div>
+        )}
+
+        {showGenresModal && (
+          <div className="modal-overlay" onClick={() => setShowGenresModal(false)}>
+            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+              <h3>Categorias</h3>
+              <div className="genres-list">
+                {selectedGameGenres.map((genre, index) => (
+                  <span key={index} className="genre-tag">{genre}</span>
+                ))}
+              </div>
+              <button className="close-modal-btn" onClick={() => setShowGenresModal(false)}>Fechar</button>
+            </div>
           </div>
         )}
       </div>
