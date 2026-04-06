@@ -6,7 +6,7 @@ interface Game {
   id: number;
   titulo: string;
   capa_url: string;
-  desenvolvedores: string[] | string;
+  desenvolvedora: string[] | string;
   generos: string[] | string;
   data_lancamento: string;
   descricao: string;
@@ -35,6 +35,7 @@ function GamesPage() {
       if (error) {
         console.error('Erro ao buscar jogos:', error);
       } else {
+        console.log('Fetched games:', data);
         setGames(data || []);
       }
       setLoading(false);
@@ -65,7 +66,8 @@ function GamesPage() {
 
   const allGenres = Array.from(new Set(games.flatMap((game) => (Array.isArray(game.generos) ? game.generos : game.generos ? [game.generos] : [])))).sort();
   const allPlatforms = Array.from(new Set(games.flatMap((game) => (Array.isArray(game.plataformas) ? game.plataformas : game.plataformas ? [game.plataformas] : [])))).sort();
-  const allDevelopers = Array.from(new Set(games.flatMap((game) => (Array.isArray(game.desenvolvedores) ? game.desenvolvedores : game.desenvolvedores ? [game.desenvolvedores] : [])))).sort();
+  const allDevelopers = Array.from(new Set(games.flatMap((game) => (Array.isArray(game.desenvolvedora) ? game.desenvolvedora : game.desenvolvedora ? [game.desenvolvedora] : [])))).sort();
+  console.log('allDevelopers:', allDevelopers);
 
   const filteredGames = games.filter((game) => {
     const titleMatch = game.titulo.toLowerCase().includes(search.toLowerCase());
@@ -73,7 +75,7 @@ function GamesPage() {
     const genreMatch = selectedGenres.length === 0 || selectedGenres.every((s) => genres.some((g) => g.toLowerCase().includes(s.toLowerCase())));
     const platforms = Array.isArray(game.plataformas) ? game.plataformas : game.plataformas ? [game.plataformas] : [];
     const platformMatch = selectedPlatforms.length === 0 || selectedPlatforms.every((s) => platforms.some((p) => p.toLowerCase().includes(s.toLowerCase())));
-    const developers = Array.isArray(game.desenvolvedores) ? game.desenvolvedores : game.desenvolvedores ? [game.desenvolvedores] : [];
+    const developers = Array.isArray(game.desenvolvedora) ? game.desenvolvedora : game.desenvolvedora ? [game.desenvolvedora] : [];
     const developerMatch = selectedDevelopers.length === 0 || selectedDevelopers.every((s) => developers.some((d) => d.toLowerCase().includes(s.toLowerCase())));
     return titleMatch && genreMatch && platformMatch && developerMatch;
   });
