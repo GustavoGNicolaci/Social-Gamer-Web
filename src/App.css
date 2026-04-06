@@ -157,6 +157,8 @@ body.light {
   align-items: center;
   text-align: center;
   padding: 0.8rem;
+  min-height: 350px;
+  justify-content: space-between;
 }
 
 .game-card:hover {

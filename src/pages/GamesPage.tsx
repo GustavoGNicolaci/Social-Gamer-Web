@@ -291,7 +291,11 @@ function GamesPage() {
               const hasMoreGenres = genres.length > 3;
               return (
                 <div key={game.id} className="game-card minimal">
-                  {game.capa_url && <img src={game.capa_url} alt={game.titulo} className="game-cover" />}
+                  {game.capa_url && (
+                    <Link to={`/games/${game.id}`}>
+                      <img src={game.capa_url} alt={game.titulo} className="game-cover" />
+                    </Link>
+                  )}
                   <h3>{game.titulo}</h3>
                   <div className="game-tags">
                     {displayedGenres.map((genre, index) => (
