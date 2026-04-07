@@ -32,15 +32,40 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // fetch profile from 'usuarios' table
   const fetchProfile = async (userId: string) => {
     try {
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from('usuarios')
         .select('*')
         .eq('id', userId)
         .single()
-      if (error) {
+
+      if (error && error.code === 'PGRST116') {  // Not found
+        // Create basic profile
+        const { data: userData } = await supabase.auth.getUser()
+        const email = userData.user?.email || ''
+        const username = email.split('@')[0]  // Basic username from email
+
+        const { data: newProfile, error: insertError } = await supabase
+          .from('usuarios')
+          .insert({
+            id: userId,
+            username,
+            nome_completo: '',
+            data_cadastro: new Date().toISOString()
+          })
+          .select()
+          .single()
+
+        if (insertError) {
+          console.error('Erro ao criar perfil:', insertError.message)
+          return null
+        }
+
+        data = newProfile
+      } else if (error) {
         console.error('Erro ao buscar perfil:', error.message)
         return null
       }
+
       return data as UserProfile
     } catch (err) {
       console.error('Erro genérico ao buscar perfil:', err)
