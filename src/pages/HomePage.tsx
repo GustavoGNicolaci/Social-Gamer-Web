@@ -1,43 +1,88 @@
+import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { supabase } from '../supabase-client';
 import './HomePage.css';
 
-function HomePage() {
-  // Mock data for recent reviews
-  const recentReviews = [
-    {
-      id: 1,
-      user: 'GamerPro123',
-      game: 'The Witcher 3',
-      rating: 5,
-      review: 'Uma obra-prima! A narrativa é incrível e os gráficos ainda impressionam.',
-      time: '2 horas atrás',
-      avatar: ''
-    },
-    {
-      id: 2,
-      user: 'PixelMaster',
-      game: 'Cyberpunk 2077',
-      rating: 4,
-      review: 'Muito bom, mas teve alguns bugs no lançamento. Vale a pena agora com as atualizações.',
-      time: '5 horas atrás',
-      avatar: ''
-    },
-    {
-      id: 3,
-      user: 'RetroFan',
-      game: 'Hades',
-      rating: 5,
-      review: 'Jogo viciante! Mecânicas perfeitas e replayability alta.',
-      time: '1 dia atrás',
-      avatar: ''
-    }
-  ];
+interface Game {
+  id: number;
+  titulo: string;
+  capa_url: string;
+  generos: string[];
+  data_lancamento: string;
+}
 
-  // Mock data for trending games
-  const trendingGames = [
-    { id: 1, name: 'Elden Ring', genre: 'RPG', rating: 4.8, icon: '' },
-    { id: 2, name: 'Baldur\'s Gate 3', genre: 'RPG', rating: 4.9, icon: '' },
-    { id: 3, name: 'God of War Ragnarök', genre: 'Ação', rating: 4.7, icon: '' }
-  ];
+interface Review {
+  id: string;
+  usuario_id: string;
+  jogo_id: number;
+  texto_review: string;
+  nota: number;
+  data_publicacao: string;
+  jogos: { titulo: string }[];
+  usuarios: { username: string; avatar_url: string | null }[];
+}
+
+function HomePage() {
+  const [recentReviews, setRecentReviews] = useState<Review[]>([]);
+  const [trendingGames, setTrendingGames] = useState<Game[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // Fetch recent reviews with user and game info
+        const { data: reviews, error: reviewsError } = await supabase
+          .from('avaliacoes')
+          .select(`
+            id,
+            usuario_id,
+            jogo_id,
+            texto_review,
+            nota,
+            data_publicacao,
+            jogos!inner(titulo),
+            usuarios!inner(username, avatar_url)
+          `)
+          .order('data_publicacao', { ascending: false })
+          .limit(5);
+
+        if (reviewsError) {
+          console.error('Error fetching reviews:', reviewsError);
+        } else {
+          setRecentReviews(reviews || []);
+        }
+
+        // Fetch trending games (top rated with reviews)
+        const { data: games, error: gamesError } = await supabase
+          .from('jogos')
+          .select('*')
+          .order('id', { ascending: false }) // For now, latest games
+          .limit(6);
+
+        if (gamesError) {
+          console.error('Error fetching games:', gamesError);
+        } else {
+          setTrendingGames(games || []);
+        }
+      } catch (error) {
+        console.error('Error fetching data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="page-container">
+        <div className="page-content">
+          <h1>Carregando...</h1>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="home-page">
@@ -47,9 +92,9 @@ function HomePage() {
           <h1 className="hero-title">Bem-vindo ao Social Gamer! 🎮</h1>
           <p className="hero-subtitle">Conecte-se, compartilhe reviews e descubra novos jogos com sua comunidade.</p>
           <div className="hero-actions">
-            <button className="hero-btn primary">✍️ Postar Review</button>
+            <Link to="/games" className="hero-btn primary">🔍 Explorar Jogos</Link>
             <button className="hero-btn secondary">👥 Encontrar Jogadores</button>
-            <button className="hero-btn secondary">🔍 Explorar Jogos</button>
+            <button className="hero-btn secondary">✍️ Postar Review</button>
           </div>
         </div>
         <div className="hero-visual">
@@ -68,41 +113,65 @@ function HomePage() {
         <div className="feed-section">
           <h2 className="section-title">Atividades Recentes</h2>
           <div className="reviews-feed">
-            {recentReviews.map(review => (
-              <div key={review.id} className="review-card animate-in">
-                <div className="review-header">
-                  <div className="user-info">
-                    <span className="user-avatar">{review.avatar}</span>
-                    <span className="user-name">{review.user}</span>
+            {recentReviews.length === 0 ? (
+              <p>Nenhuma review recente. Seja o primeiro a avaliar um jogo!</p>
+            ) : (
+              recentReviews.map(review => (
+                <div key={review.id} className="review-card animate-in">
+                  <div className="review-header">
+                    <div className="user-info">
+                      <span className="user-avatar">
+                      {review.usuarios[0]?.avatar_url ? (
+                        <img src={review.usuarios[0].avatar_url} alt="Avatar" />
+                      ) : (
+                        review.usuarios[0]?.username.charAt(0).toUpperCase() || 'U'
+                      )}
+                    </span>
+                    <span className="user-name">{review.usuarios[0]?.username || 'Usuário'}</span>
+                    </div>
+                    <span className="review-time">
+                      {new Date(review.data_publicacao).toLocaleDateString('pt-BR')}
+                    </span>
                   </div>
-                  <span className="review-time">{review.time}</span>
-                </div>
-                <div className="review-content">
-                  <h4 className="game-title">{review.game}</h4>
-                  <div className="rating">
-                    {'⭐'.repeat(review.rating)}
+                  <div className="review-content">
+                    <h4 className="game-title">{review.jogos[0]?.titulo || 'Jogo desconhecido'}</h4>
+                    <div className="rating">
+                      {'⭐'.repeat(Math.floor(review.nota))}
+                    </div>
+                    <p className="review-text">{review.texto_review}</p>
                   </div>
-                  <p className="review-text">{review.review}</p>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
 
         {/* Sidebar */}
         <div className="sidebar">
           <div className="sidebar-section trending-section">
-            <h3 className="sidebar-title">🔥 Jogos em Alta</h3>
+            <h3 className="sidebar-title">🔥 Jogos em Destaque</h3>
             <div className="trending-games">
-              {trendingGames.map(game => (
-                <div key={game.id} className="trending-game animate-in">
-                  <div className="game-icon">{game.icon}</div>
-                  <div className="game-info">
-                    <h4 className="game-name">{game.name}</h4>
-                    <p className="game-meta">{game.genre} • ⭐ {game.rating}</p>
-                  </div>
-                </div>
-              ))}
+              {trendingGames.length === 0 ? (
+                <p>Nenhum jogo encontrado.</p>
+              ) : (
+                trendingGames.map(game => (
+                  <Link key={game.id} to={`/games/${game.id}`} className="trending-game animate-in">
+                    <div className="game-icon">
+                      {game.capa_url ? (
+                        <img src={game.capa_url} alt={game.titulo} />
+                      ) : (
+                        '🎮'
+                      )}
+                    </div>
+                    <div className="game-info">
+                      <h4 className="game-name">{game.titulo}</h4>
+                      <p className="game-meta">
+                        {game.generos ? game.generos.slice(0, 2).join(', ') : 'Gênero não informado'}
+                      </p>
+                    </div>
+                  </Link>
+                ))
+              )}
             </div>
           </div>
           <div className="sidebar-section community-section">
