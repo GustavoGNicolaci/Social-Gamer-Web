@@ -27,6 +27,13 @@ function HomePage() {
   const [trendingGames, setTrendingGames] = useState<Game[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Mock data for famous communities
+  const famousCommunities = [
+    { id: 1, name: 'Gamers Brasil', members: 15420, description: 'Comunidade brasileira de jogos' },
+    { id: 2, name: 'RPG Masters', members: 8920, description: 'Para amantes de RPGs' },
+    { id: 3, name: 'Speedrunners Club', members: 5670, description: 'Mestres do speedrun' }
+  ];
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -57,7 +64,7 @@ function HomePage() {
           .from('jogos')
           .select('*')
           .order('id', { ascending: false }) // For now, latest games
-          .limit(6);
+          .limit(3);
 
         if (gamesError) {
           console.error('Error fetching games:', gamesError);
@@ -175,9 +182,17 @@ function HomePage() {
             </div>
           </div>
           <div className="sidebar-section community-section">
-            <h3 className="sidebar-title">👥 Comunidade</h3>
-            <p className="community-text">Veja as últimas atividades dos gamers que você segue.</p>
-            <button className="community-btn">Explorar Comunidade</button>
+            <h3 className="sidebar-title">👥 Comunidades Famosas</h3>
+            <div className="famous-communities">
+              {famousCommunities.map(community => (
+                <div key={community.id} className="community-item animate-in">
+                  <h4>{community.name}</h4>
+                  <p className="community-members">{community.members.toLocaleString()} membros</p>
+                  <p className="community-desc">{community.description}</p>
+                </div>
+              ))}
+            </div>
+            <button className="community-btn">Explorar Mais Comunidades</button>
           </div>
         </div>
       </div>
