@@ -7,6 +7,9 @@ interface UserProfile {
   username: string
   nome_completo: string
   avatar_url: string | null
+  bio: string | null
+  data_cadastro: string
+  configuracoes_privacidade: any
 }
 
 interface AuthContextValue {

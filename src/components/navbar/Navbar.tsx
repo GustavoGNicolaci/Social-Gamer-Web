@@ -12,6 +12,7 @@ function Navbar() {
   const { user, profile, logout } = useAuth()
   const navigate = useNavigate()
   const [showMenu, setShowMenu] = useState(false)
+  const [menuTimeout, setMenuTimeout] = useState<number | null>(null)
 
   // determine avatar url to display
   const avatarUrl = profile?.avatar_url || ''
@@ -25,8 +26,31 @@ function Navbar() {
     }
   }, [theme])
 
+  useEffect(() => {
+    return () => {
+      if (menuTimeout) {
+        clearTimeout(menuTimeout)
+      }
+    }
+  }, [menuTimeout])
+
   const toggleTheme = () => {
     setTheme(prev => (prev === 'dark' ? 'light' : 'dark'))
+  }
+
+  const handleMouseEnter = () => {
+    if (menuTimeout) {
+      clearTimeout(menuTimeout)
+      setMenuTimeout(null)
+    }
+    setShowMenu(true)
+  }
+
+  const handleMouseLeave = () => {
+    const timeout = setTimeout(() => {
+      setShowMenu(false)
+    }, 500) // 500ms delay
+    setMenuTimeout(timeout)
   }
 
   return (
@@ -67,23 +91,26 @@ function Navbar() {
           </button>
 
           {user ? (
-            <div className="user-menu">
-              <button
+            <div className="user-menu" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
+              <Link
+                to="/profile"
                 className="user-avatar-btn"
-                onClick={() => setShowMenu((prev) => !prev)}
                 title="Perfil"
               >
                 {avatarUrl ? (
                   <img src={avatarUrl} alt="Avatar do usuário" className="user-avatar-img" />
                 ) : (
-                  <span className="avatar-placeholder">👤</span>
+                  <span className="avatar-placeholder">{displayName.charAt(0).toUpperCase()}</span>
                 )}
                 <span className="user-name">{displayName}</span>
-              </button>
+              </Link>
               {showMenu && (
                 <div className="user-dropdown">
+                  <Link to="/profile" className="dropdown-item" onClick={() => setShowMenu(false)}>
+                    Ver Perfil
+                  </Link>
                   <button
-                    className="logout-btn"
+                    className="dropdown-item logout-btn"
                     onClick={async () => {
                       await logout()
                       setShowMenu(false)

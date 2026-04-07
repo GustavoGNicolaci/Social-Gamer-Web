@@ -234,6 +234,7 @@
   border: none;
   color: white;
   cursor: pointer;
+  text-decoration: none;
 }
 
 .user-avatar-img {
@@ -262,6 +263,23 @@
   padding: 0.5rem 0;
   min-width: 120px;
   z-index: 100;
+}
+
+.dropdown-item {
+  display: block;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 0.5rem 1rem;
+  text-align: left;
+  cursor: pointer;
+  font-size: 0.95rem;
+  text-decoration: none;
+  color: #333;
+}
+
+.dropdown-item:hover {
+  background: #f5f5f5;
 }
 
 .logout-btn {
