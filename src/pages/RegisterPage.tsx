@@ -3,24 +3,6 @@ import type { ChangeEvent, FormEvent } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../supabase-client'
-import reactLogo from '../assets/react.svg'
-
-interface AvatarIcon {
-  id: string
-  image: string
-  name: string
-}
-
-const DEFAULT_AVATARS: AvatarIcon[] = [
-  { id: 'warrior', image: reactLogo, name: 'Guerreiro' },
-  { id: 'wizard', image: reactLogo, name: 'Mago' },
-  { id: 'archer', image: reactLogo, name: 'Arqueiro' },
-  { id: 'rogue', image: reactLogo, name: 'Gatuno' },
-  { id: 'paladin', image: reactLogo, name: 'Paladino' },
-  { id: 'ranger', image: reactLogo, name: 'Caçador' },
-  { id: 'cleric', image: reactLogo, name: 'Clérigo' },
-  { id: 'bard', image: reactLogo, name: 'Bardo' },
-]
 
 function RegisterPage() {
   const { user } = useAuth()
@@ -40,10 +22,6 @@ function RegisterPage() {
     password: '',
     confirmPassword: '',
   })
-  const [selectedAvatar, setSelectedAvatar] = useState<string>('warrior')
-  const [photoFile, setPhotoFile] = useState<File | null>(null)
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null)
-  const [useCustomPhoto, setUseCustomPhoto] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -56,31 +34,6 @@ function RegisterPage() {
       setErrors((prev) => ({
         ...prev,
         [name]: '',
-      }))
-    }
-  }
-
-  const handlePhotoChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        setErrors((prev) => ({
-          ...prev,
-          photo: 'Arquivo deve ser menor que 5MB',
-        }))
-        return
-      }
-
-      setPhotoFile(file)
-      setUseCustomPhoto(true)
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        setPhotoPreview(reader.result as string)
-      }
-      reader.readAsDataURL(file)
-      setErrors((prev) => ({
-        ...prev,
-        photo: '',
       }))
     }
   }
@@ -140,21 +93,12 @@ function RegisterPage() {
         return
       }
 
-      // 2. determinar URL do avatar - se escolheu ícone padrão, usar sua imagem
-      let avatarUrl: string | null = null
-      if (!useCustomPhoto) {
-        // encontrar a imagem associada ao avatar padrão selecionado
-        const found = DEFAULT_AVATARS.find((a) => a.id === selectedAvatar)
-        avatarUrl = found ? found.image : null
-      }
-      // Avatar customizado será enviado depois no perfil
-
-      // 3. inserir perfil na tabela usuarios
+      // 2. inserir perfil na tabela usuarios
       const { error: insertError } = await supabase.from('usuarios').insert({
         id: user.id,
         username: formData.username,
         nome_completo: formData.name,
-        avatar_url: avatarUrl,
+        avatar_url: null,
         bio: '',
         data_cadastro: new Date().toISOString(),
         configuracoes_privacidade: {},
@@ -196,8 +140,6 @@ function RegisterPage() {
 
           <form onSubmit={handleRegister}>
             {/* Username */}
-            <div className="form-columns">
-              <div className="left-column">
             <div className="form-group">
               <label htmlFor="username">Nome de usuário</label>
               <input
@@ -273,68 +215,6 @@ function RegisterPage() {
                 <span className="error-message">{errors.confirmPassword}</span>
               )}
             </div>
-            </div> {/* end left-column */}
-            <div className="right-column">
-
-            {/* Avatar Selection */}
-            <div className="form-group">
-              <label>Escolha seu Avatar</label>
-              <div className="avatar-selection">
-                {DEFAULT_AVATARS.map((avatar) => (
-                  <button
-                    key={avatar.id}
-                    type="button"
-                    className={`avatar-btn ${selectedAvatar === avatar.id && !useCustomPhoto ? 'selected' : ''}`}
-                    onClick={() => {
-                      setSelectedAvatar(avatar.id)
-                      setUseCustomPhoto(false)
-                    }}
-                    title={avatar.name}
-                  >
-                    <img src={avatar.image} alt={avatar.name} className="avatar-image" />
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Photo Upload */}
-            <div className="form-group">
-              <label htmlFor="photo">Ou envie uma foto</label>
-              <div className="photo-upload-container">
-                <input
-                  type="file"
-                  id="photo"
-                  accept="image/*"
-                  onChange={handlePhotoChange}
-                  className="photo-input"
-                />
-                <label htmlFor="photo" className="photo-upload-label">
-                  <span className="upload-icon">📸</span>
-                  <span>Clique para enviar uma foto</span>
-                </label>
-              </div>
-              {errors.photo && <span className="error-message">{errors.photo}</span>}
-            </div>
-
-            {/* Photo Preview */}
-            {photoPreview && (
-              <div className="photo-preview-container">
-                <img src={photoPreview} alt="Preview" className="photo-preview" />
-                <button
-                  type="button"
-                  className="remove-photo-btn"
-                  onClick={() => {
-                    setPhotoFile(null)
-                    setPhotoPreview(null)
-                    setUseCustomPhoto(false)
-                  }}
-                >
-                  ✕ Remover
-                </button>
-              </div>
-            )}
-            </div> {/* end right-column */}
-            </div> {/* end form-columns */}
 
             {errors.submit && <div className="error-banner">{errors.submit}</div>}
 
