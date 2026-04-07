@@ -114,24 +114,6 @@ function RegisterPage() {
     return Object.keys(newErrors).length === 0
   }
 
-  const uploadAvatar = async (file: File, userId: string): Promise<string | null> => {
-    const filePath = `${userId}/avatars/${Date.now()}-${file.name}`
-    const { error } = await supabase.storage
-      .from('user-uploads')
-      .upload(filePath, file)
-
-    if (error) {
-      console.error('Error uploading avatar:', error.message)
-      return null
-    }
-
-    const { data } = await supabase.storage
-      .from('user-uploads')
-      .getPublicUrl(filePath)
-
-    return data.publicUrl
-  }
-
   const handleRegister = async (e: FormEvent) => {
     e.preventDefault()
 
@@ -158,17 +140,14 @@ function RegisterPage() {
         return
       }
 
-      // 2. se houver foto customizada, enviar para storage
-      // determine final avatar URL - if user chose a default icon, use its image
+      // 2. determinar URL do avatar - se escolheu ícone padrão, usar sua imagem
       let avatarUrl: string | null = null
-      if (useCustomPhoto && photoFile) {
-        const uploadedUrl = await uploadAvatar(photoFile, user.id)
-        if (uploadedUrl) avatarUrl = uploadedUrl
-      } else {
-        // find the image associated with the selected default avatar id
+      if (!useCustomPhoto) {
+        // encontrar a imagem associada ao avatar padrão selecionado
         const found = DEFAULT_AVATARS.find((a) => a.id === selectedAvatar)
         avatarUrl = found ? found.image : null
       }
+      // Avatar customizado será enviado depois no perfil
 
       // 3. inserir perfil na tabela usuarios
       const { error: insertError } = await supabase.from('usuarios').insert({
