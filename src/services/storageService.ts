@@ -2,11 +2,6 @@ import { supabase } from '../supabase-client';
 
 const BUCKET_NAME = 'user-uploads';
 
-interface UploadOptions {
-  cacheControl?: string;
-  upsert?: boolean;
-}
-
 /**
  * Upload de arquivo para o bucket do usuário
  */

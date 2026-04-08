@@ -34,15 +34,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       console.log('Buscando perfil para userId:', userId)
 
-      let { data, error } = await supabase
+      const { data, error } = await supabase
         .from('usuarios')
         .select('*')
         .eq('id', userId)
         .single()
 
       if (error) {
-        console.error('Erro ao buscar perfil:', error.message)
-        console.error('Código do erro:', error.code)
+        if (error.code === 'PGRST116') {
+          console.log('Perfil não encontrado para userId:', userId)
+        } else {
+          console.error('Erro ao buscar perfil:', error.message)
+          console.error('Código do erro:', error.code)
+        }
         return null
       }
 
@@ -54,6 +58,47 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }
 
+  const createProfileFromMetadata = async (user: User) => {
+    try {
+      const metadata = user.user_metadata as Record<string, any> | undefined
+      const username = metadata?.username || user.email?.split('@')[0] || ''
+      const nome_completo = metadata?.nome_completo || user.email || ''
+
+      if (!username || !nome_completo) {
+        console.log('Não há metadata suficiente para criar perfil automaticamente')
+        return null
+      }
+
+      const profileData = {
+        id: user.id,
+        username,
+        nome_completo,
+        avatar_url: null,
+        bio: null,
+        data_cadastro: new Date().toISOString(),
+        configuracoes_privacidade: {},
+      }
+
+      const { data, error } = await supabase.from('usuarios').insert(profileData).select().single()
+      if (error) {
+        console.error('Erro ao criar perfil a partir de metadata:', error.message)
+        return null
+      }
+
+      console.log('Perfil criado a partir de metadata:', data)
+      return data as UserProfile
+    } catch (err) {
+      console.error('Erro genérico ao criar perfil a partir de metadata:', err)
+      return null
+    }
+  }
+
+  const fetchOrCreateProfile = async (user: User) => {
+    const profile = await fetchProfile(user.id)
+    if (profile) return profile
+    return await createProfileFromMetadata(user)
+  }
+
   useEffect(() => {
     // check current session on mount
     const init = async () => {
@@ -63,7 +108,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setSession(currentSession)
       setUser(currentSession?.user ?? null)
       if (currentSession?.user) {
-        const prof = await fetchProfile(currentSession.user.id)
+        const prof = await fetchOrCreateProfile(currentSession.user)
         setProfile(prof)
       }
       setLoading(false)
@@ -76,7 +121,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setSession(newSession)
         setUser(newSession?.user ?? null)
         if (newSession?.user) {
-          const prof = await fetchProfile(newSession.user.id)
+          const prof = await fetchOrCreateProfile(newSession.user)
           setProfile(prof)
         } else {
           setProfile(null)
@@ -90,7 +135,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [])
 
   const login = async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signInWithPassword({
+    const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
     })

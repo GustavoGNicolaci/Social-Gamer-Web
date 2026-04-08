@@ -1,12 +1,10 @@
 import { useState, useEffect } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../supabase-client'
 import { testDatabaseOperations } from '../utils/databaseTest'
 
 function RegisterPage() {
-  const { user } = useAuth()
   const navigate = useNavigate()
 
   const testDatabaseConnection = async () => {
@@ -85,10 +83,16 @@ function RegisterPage() {
     try {
       console.log('Iniciando registro com dados:', formData)
 
-      // 1. criar conta no auth do Supabase
+      // 1. criar conta no auth do Supabase e armazenar dados básicos em user_metadata
       const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
+        options: {
+          data: {
+            username: formData.username,
+            nome_completo: formData.name,
+          },
+        },
       })
 
       if (signUpError) {
