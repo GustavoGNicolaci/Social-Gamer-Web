@@ -11,19 +11,22 @@ interface Game {
   data_lancamento: string;
 }
 
-interface Review {
+interface Activity {
   id: string;
+  type: 'review' | 'comment';
   usuario_id: string;
-  jogo_id: number;
-  texto_review: string;
-  nota: number;
+  jogo_id?: number;
+  review_id?: string;
+  texto: string;
+  nota?: number;
   data_publicacao: string;
-  jogos: { titulo: string }[];
+  jogos?: { titulo: string }[];
   usuarios: { username: string; avatar_url: string | null }[];
+  review_jogo?: { titulo: string }[];
 }
 
 function HomePage() {
-  const [recentReviews, setRecentReviews] = useState<Review[]>([]);
+  const [recentActivities, setRecentActivities] = useState<Activity[]>([]);
   const [trendingGames, setTrendingGames] = useState<Game[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -37,7 +40,7 @@ function HomePage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch recent reviews with user and game info
+        // Fetch recent reviews
         const { data: reviews, error: reviewsError } = await supabase
           .from('avaliacoes')
           .select(`
@@ -51,13 +54,60 @@ function HomePage() {
             usuarios!inner(username, avatar_url)
           `)
           .order('data_publicacao', { ascending: false })
-          .limit(5);
+          .limit(10);
 
-        if (reviewsError) {
-          console.error('Error fetching reviews:', reviewsError);
-        } else {
-          setRecentReviews(reviews || []);
+        // Fetch recent comments
+        const { data: comments, error: commentsError } = await supabase
+          .from('comentarios')
+          .select(`
+            id,
+            usuario_id,
+            review_id,
+            texto,
+            data_comentario,
+            usuarios!inner(username, avatar_url),
+            avaliacoes!inner(
+              jogo_id,
+              jogos!inner(titulo)
+            )
+          `)
+          .order('data_comentario', { ascending: false })
+          .limit(10);
+
+        let activities: Activity[] = [];
+
+        if (!reviewsError && reviews) {
+          const reviewActivities: Activity[] = reviews.map(review => ({
+            id: review.id,
+            type: 'review' as const,
+            usuario_id: review.usuario_id,
+            jogo_id: review.jogo_id,
+            texto: review.texto_review || `Avaliou com ${review.nota} estrelas`,
+            nota: review.nota,
+            data_publicacao: review.data_publicacao,
+            jogos: review.jogos,
+            usuarios: review.usuarios
+          }));
+          activities.push(...reviewActivities);
         }
+
+        if (!commentsError && comments) {
+          const commentActivities: Activity[] = comments.map(comment => ({
+            id: comment.id,
+            type: 'comment' as const,
+            usuario_id: comment.usuario_id,
+            review_id: comment.review_id,
+            texto: comment.texto,
+            data_publicacao: comment.data_comentario,
+            usuarios: comment.usuarios,
+            review_jogo: comment.avaliacoes?.[0]?.jogos
+          }));
+          activities.push(...commentActivities);
+        }
+
+        // Sort by date and limit to 15 most recent
+        activities.sort((a, b) => new Date(b.data_publicacao).getTime() - new Date(a.data_publicacao).getTime());
+        setRecentActivities(activities.slice(0, 15));
 
         // Fetch trending games (top rated with reviews)
         const { data: games, error: gamesError } = await supabase
@@ -120,32 +170,45 @@ function HomePage() {
         <div className="feed-section">
           <h2 className="section-title">Atividades Recentes</h2>
           <div className="reviews-feed">
-            {recentReviews.length === 0 ? (
-              <p>Nenhuma review recente. Seja o primeiro a avaliar um jogo!</p>
+            {recentActivities.length === 0 ? (
+              <p>Nenhuma atividade recente. Seja o primeiro a avaliar um jogo!</p>
             ) : (
-              recentReviews.map(review => (
-                <div key={review.id} className="review-card animate-in">
+              recentActivities.map(activity => (
+                <div key={`${activity.type}-${activity.id}`} className="review-card animate-in">
                   <div className="review-header">
                     <div className="user-info">
                       <span className="user-avatar">
-                      {review.usuarios[0]?.avatar_url ? (
-                        <img src={review.usuarios[0].avatar_url} alt="Avatar" />
+                      {activity.usuarios[0]?.avatar_url ? (
+                        <img src={activity.usuarios[0].avatar_url} alt="Avatar" />
                       ) : (
-                        review.usuarios[0]?.username.charAt(0).toUpperCase() || 'U'
+                        activity.usuarios[0]?.username.charAt(0).toUpperCase() || 'U'
                       )}
                     </span>
-                    <span className="user-name">{review.usuarios[0]?.username || 'Usuário'}</span>
+                    <span className="user-name">{activity.usuarios[0]?.username || 'Usuário'}</span>
                     </div>
                     <span className="review-time">
-                      {new Date(review.data_publicacao).toLocaleDateString('pt-BR')}
+                      {new Date(activity.data_publicacao).toLocaleDateString('pt-BR')}
                     </span>
                   </div>
                   <div className="review-content">
-                    <h4 className="game-title">{review.jogos[0]?.titulo || 'Jogo desconhecido'}</h4>
-                    <div className="rating">
-                      {'⭐'.repeat(Math.floor(review.nota))}
-                    </div>
-                    <p className="review-text">{review.texto_review}</p>
+                    {activity.type === 'review' ? (
+                      <>
+                        <h4 className="game-title">
+                          {activity.jogos?.[0]?.titulo || 'Jogo desconhecido'}
+                        </h4>
+                        <div className="rating">
+                          {'⭐'.repeat(Math.floor(activity.nota || 0))}
+                        </div>
+                        <p className="review-text">{activity.texto}</p>
+                      </>
+                    ) : (
+                      <>
+                        <h4 className="game-title">
+                          Comentou em {activity.review_jogo?.[0]?.titulo || 'uma avaliação'}
+                        </h4>
+                        <p className="review-text">💬 {activity.texto}</p>
+                      </>
+                    )}
                   </div>
                 </div>
               ))
