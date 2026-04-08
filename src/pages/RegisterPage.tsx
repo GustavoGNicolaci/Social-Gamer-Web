@@ -29,6 +29,7 @@ function RegisterPage() {
     confirmPassword: '',
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [successMessage, setSuccessMessage] = useState('')
 
   const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
@@ -143,14 +144,17 @@ function RegisterPage() {
 
       console.log('Perfil inserido com sucesso:', insertedData)
 
-      // redireciona após registro bem-sucedido
-      // se a sessão já estiver ativa (usuário logado automaticamente), vai para home
       if (signUpData.session) {
         console.log('Sessão ativa, redirecionando para home')
         navigate('/')
       } else {
-        console.log('Sessão não ativa, redirecionando para login')
-        navigate('/login')
+        console.log('Sessão não ativa, aguardando confirmação por email')
+        setSuccessMessage(
+          `Quase lá! Um e-mail de confirmação foi enviado para ${formData.email}. ` +
+          'Abra sua caixa de entrada e clique no link para ativar sua conta. ' +
+          'Depois disso, retorne aqui e faça login.'
+        )
+        setErrors({})
       }
     } catch (error) {
       console.error('Erro ao registrar:', error)
@@ -168,90 +172,102 @@ function RegisterPage() {
           <h1>Criar Conta</h1>
           <p>Junte-se à comunidade!</p>
 
-          <form onSubmit={handleRegister}>
-            {/* Username */}
-            <div className="form-group">
-              <label htmlFor="username">Nome de usuário</label>
-              <input
-                type="text"
-                id="username"
-                name="username"
-                placeholder="Seu username (único)"
-                value={formData.username}
-                onChange={handleInputChange}
-                className={errors.username ? 'input-error' : ''}
-              />
-              {errors.username && <span className="error-message">{errors.username}</span>}
+          {successMessage ? (
+            <div className="success-banner">
+              <h2>Confirmação enviada!</h2>
+              <p>{successMessage}</p>
+              <div className="success-actions">
+                <Link to="/login" className="register-link">
+                  Ir para login
+                </Link>
+              </div>
             </div>
+          ) : (
+            <form onSubmit={handleRegister}>
+              {/* Username */}
+              <div className="form-group">
+                <label htmlFor="username">Nome de usuário</label>
+                <input
+                  type="text"
+                  id="username"
+                  name="username"
+                  placeholder="Seu username (único)"
+                  value={formData.username}
+                  onChange={handleInputChange}
+                  className={errors.username ? 'input-error' : ''}
+                />
+                {errors.username && <span className="error-message">{errors.username}</span>}
+              </div>
 
-            {/* Nome */}
-            <div className="form-group">
-              <label htmlFor="name">Nome Completo</label>
-              <input
-                type="text"
-                id="name"
-                name="name"
-                placeholder="Seu Nome Completo"
-                value={formData.name}
-                onChange={handleInputChange}
-                className={errors.name ? 'input-error' : ''}
-              />
-              {errors.name && <span className="error-message">{errors.name}</span>}
-            </div>
+              {/* Nome */}
+              <div className="form-group">
+                <label htmlFor="name">Nome Completo</label>
+                <input
+                  type="text"
+                  id="name"
+                  name="name"
+                  placeholder="Seu Nome Completo"
+                  value={formData.name}
+                  onChange={handleInputChange}
+                  className={errors.name ? 'input-error' : ''}
+                />
+                {errors.name && <span className="error-message">{errors.name}</span>}
+              </div>
 
-            {/* Email */}
-            <div className="form-group">
-              <label htmlFor="email">Email</label>
-              <input
-                type="email"
-                id="email"
-                name="email"
-                placeholder="seu@email.com"
-                value={formData.email}
-                onChange={handleInputChange}
-                className={errors.email ? 'input-error' : ''}
-              />
-              {errors.email && <span className="error-message">{errors.email}</span>}
-            </div>
+              {/* Email */}
+              <div className="form-group">
+                <label htmlFor="email">Email</label>
+                <input
+                  type="email"
+                  id="email"
+                  name="email"
+                  placeholder="seu@email.com"
+                  value={formData.email}
+                  onChange={handleInputChange}
+                  className={errors.email ? 'input-error' : ''}
+                />
+                {errors.email && <span className="error-message">{errors.email}</span>}
+              </div>
 
-            {/* Senha */}
-            <div className="form-group">
-              <label htmlFor="password">Senha</label>
-              <input
-                type="password"
-                id="password"
-                name="password"
-                placeholder="Sua senha"
-                value={formData.password}
-                onChange={handleInputChange}
-                className={errors.password ? 'input-error' : ''}
-              />
-              {errors.password && <span className="error-message">{errors.password}</span>}
-            </div>
+              {/* Senha */}
+              <div className="form-group">
+                <label htmlFor="password">Senha</label>
+                <input
+                  type="password"
+                  id="password"
+                  name="password"
+                  placeholder="Sua senha"
+                  value={formData.password}
+                  onChange={handleInputChange}
+                  className={errors.password ? 'input-error' : ''}
+                />
+                {errors.password && <span className="error-message">{errors.password}</span>}
+              </div>
 
-            {/* Confirmar Senha */}
-            <div className="form-group">
-              <label htmlFor="confirmPassword">Confirmar Senha</label>
-              <input
-                type="password"
-                id="confirmPassword"
-                name="confirmPassword"
-                placeholder="Confirme sua senha"
-                value={formData.confirmPassword}
-                onChange={handleInputChange}
-                className={errors.confirmPassword ? 'input-error' : ''}
-              />
-              {errors.confirmPassword && (
-                <span className="error-message">{errors.confirmPassword}</span>
-              )}
-            </div>
+              {/* Confirmar Senha */}
+              <div className="form-group">
+                <label htmlFor="confirmPassword">Confirmar Senha</label>
+                <input
+                  type="password"
+                  id="confirmPassword"
+                  name="confirmPassword"
+                  placeholder="Confirme sua senha"
+                  value={formData.confirmPassword}
+                  onChange={handleInputChange}
+                  className={errors.confirmPassword ? 'input-error' : ''}
+                />
+                {errors.confirmPassword && (
+                  <span className="error-message">{errors.confirmPassword}</span>
+                )}
+              </div>
 
-            {errors.submit && <div className="error-banner">{errors.submit}</div>}
+              {errors.submit && <div className="error-banner">{errors.submit}</div>}
 
-            <button type="submit" className="register-submit-btn">
-              Criar Conta
-            </button>
-          </form>
+              <button type="submit" className="register-submit-btn">
+                Criar Conta
+              </button>
+            </form>
+          )}
 
           <div className="register-footer">
             <p>
