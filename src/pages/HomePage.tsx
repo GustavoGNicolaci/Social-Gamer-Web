@@ -197,7 +197,16 @@ function HomePage() {
                           {activity.jogos?.[0]?.titulo || 'Jogo desconhecido'}
                         </h4>
                         <div className="rating">
-                          {'⭐'.repeat(Math.floor(activity.nota || 0))}
+                          <div className="rating-display">
+                            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+                              <span
+                                key={num}
+                                className={`rating-square-display ${num <= (activity.nota || 0) ? 'filled' : ''}`}
+                              >
+                                {num}
+                              </span>
+                            ))}
+                          </div>
                         </div>
                         <p className="review-text">{activity.texto}</p>
                       </>

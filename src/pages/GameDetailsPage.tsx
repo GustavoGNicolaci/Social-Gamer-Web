@@ -212,15 +212,19 @@ function GameDetailsPage() {
           {user ? (
             <form onSubmit={handleSubmitAvaliacao} className="review-form">
               <div className="rating-input">
-                <label>Nota (1-10):</label>
-                <input
-                  type="number"
-                  min="1"
-                  max="10"
-                  value={nota}
-                  onChange={(e) => setNota(Number(e.target.value))}
-                  required
-                />
+                <label>Nota:</label>
+                <div className="rating-squares">
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+                    <button
+                      key={num}
+                      type="button"
+                      className={`rating-square ${nota === num ? 'selected' : ''}`}
+                      onClick={() => setNota(num)}
+                    >
+                      {num}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div className="review-text">
                 <label>Comentário:</label>
@@ -256,7 +260,16 @@ function GameDetailsPage() {
                       <span className="username">{avaliacao.usuario.username}</span>
                     </div>
                     <div className="review-rating">
-                      <span className="rating-stars">{'★'.repeat(avaliacao.nota)}{'☆'.repeat(10 - avaliacao.nota)}</span>
+                      <div className="rating-display">
+                        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+                          <span
+                            key={num}
+                            className={`rating-square-display ${num <= avaliacao.nota ? 'filled' : ''}`}
+                          >
+                            {num}
+                          </span>
+                        ))}
+                      </div>
                       <span className="rating-number">({avaliacao.nota}/10)</span>
                     </div>
                   </div>

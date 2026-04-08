@@ -428,15 +428,47 @@ body.light {
   display: block;
   color: rgba(255,255,255,0.85);
   margin-bottom: 0.5rem;
+  font-weight: 500;
 }
 
-.rating-input input {
-  width: 100%;
-  padding: 0.5rem;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 5px;
+.rating-squares {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.rating-square {
+  width: 40px;
+  height: 40px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
   background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  color: rgba(255, 255, 255, 0.8);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.rating-square:hover {
+  border-color: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.15);
+  transform: scale(1.05);
+}
+
+.rating-square.selected {
+  background: #007bff;
+  border-color: #007bff;
+  color: white;
+  box-shadow: 0 0 10px rgba(0, 123, 255, 0.3);
+}
+
+.rating-square.selected:hover {
+  background: #0056b3;
+  border-color: #0056b3;
 }
 
 .review-text {
@@ -517,9 +549,29 @@ body.light {
   gap: 0.5rem;
 }
 
-.rating-stars {
-  color: #ffd700;
-  font-size: 1.2rem;
+.rating-display {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.rating-square-display {
+  width: 20px;
+  height: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.6);
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: bold;
+}
+
+.rating-square-display.filled {
+  background: #007bff;
+  border-color: #007bff;
+  color: white;
 }
 
 .rating-number {
