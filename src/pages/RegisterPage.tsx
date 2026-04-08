@@ -3,17 +3,25 @@ import type { ChangeEvent, FormEvent } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../supabase-client'
+import { testDatabaseOperations } from '../utils/databaseTest'
 
 function RegisterPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
 
-  // if already logged in, send to home
-  useEffect(() => {
-    if (user) {
-      navigate('/')
+  const testDatabaseConnection = async () => {
+    try {
+      console.log('Testando conexão com a tabela usuarios...')
+      await testDatabaseOperations()
+    } catch (err) {
+      console.error('Erro no teste de conexão:', err)
     }
-  }, [user, navigate])
+  }
+
+  // Testar conexão ao montar o componente
+  useEffect(() => {
+    testDatabaseConnection()
+  }, [])
 
   const [formData, setFormData] = useState({
     username: '',
@@ -75,6 +83,8 @@ function RegisterPage() {
     }
 
     try {
+      console.log('Iniciando registro com dados:', formData)
+
       // 1. criar conta no auth do Supabase
       const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email: formData.email,
@@ -89,12 +99,15 @@ function RegisterPage() {
 
       const user = signUpData.user
       if (!user) {
+        console.error('Usuário não foi criado')
         setErrors((prev) => ({ ...prev, submit: 'Falha ao criar usuário' }))
         return
       }
 
+      console.log('Usuário criado no auth:', user.id)
+
       // 2. inserir perfil na tabela usuarios
-      const { error: insertError } = await supabase.from('usuarios').insert({
+      const profileData = {
         id: user.id,
         username: formData.username,
         nome_completo: formData.name,
@@ -102,10 +115,19 @@ function RegisterPage() {
         bio: '',
         data_cadastro: new Date().toISOString(),
         configuracoes_privacidade: {},
-      })
+      }
+
+      console.log('Tentando inserir perfil:', profileData)
+
+      // Verificar se temos uma sessão ativa
+      const { data: sessionData } = await supabase.auth.getSession()
+      console.log('Sessão atual:', sessionData.session ? 'Ativa' : 'Inativa')
+
+      const { data: insertedData, error: insertError } = await supabase.from('usuarios').insert(profileData).select()
 
       if (insertError) {
-        console.error('Error inserting profile:', insertError.message)
+        console.error('Error inserting profile:', insertError)
+        console.error('Detalhes do erro:', insertError.details, insertError.hint, insertError.code)
         // handle duplicate username constraint
         if (insertError.details?.includes('Key (username)')) {
           setErrors((prev) => ({ ...prev, username: 'Nome de usuário já existe' }))
@@ -115,11 +137,15 @@ function RegisterPage() {
         return
       }
 
+      console.log('Perfil inserido com sucesso:', insertedData)
+
       // redireciona após registro bem-sucedido
       // se a sessão já estiver ativa (usuário logado automaticamente), vai para home
       if (signUpData.session) {
+        console.log('Sessão ativa, redirecionando para home')
         navigate('/')
       } else {
+        console.log('Sessão não ativa, redirecionando para login')
         navigate('/login')
       }
     } catch (error) {
