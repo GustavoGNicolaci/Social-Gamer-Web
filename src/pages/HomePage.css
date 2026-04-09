@@ -1,10 +1,11 @@
 /* HomePage.css */
 
 .home-page {
-  max-width: 1200px;
+  width: 100%;
+  max-width: var(--content-max-width);
   margin: 0 auto;
   padding: 2rem;
-  padding-top: calc(2rem + 80px);
+  padding-top: var(--page-top-clearance);
   min-height: 100vh;
 }
 
@@ -471,7 +472,7 @@
 @media (max-width: 768px) {
   .home-page {
     padding: 1rem;
-    padding-top: calc(1rem + 80px);
+    padding-top: var(--page-top-clearance-tablet);
   }
 
   .hero-section {
@@ -595,5 +596,12 @@
   .quick-actions {
     flex-wrap: wrap;
     justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .home-page {
+    padding: 0.5rem;
+    padding-top: var(--page-top-clearance-mobile);
   }
 }

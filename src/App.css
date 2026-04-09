@@ -7,6 +7,10 @@
 
 /* Theme variables */
 :root {
+  --content-max-width: 1600px;
+  --page-top-clearance: calc(2rem + 112px);
+  --page-top-clearance-tablet: calc(1rem + 102px);
+  --page-top-clearance-mobile: calc(0.5rem + 96px);
   --bg-gradient-dark: linear-gradient(135deg, #090312 0%, #140521 50%, #1b0630 100%);
   --bg-gradient-light: linear-gradient(135deg, #f0f4f8 0%, #ffffff 100%);
   --bg-gradient: var(--bg-gradient-dark);
@@ -50,7 +54,7 @@ body.light {
 /* Root container */
 #root {
   width: 100%;
-  padding: 2rem;
+  padding: 0;
   text-align: left;
   display: flex;
   flex-direction: column;
@@ -76,12 +80,13 @@ body.light {
 .page-container {
   flex: 1;
   padding: 2rem;
-  padding-top: calc(2rem + 80px);
+  padding-top: var(--page-top-clearance);
   animation: fadeIn 0.3s ease-in;
 }
 
 .page-content {
-  max-width: 1200px;
+  width: 100%;
+  max-width: var(--content-max-width);
   margin: 0 auto;
 }
 
@@ -1705,6 +1710,7 @@ body.light {
 @media (max-width: 768px) {
   .page-container {
     padding: 1rem;
+    padding-top: var(--page-top-clearance-tablet);
   }
 
   .page-content h1 {
@@ -1760,6 +1766,7 @@ body.light {
 @media (max-width: 480px) {
   .page-container {
     padding: 0.5rem;
+    padding-top: var(--page-top-clearance-mobile);
   }
 
   .page-content h1 {
