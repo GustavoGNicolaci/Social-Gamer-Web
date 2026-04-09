@@ -25,7 +25,7 @@ function GamesPage() {
   const [customPlatform, setCustomPlatform] = useState('');
   const [customDeveloper, setCustomDeveloper] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 9;
+  const itemsPerPage = 12;
   const [showGenresModal, setShowGenresModal] = useState(false);
   const [selectedGameGenres, setSelectedGameGenres] = useState<string[]>([]);
 
