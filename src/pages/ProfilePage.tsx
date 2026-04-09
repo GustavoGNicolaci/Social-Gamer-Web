@@ -1,11 +1,23 @@
+import { useEffect, useState, type ChangeEvent } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../supabase-client'
-import { AvatarUpload } from '../components/AvatarUpload'
+import { uploadImage } from '../services/storageService'
 
 export function ProfilePage() {
   const { user, profile } = useAuth()
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
+  const [bio, setBio] = useState('')
+  const [isSavingBio, setIsSavingBio] = useState(false)
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
+  const [bioFeedback, setBioFeedback] = useState<string | null>(null)
+  const [avatarFeedback, setAvatarFeedback] = useState<string | null>(null)
 
-  console.log('ProfilePage render:', { user, profile })
+  useEffect(() => {
+    if (!profile) return
+
+    setAvatarUrl(profile.avatar_url)
+    setBio(profile.bio || '')
+  }, [profile])
 
   if (!user || !profile) {
     return (
@@ -29,22 +41,63 @@ export function ProfilePage() {
       })
     : 'Data nao informada'
 
-  const handleAvatarUploadSuccess = async (url: string) => {
-    if (!user) return
+  const handleAvatarChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
 
+    setAvatarFeedback(null)
+    setIsUploadingAvatar(true)
+
+    try {
+      const result = await uploadImage(file, user.id)
+      if (!result) {
+        setAvatarFeedback('Nao foi possivel enviar a nova foto.')
+        return
+      }
+
+      const { error } = await supabase
+        .from('usuarios')
+        .update({
+          avatar_url: result.url,
+        })
+        .eq('id', user.id)
+
+      if (error) {
+        setAvatarFeedback('Nao foi possivel atualizar a foto no perfil.')
+        return
+      }
+
+      setAvatarUrl(result.url)
+      setAvatarFeedback('Foto de perfil atualizada com sucesso.')
+    } catch (error) {
+      setAvatarFeedback('Nao foi possivel atualizar a foto agora.')
+    } finally {
+      setIsUploadingAvatar(false)
+      event.target.value = ''
+    }
+  }
+
+  const handleSaveBio = async () => {
+    setBioFeedback(null)
+    setIsSavingBio(true)
+
+    const trimmedBio = bio.trim()
     const { error } = await supabase
       .from('usuarios')
       .update({
-        avatar_url: url,
+        bio: trimmedBio || null,
       })
       .eq('id', user.id)
 
-    if (!error) {
-      alert('Avatar atualizado com sucesso!')
-      window.location.reload()
-    } else {
-      alert('Erro ao atualizar perfil')
+    if (error) {
+      setBioFeedback('Nao foi possivel salvar sua bio.')
+      setIsSavingBio(false)
+      return
     }
+
+    setBio(trimmedBio)
+    setBioFeedback('Bio salva com sucesso.')
+    setIsSavingBio(false)
   }
 
   return (
@@ -54,18 +107,37 @@ export function ProfilePage() {
           <div className="profile-hero-glow profile-hero-glow-left"></div>
           <div className="profile-hero-glow profile-hero-glow-right"></div>
 
-          <div className="profile-hero-main">
+          <div className="profile-hero-main profile-hero-main-single">
             <div className="profile-identity-card">
               <div className="profile-avatar-column">
-                {profile.avatar_url ? (
-                  <img src={profile.avatar_url} alt="Avatar" className="avatar-img profile-avatar-large" />
-                ) : (
-                  <div className="avatar-placeholder-large profile-avatar-large">
-                    {profile.nome_completo ? profile.nome_completo.charAt(0).toUpperCase() : 'U'}
-                  </div>
-                )}
+                <label
+                  htmlFor="profile-avatar-input"
+                  className={`profile-avatar-trigger${isUploadingAvatar ? ' is-uploading' : ''}`}
+                  title="Clique para trocar a foto"
+                >
+                  {avatarUrl ? (
+                    <img src={avatarUrl} alt="Avatar" className="avatar-img profile-avatar-large" />
+                  ) : (
+                    <div className="avatar-placeholder-large profile-avatar-large">
+                      {profile.nome_completo ? profile.nome_completo.charAt(0).toUpperCase() : 'U'}
+                    </div>
+                  )}
+                  <span className="profile-avatar-overlay">
+                    {isUploadingAvatar ? 'Enviando foto...' : 'Trocar foto'}
+                  </span>
+                </label>
+
+                <input
+                  id="profile-avatar-input"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleAvatarChange}
+                  disabled={isUploadingAvatar}
+                  className="profile-avatar-input"
+                />
 
                 <div className="profile-status-pill">Conta ativa</div>
+                {avatarFeedback && <p className="profile-inline-feedback">{avatarFeedback}</p>}
               </div>
 
               <div className="profile-info-column">
@@ -73,14 +145,13 @@ export function ProfilePage() {
                 <h1>{profile.nome_completo || 'Nome nao informado'}</h1>
                 <p className="profile-handle">@{profile.username || 'usuario'}</p>
                 <p className="profile-summary">
-                  Este e o espaco principal da sua conta. Aqui voce pode revisar como seu nome e
-                  avatar aparecem para a comunidade.
+                  Sua pagina mostra apenas os dados publicos do perfil. O email nao aparece aqui.
                 </p>
 
                 <div className="profile-highlights">
                   <div className="profile-highlight-card">
-                    <span className="profile-highlight-label">Email da conta</span>
-                    <strong>{user.email || 'Nao informado'}</strong>
+                    <span className="profile-highlight-label">Nome exibido</span>
+                    <strong>{profile.nome_completo || 'Nao informado'}</strong>
                   </div>
                   <div className="profile-highlight-card">
                     <span className="profile-highlight-label">Membro desde</span>
@@ -89,19 +160,6 @@ export function ProfilePage() {
                 </div>
               </div>
             </div>
-
-            <aside className="profile-side-panel">
-              <div className="profile-panel-card">
-                <h2>Foto de perfil</h2>
-                <p>Troque sua foto sem duplicar a visualizacao. A imagem atual continua destacada no topo do perfil.</p>
-                <AvatarUpload
-                  userId={user.id}
-                  currentAvatarPath={profile.avatar_url || undefined}
-                  onUploadSuccess={handleAvatarUploadSuccess}
-                  showPreview={false}
-                />
-              </div>
-            </aside>
           </div>
         </section>
 
@@ -120,19 +178,40 @@ export function ProfilePage() {
                 <strong>@{profile.username || 'usuario'}</strong>
               </div>
               <div className="profile-detail-row">
-                <span>Email</span>
-                <strong>{user.email || 'Nao informado'}</strong>
+                <span>Bio atual</span>
+                <strong>{bio || 'Sem bio ainda'}</strong>
               </div>
             </div>
           </article>
 
           <article className="profile-detail-card profile-detail-card-accent">
-            <span className="profile-card-kicker">Dica rapida</span>
-            <h2>Deixe sua conta facil de reconhecer</h2>
+            <span className="profile-card-kicker">Bio</span>
+            <h2>Conte um pouco sobre voce</h2>
             <p>
-              Use um nome completo legivel e um avatar marcante. Isso melhora sua presenca na
-              navbar, no perfil e nas interacoes com outros jogadores.
+              Escreva uma bio curta para aparecer no seu perfil e deixar sua conta mais pessoal.
             </p>
+
+            <textarea
+              className="profile-bio-input"
+              value={bio}
+              onChange={(event) => setBio(event.target.value)}
+              maxLength={220}
+              placeholder="Ex.: Fa de RPGs, viciado em multiplayer competitivo e sempre procurando novos jogos."
+            />
+
+            <div className="profile-bio-footer">
+              <span className="profile-bio-counter">{bio.length}/220</span>
+              <button
+                type="button"
+                className="profile-save-button"
+                onClick={handleSaveBio}
+                disabled={isSavingBio}
+              >
+                {isSavingBio ? 'Salvando...' : 'Salvar bio'}
+              </button>
+            </div>
+
+            {bioFeedback && <p className="profile-inline-feedback">{bioFeedback}</p>}
           </article>
         </section>
       </div>
