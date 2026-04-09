@@ -6,12 +6,14 @@ interface AvatarUploadProps {
   userId: string;
   currentAvatarPath?: string;
   onUploadSuccess: (url: string, path: string) => void;
+  showPreview?: boolean;
 }
 
 export function AvatarUpload({
   userId,
   currentAvatarPath,
   onUploadSuccess,
+  showPreview = true,
 }: AvatarUploadProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -57,15 +59,17 @@ export function AvatarUpload({
 
   return (
     <div className="avatar-upload">
-      <div className="avatar-preview">
-        {preview ? (
-          <img src={preview} alt="Preview" />
-        ) : currentAvatarPath ? (
-          <img src={getPublicUrl(currentAvatarPath)} alt="Avatar" />
-        ) : (
-          <div className="placeholder">Sem foto de perfil</div>
-        )}
-      </div>
+      {showPreview && (
+        <div className="avatar-preview">
+          {preview ? (
+            <img src={preview} alt="Preview" />
+          ) : currentAvatarPath ? (
+            <img src={getPublicUrl(currentAvatarPath)} alt="Avatar" />
+          ) : (
+            <div className="placeholder">Sem foto de perfil</div>
+          )}
+        </div>
+      )}
 
       <label htmlFor="avatar-input" className="upload-button">
         {isLoading ? 'Enviando...' : 'Escolher foto'}

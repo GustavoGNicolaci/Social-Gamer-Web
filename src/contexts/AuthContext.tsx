@@ -23,29 +23,41 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 
+const getMetadataProfile = (user: User) => {
+  const metadata = user.user_metadata as Record<string, unknown> | undefined
+
+  return {
+    username: typeof metadata?.username === 'string' ? metadata.username.trim() : '',
+    nome_completo:
+      typeof metadata?.nome_completo === 'string' ? metadata.nome_completo.trim() : '',
+  }
+}
+
+const getEmailLocalPart = (email?: string) => {
+  if (!email) return ''
+
+  const [localPart] = email.split('@')
+  return localPart?.trim().toLowerCase() || ''
+}
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null)
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState<boolean>(true)
 
-  // fetch profile from 'usuarios' table
   const fetchProfile = async (userId: string) => {
     try {
       console.log('Buscando perfil para userId:', userId)
 
-      const { data, error } = await supabase
-        .from('usuarios')
-        .select('*')
-        .eq('id', userId)
-        .single()
+      const { data, error } = await supabase.from('usuarios').select('*').eq('id', userId).single()
 
       if (error) {
         if (error.code === 'PGRST116') {
-          console.log('Perfil não encontrado para userId:', userId)
+          console.log('Perfil nao encontrado para userId:', userId)
         } else {
           console.error('Erro ao buscar perfil:', error.message)
-          console.error('Código do erro:', error.code)
+          console.error('Codigo do erro:', error.code)
         }
         return null
       }
@@ -53,19 +65,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.log('Perfil encontrado:', data)
       return data as UserProfile
     } catch (err) {
-      console.error('Erro genérico ao buscar perfil:', err)
+      console.error('Erro generico ao buscar perfil:', err)
       return null
     }
   }
 
   const createProfileFromMetadata = async (user: User) => {
     try {
-      const metadata = user.user_metadata as Record<string, any> | undefined
-      const username = metadata?.username || user.email?.split('@')[0] || ''
-      const nome_completo = metadata?.nome_completo || user.email || ''
+      const { username, nome_completo } = getMetadataProfile(user)
 
       if (!username || !nome_completo) {
-        console.log('Não há metadata suficiente para criar perfil automaticamente')
+        console.error('Nao ha metadata suficiente para criar perfil automaticamente sem usar email:', {
+          userId: user.id,
+          hasUsername: Boolean(username),
+          hasNomeCompleto: Boolean(nome_completo),
+        })
         return null
       }
 
@@ -88,46 +102,103 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.log('Perfil criado a partir de metadata:', data)
       return data as UserProfile
     } catch (err) {
-      console.error('Erro genérico ao criar perfil a partir de metadata:', err)
+      console.error('Erro generico ao criar perfil a partir de metadata:', err)
       return null
     }
   }
 
+  const repairLegacyProfile = async (user: User, profile: UserProfile) => {
+    try {
+      const { username: metadataUsername, nome_completo: metadataNomeCompleto } = getMetadataProfile(user)
+      if (!metadataUsername || !metadataNomeCompleto) {
+        return profile
+      }
+
+      const normalizedEmail = user.email?.trim().toLowerCase() || ''
+      const emailLocalPart = getEmailLocalPart(user.email)
+      const normalizedProfileUsername = profile.username?.trim().toLowerCase() || ''
+      const normalizedProfileNomeCompleto = profile.nome_completo?.trim().toLowerCase() || ''
+
+      const shouldRepairUsername =
+        normalizedProfileUsername === emailLocalPart && profile.username !== metadataUsername
+
+      const shouldRepairNomeCompleto =
+        normalizedProfileNomeCompleto === normalizedEmail &&
+        profile.nome_completo !== metadataNomeCompleto
+
+      if (!shouldRepairUsername && !shouldRepairNomeCompleto) {
+        return profile
+      }
+
+      const updates: Partial<UserProfile> = {}
+
+      if (shouldRepairUsername) {
+        updates.username = metadataUsername
+      }
+
+      if (shouldRepairNomeCompleto) {
+        updates.nome_completo = metadataNomeCompleto
+      }
+
+      const { data, error } = await supabase
+        .from('usuarios')
+        .update(updates)
+        .eq('id', user.id)
+        .select('*')
+        .single()
+
+      if (error) {
+        console.error('Erro ao corrigir perfil legado com dados herdados do email:', error.message)
+        return profile
+      }
+
+      console.log('Perfil legado corrigido com sucesso:', data)
+      return data as UserProfile
+    } catch (err) {
+      console.error('Erro generico ao corrigir perfil legado:', err)
+      return profile
+    }
+  }
+
   const fetchOrCreateProfile = async (user: User) => {
-    const profile = await fetchProfile(user.id)
-    if (profile) return profile
+    const existingProfile = await fetchProfile(user.id)
+    if (existingProfile) {
+      return await repairLegacyProfile(user, existingProfile)
+    }
+
     return await createProfileFromMetadata(user)
   }
 
   useEffect(() => {
-    // check current session on mount
     const init = async () => {
       const {
         data: { session: currentSession },
       } = await supabase.auth.getSession()
+
       setSession(currentSession)
       setUser(currentSession?.user ?? null)
+
       if (currentSession?.user) {
         const prof = await fetchOrCreateProfile(currentSession.user)
         setProfile(prof)
       }
+
       setLoading(false)
     }
+
     init()
 
-    // subscribe to auth state changes
-    const { data: listener } = supabase.auth.onAuthStateChange(
-      async (_event, newSession) => {
-        setSession(newSession)
-        setUser(newSession?.user ?? null)
-        if (newSession?.user) {
-          const prof = await fetchOrCreateProfile(newSession.user)
-          setProfile(prof)
-        } else {
-          setProfile(null)
-        }
+    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
+      setSession(newSession)
+      setUser(newSession?.user ?? null)
+
+      if (newSession?.user) {
+        const prof = await fetchOrCreateProfile(newSession.user)
+        setProfile(prof)
+      } else {
+        setProfile(null)
       }
-    )
+    })
 
     return () => {
       listener.subscription.unsubscribe()
@@ -139,7 +210,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       email,
       password,
     })
-    // after login, onAuthStateChange will fire and update profile
+
     return { error }
   }
 
@@ -149,9 +220,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }
 
   return (
-    <AuthContext.Provider
-      value={{ session, user, profile, loading, login, logout }}
-    >
+    <AuthContext.Provider value={{ session, user, profile, loading, login, logout }}>
       {children}
     </AuthContext.Provider>
   )
