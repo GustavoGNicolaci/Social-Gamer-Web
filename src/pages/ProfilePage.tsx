@@ -4,7 +4,7 @@ import { supabase } from '../supabase-client'
 import { uploadImage } from '../services/storageService'
 
 export function ProfilePage() {
-  const { user, profile } = useAuth()
+  const { user, profile, refreshProfile } = useAuth()
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [bio, setBio] = useState('')
   const [isSavingBio, setIsSavingBio] = useState(false)
@@ -68,6 +68,7 @@ export function ProfilePage() {
       }
 
       setAvatarUrl(result.url)
+      await refreshProfile()
       setAvatarFeedback('Foto de perfil atualizada com sucesso.')
     } catch (error) {
       setAvatarFeedback('Nao foi possivel atualizar a foto agora.')
@@ -96,6 +97,7 @@ export function ProfilePage() {
     }
 
     setBio(trimmedBio)
+    await refreshProfile()
     setBioFeedback('Bio salva com sucesso.')
     setIsSavingBio(false)
   }

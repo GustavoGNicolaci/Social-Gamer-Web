@@ -19,6 +19,7 @@ interface AuthContextValue {
   loading: boolean
   login: (email: string, password: string) => Promise<{ error: any }>
   logout: () => Promise<void>
+  refreshProfile: () => Promise<UserProfile | null>
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
@@ -169,6 +170,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return await createProfileFromMetadata(user)
   }
 
+  const loadProfile = async (targetUser: User | null) => {
+    if (!targetUser) {
+      setProfile(null)
+      return null
+    }
+
+    const nextProfile = await fetchOrCreateProfile(targetUser)
+    setProfile(nextProfile)
+    return nextProfile
+  }
+
+  const refreshProfile = async () => {
+    return await loadProfile(user)
+  }
+
   useEffect(() => {
     const init = async () => {
       const {
@@ -177,11 +193,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       setSession(currentSession)
       setUser(currentSession?.user ?? null)
-
-      if (currentSession?.user) {
-        const prof = await fetchOrCreateProfile(currentSession.user)
-        setProfile(prof)
-      }
+      await loadProfile(currentSession?.user ?? null)
 
       setLoading(false)
     }
@@ -191,13 +203,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const { data: listener } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
       setSession(newSession)
       setUser(newSession?.user ?? null)
-
-      if (newSession?.user) {
-        const prof = await fetchOrCreateProfile(newSession.user)
-        setProfile(prof)
-      } else {
-        setProfile(null)
-      }
+      await loadProfile(newSession?.user ?? null)
     })
 
     return () => {
@@ -220,7 +226,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }
 
   return (
-    <AuthContext.Provider value={{ session, user, profile, loading, login, logout }}>
+    <AuthContext.Provider value={{ session, user, profile, loading, login, logout, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   )

@@ -227,29 +227,91 @@
 }
 
 .user-avatar-btn {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  background: none;
-  border: none;
+  gap: 0.75rem;
+  min-height: 44px;
+  padding: 0.35rem 0.55rem 0.35rem 0.35rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.08);
   color: white;
   cursor: pointer;
   text-decoration: none;
+  transition:
+    transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.3s ease,
+    border-color 0.3s ease,
+    background 0.3s ease;
+  box-shadow: 0 8px 20px rgba(10, 18, 35, 0.18);
+  backdrop-filter: blur(12px);
+}
+
+.user-avatar-btn:hover {
+  transform: translateY(-2px);
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.45);
+  box-shadow: 0 12px 24px rgba(10, 18, 35, 0.24);
+}
+
+.user-avatar-shell {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+}
+
+.user-avatar-img,
+.avatar-placeholder {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
 }
 
 .user-avatar-img {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
+  display: block;
   object-fit: cover;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  background: rgba(15, 23, 42, 0.35);
 }
 
 .avatar-placeholder {
-  font-size: 1.5rem;
+  display: grid;
+  place-items: center;
+  font-size: 0.95rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.9), rgba(14, 165, 233, 0.92));
+  border: 2px solid rgba(255, 255, 255, 0.25);
+}
+
+.user-profile-badge {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #f8fafc, #cbd5e1);
+  color: #0f172a;
+  border: 2px solid rgba(15, 23, 42, 0.35);
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.25);
+}
+
+.user-profile-icon {
+  width: 10px;
+  height: 10px;
 }
 
 .user-name {
-  font-weight: 500;
+  max-width: 9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  font-size: 0.95rem;
 }
 
 .user-dropdown {
@@ -307,36 +369,6 @@
   border-color: rgba(255, 255, 255, 0.5);
   transform: translateY(-3px);
   box-shadow: 0 12px 24px rgba(102, 126, 234, 0.3);
-}
-
-/* User Avatar Button */
-.user-avatar-btn {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  border: 2px solid white;
-  background: transparent;
-  cursor: pointer;
-  padding: 2px;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  overflow: hidden;
-}
-
-.user-avatar-btn:hover {
-  transform: scale(1.1);
-  box-shadow: 0 8px 20px rgba(255, 255, 255, 0.2);
-  border-color: rgba(255, 255, 255, 0.8);
-}
-
-.user-avatar-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: 50%;
 }
 
 /* Theme Button */
@@ -419,6 +451,13 @@
     font-size: 0.9rem;
   }
 
+  .user-avatar-btn {
+    padding-right: 0.35rem;
+  }
+
+  .user-name {
+    display: none;
+  }
 
 }
 
@@ -474,5 +513,25 @@
 
   .theme-icon {
     font-size: 1rem;
+  }
+
+  .user-avatar-btn {
+    min-height: 38px;
+    padding: 0.2rem;
+  }
+
+  .user-avatar-shell {
+    width: 34px;
+    height: 34px;
+  }
+
+  .user-profile-badge {
+    width: 16px;
+    height: 16px;
+  }
+
+  .user-profile-icon {
+    width: 9px;
+    height: 9px;
   }
 }
