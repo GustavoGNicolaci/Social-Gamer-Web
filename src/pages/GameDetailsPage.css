@@ -229,6 +229,19 @@
   line-height: 1.7;
 }
 
+.game-details-chip-section {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.game-details-chip-label {
+  color: rgba(200, 210, 255, 0.72);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .game-details-chip-row {
   display: flex;
   flex-wrap: wrap;
@@ -326,15 +339,12 @@
   text-transform: uppercase;
 }
 
-.game-details-highlight-card strong,
-.game-details-review-summary-card strong,
-.game-details-meta-row strong {
+.game-details-highlight-card strong {
   color: #fff;
   word-break: break-word;
 }
 
-.game-details-highlight-card small,
-.game-details-review-summary-card small {
+.game-details-highlight-card small {
   color: rgba(222, 232, 255, 0.72);
   font-size: 0.9rem;
 }
@@ -350,10 +360,8 @@
   gap: 0.85rem;
 }
 
-.game-details-panel-accent {
-  background:
-    radial-gradient(circle at top right, rgba(84, 211, 194, 0.14), transparent 32%),
-    linear-gradient(180deg, rgba(15, 18, 32, 0.95), rgba(9, 12, 24, 0.95));
+.game-details-panel-full {
+  grid-column: 1 / -1;
 }
 
 .game-details-panel h2,
@@ -371,23 +379,8 @@
   line-height: 1.7;
 }
 
-.game-details-meta-list {
-  display: grid;
-  gap: 0.8rem;
-}
-
-.game-details-meta-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 0.95rem 1rem;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.game-details-meta-row span {
-  color: rgba(200, 210, 255, 0.76);
+.game-details-section-heading p {
+  max-width: 60ch;
 }
 
 .game-details-reviews {
@@ -400,26 +393,6 @@
   justify-content: space-between;
   gap: 1rem;
   align-items: flex-start;
-}
-
-.game-details-review-summary-card {
-  display: grid;
-  gap: 0.15rem;
-  min-width: 150px;
-  padding: 1rem;
-  border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(12px);
-  text-align: right;
-}
-
-.game-details-review-summary-label {
-  color: rgba(200, 210, 255, 0.72);
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
 .game-details-review-form {
@@ -772,10 +745,6 @@
     display: grid;
   }
 
-  .game-details-review-summary-card {
-    text-align: left;
-  }
-
   .game-review-score {
     justify-items: start;
   }
@@ -820,7 +789,6 @@
     width: 100%;
   }
 
-  .game-details-meta-row,
   .game-review-comment-header {
     flex-direction: column;
     align-items: flex-start;

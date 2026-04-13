@@ -469,7 +469,7 @@
 
 .gp-game {
   display: grid;
-  gap: 0.9rem;
+  gap: 0.8rem;
   padding: 1rem;
   min-height: 100%;
   transition:
@@ -553,26 +553,17 @@
 
 .gp-game-body {
   display: grid;
-  gap: 0.75rem;
+  gap: 0.65rem;
 }
 
 .gp-game-head {
   display: grid;
-  gap: 0.3rem;
+  gap: 0.1rem;
 }
 
 .gp-game-head h3 {
   font-size: 1.15rem;
   line-height: 1.35;
-}
-
-.gp-preview {
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  opacity: 0.8;
-  line-height: 1.6;
 }
 
 .gp-tags {
@@ -605,7 +596,7 @@
 .gp-meta {
   display: grid;
   gap: 0.55rem;
-  padding: 0.9rem;
+  padding: 0.8rem;
   border-radius: 18px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.04);

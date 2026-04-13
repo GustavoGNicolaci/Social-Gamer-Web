@@ -319,16 +319,20 @@ function GameDetailsPage() {
               <h1>{game.titulo}</h1>
               <p className="game-details-summary">{resumoDescricao}</p>
 
-              <div className="game-details-chip-row">
-                {generos.length > 0 ? (
-                  generos.map(genero => (
-                    <span key={genero} className="genre-chip game-details-chip">
-                      {genero}
-                    </span>
-                  ))
-                ) : (
-                  <span className="game-details-muted-chip">Genero nao informado</span>
-                )}
+              <div className="game-details-chip-section">
+                <span className="game-details-chip-label">Categorias</span>
+
+                <div className="game-details-chip-row">
+                  {generos.length > 0 ? (
+                    generos.map(genero => (
+                      <span key={genero} className="genre-chip game-details-chip">
+                        {genero}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="game-details-muted-chip">Genero nao informado</span>
+                  )}
+                </div>
               </div>
 
               <div className="game-details-actions">
@@ -369,42 +373,15 @@ function GameDetailsPage() {
           <article className="game-details-highlight-card">
             <span className="game-details-highlight-label">Comunidade</span>
             <strong>{mediaAvaliacoes ? `${mediaAvaliacoesLabel}/10` : 'Ainda sem notas'}</strong>
-            <small>{totalAvaliacoesLabel}</small>
+            <small>{`${totalAvaliacoesLabel} | ${totalComentariosLabel}`}</small>
           </article>
         </section>
 
         <section className="game-details-info-grid">
-          <article className="game-details-panel">
+          <article className="game-details-panel game-details-panel-full">
             <span className="game-details-panel-kicker">Descricao</span>
             <h2>Sobre o jogo</h2>
             <p className="game-details-description-body">{descricaoCompleta}</p>
-          </article>
-
-          <article className="game-details-panel game-details-panel-accent">
-            <span className="game-details-panel-kicker">Resumo rapido</span>
-            <h2>Informacoes principais</h2>
-
-            <div className="game-details-meta-list">
-              <div className="game-details-meta-row">
-                <span>Generos</span>
-                <strong>{formatList(generos, 'Nao informados')}</strong>
-              </div>
-
-              <div className="game-details-meta-row">
-                <span>Plataformas</span>
-                <strong>{formatList(plataformas, 'Nao informadas')}</strong>
-              </div>
-
-              <div className="game-details-meta-row">
-                <span>Total de avaliacoes</span>
-                <strong>{totalAvaliacoesLabel}</strong>
-              </div>
-
-              <div className="game-details-meta-row">
-                <span>Comentarios</span>
-                <strong>{totalComentariosLabel}</strong>
-              </div>
-            </div>
           </article>
         </section>
 
@@ -414,12 +391,6 @@ function GameDetailsPage() {
               <span className="game-details-panel-kicker">Comunidade</span>
               <h2>Avaliacoes e comentarios</h2>
               <p>Veja como a comunidade descreve a experiencia deste jogo.</p>
-            </div>
-
-            <div className="game-details-review-summary-card">
-              <span className="game-details-review-summary-label">Panorama</span>
-              <strong>{mediaAvaliacoes ? `${mediaAvaliacoesLabel}/10` : 'Sem notas'}</strong>
-              <small>{totalAvaliacoesLabel}</small>
             </div>
           </div>
 

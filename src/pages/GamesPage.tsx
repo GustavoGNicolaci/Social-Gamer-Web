@@ -61,13 +61,6 @@ function formatDate(value: string | null | undefined, fallback = 'Nao informada'
   return date.toLocaleDateString('pt-BR')
 }
 
-function previewText(value: string | null | undefined) {
-  const normalizedValue = value?.trim() || ''
-  if (!normalizedValue) return 'Descricao nao informada.'
-  if (normalizedValue.length <= 150) return normalizedValue
-  return `${normalizedValue.slice(0, 147).trim()}...`
-}
-
 function initial(value: string) {
   const first = value.trim().charAt(0)
   return first ? first.toUpperCase() : 'J'
@@ -193,7 +186,6 @@ function GameCard({ game, onShowGenres }: GameCardProps) {
       <div className="gp-game-body">
         <div className="gp-game-head">
           <h3>{game.titulo}</h3>
-          <p className="gp-preview">{previewText(game.descricao)}</p>
         </div>
 
         <div className="gp-tags">
