@@ -1,15 +1,26 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
-import type { Session, User } from '@supabase/supabase-js'
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
+import type { AuthError, Session, User } from '@supabase/supabase-js'
 import { supabase } from '../supabase-client'
 
-interface UserProfile {
+export interface UserProfile {
   id: string
   username: string
   nome_completo: string
   avatar_url: string | null
   bio: string | null
   data_cadastro: string
-  configuracoes_privacidade: any
+  configuracoes_privacidade: Record<string, unknown> | null
+}
+
+export type UserProfileUpdates = Partial<
+  Pick<UserProfile, 'nome_completo' | 'username' | 'bio' | 'avatar_url'>
+>
+
+export interface ProfileUpdateError {
+  code?: string
+  message: string
+  details?: string | null
+  hint?: string | null
 }
 
 interface AuthContextValue {
@@ -17,9 +28,12 @@ interface AuthContextValue {
   user: User | null
   profile: UserProfile | null
   loading: boolean
-  login: (email: string, password: string) => Promise<{ error: any }>
+  login: (email: string, password: string) => Promise<{ error: AuthError | null }>
   logout: () => Promise<void>
   refreshProfile: () => Promise<UserProfile | null>
+  updateOwnProfile: (
+    updates: UserProfileUpdates
+  ) => Promise<{ data: UserProfile | null; error: ProfileUpdateError | null }>
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
@@ -41,13 +55,29 @@ const getEmailLocalPart = (email?: string) => {
   return localPart?.trim().toLowerCase() || ''
 }
 
+const normalizeProfileUpdateError = (
+  error: unknown,
+  fallbackMessage: string
+): ProfileUpdateError => {
+  if (error && typeof error === 'object') {
+    const message = 'message' in error && typeof error.message === 'string' ? error.message : fallbackMessage
+    const code = 'code' in error && typeof error.code === 'string' ? error.code : undefined
+    const details = 'details' in error && typeof error.details === 'string' ? error.details : null
+    const hint = 'hint' in error && typeof error.hint === 'string' ? error.hint : null
+
+    return { code, message, details, hint }
+  }
+
+  return { message: fallbackMessage }
+}
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null)
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState<boolean>(true)
 
-  const fetchProfile = async (userId: string) => {
+  const fetchProfile = useCallback(async (userId: string) => {
     try {
       console.log('Buscando perfil para userId:', userId)
 
@@ -57,27 +87,33 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         if (error.code === 'PGRST116') {
           console.log('Perfil nao encontrado para userId:', userId)
         } else {
-          console.error('Erro ao buscar perfil:', error.message)
-          console.error('Codigo do erro:', error.code)
+          console.error('Erro ao buscar perfil:', {
+            userId,
+            code: error.code,
+            message: error.message,
+            details: error.details,
+            hint: error.hint,
+          })
         }
+
         return null
       }
 
       console.log('Perfil encontrado:', data)
       return data as UserProfile
-    } catch (err) {
-      console.error('Erro generico ao buscar perfil:', err)
+    } catch (error) {
+      console.error('Erro generico ao buscar perfil:', { userId, error })
       return null
     }
-  }
+  }, [])
 
-  const createProfileFromMetadata = async (user: User) => {
+  const createProfileFromMetadata = useCallback(async (nextUser: User) => {
     try {
-      const { username, nome_completo } = getMetadataProfile(user)
+      const { username, nome_completo } = getMetadataProfile(nextUser)
 
       if (!username || !nome_completo) {
         console.error('Nao ha metadata suficiente para criar perfil automaticamente sem usar email:', {
-          userId: user.id,
+          userId: nextUser.id,
           hasUsername: Boolean(username),
           hasNomeCompleto: Boolean(nome_completo),
         })
@@ -85,7 +121,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
 
       const profileData = {
-        id: user.id,
+        id: nextUser.id,
         username,
         nome_completo,
         avatar_url: null,
@@ -96,39 +132,49 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       const { data, error } = await supabase.from('usuarios').insert(profileData).select().single()
       if (error) {
-        console.error('Erro ao criar perfil a partir de metadata:', error.message)
+        console.error('Erro ao criar perfil a partir de metadata:', {
+          userId: nextUser.id,
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+        })
         return null
       }
 
       console.log('Perfil criado a partir de metadata:', data)
       return data as UserProfile
-    } catch (err) {
-      console.error('Erro generico ao criar perfil a partir de metadata:', err)
+    } catch (error) {
+      console.error('Erro generico ao criar perfil a partir de metadata:', {
+        userId: nextUser.id,
+        error,
+      })
       return null
     }
-  }
+  }, [])
 
-  const repairLegacyProfile = async (user: User, profile: UserProfile) => {
+  const repairLegacyProfile = useCallback(async (nextUser: User, currentProfile: UserProfile) => {
     try {
-      const { username: metadataUsername, nome_completo: metadataNomeCompleto } = getMetadataProfile(user)
+      const { username: metadataUsername, nome_completo: metadataNomeCompleto } =
+        getMetadataProfile(nextUser)
       if (!metadataUsername || !metadataNomeCompleto) {
-        return profile
+        return currentProfile
       }
 
-      const normalizedEmail = user.email?.trim().toLowerCase() || ''
-      const emailLocalPart = getEmailLocalPart(user.email)
-      const normalizedProfileUsername = profile.username?.trim().toLowerCase() || ''
-      const normalizedProfileNomeCompleto = profile.nome_completo?.trim().toLowerCase() || ''
+      const normalizedEmail = nextUser.email?.trim().toLowerCase() || ''
+      const emailLocalPart = getEmailLocalPart(nextUser.email)
+      const normalizedProfileUsername = currentProfile.username?.trim().toLowerCase() || ''
+      const normalizedProfileNomeCompleto = currentProfile.nome_completo?.trim().toLowerCase() || ''
 
       const shouldRepairUsername =
-        normalizedProfileUsername === emailLocalPart && profile.username !== metadataUsername
+        normalizedProfileUsername === emailLocalPart && currentProfile.username !== metadataUsername
 
       const shouldRepairNomeCompleto =
         normalizedProfileNomeCompleto === normalizedEmail &&
-        profile.nome_completo !== metadataNomeCompleto
+        currentProfile.nome_completo !== metadataNomeCompleto
 
       if (!shouldRepairUsername && !shouldRepairNomeCompleto) {
-        return profile
+        return currentProfile
       }
 
       const updates: Partial<UserProfile> = {}
@@ -144,46 +190,128 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const { data, error } = await supabase
         .from('usuarios')
         .update(updates)
-        .eq('id', user.id)
+        .eq('id', nextUser.id)
         .select('*')
         .single()
 
       if (error) {
-        console.error('Erro ao corrigir perfil legado com dados herdados do email:', error.message)
-        return profile
+        console.error('Erro ao corrigir perfil legado com dados herdados do email:', {
+          userId: nextUser.id,
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+        })
+        return currentProfile
       }
 
       console.log('Perfil legado corrigido com sucesso:', data)
       return data as UserProfile
-    } catch (err) {
-      console.error('Erro generico ao corrigir perfil legado:', err)
-      return profile
+    } catch (error) {
+      console.error('Erro generico ao corrigir perfil legado:', {
+        userId: nextUser.id,
+        error,
+      })
+      return currentProfile
     }
-  }
+  }, [])
 
-  const fetchOrCreateProfile = async (user: User) => {
-    const existingProfile = await fetchProfile(user.id)
-    if (existingProfile) {
-      return await repairLegacyProfile(user, existingProfile)
-    }
+  const fetchOrCreateProfile = useCallback(
+    async (nextUser: User) => {
+      const existingProfile = await fetchProfile(nextUser.id)
+      if (existingProfile) {
+        return await repairLegacyProfile(nextUser, existingProfile)
+      }
 
-    return await createProfileFromMetadata(user)
-  }
+      return await createProfileFromMetadata(nextUser)
+    },
+    [createProfileFromMetadata, fetchProfile, repairLegacyProfile]
+  )
 
-  const loadProfile = async (targetUser: User | null) => {
-    if (!targetUser) {
-      setProfile(null)
-      return null
-    }
+  const loadProfile = useCallback(
+    async (targetUser: User | null) => {
+      if (!targetUser) {
+        setProfile(null)
+        return null
+      }
 
-    const nextProfile = await fetchOrCreateProfile(targetUser)
-    setProfile(nextProfile)
-    return nextProfile
-  }
+      const nextProfile = await fetchOrCreateProfile(targetUser)
+      setProfile(nextProfile)
+      return nextProfile
+    },
+    [fetchOrCreateProfile]
+  )
 
-  const refreshProfile = async () => {
+  const refreshProfile = useCallback(async () => {
     return await loadProfile(user)
-  }
+  }, [loadProfile, user])
+
+  const updateOwnProfile = useCallback(
+    async (updates: UserProfileUpdates) => {
+      if (!user) {
+        return {
+          data: null,
+          error: { message: 'Usuario nao autenticado para atualizar o perfil.' },
+        }
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from('usuarios')
+          .update(updates)
+          .eq('id', user.id)
+          .select('*')
+          .single()
+
+        if (error) {
+          const normalizedError = normalizeProfileUpdateError(
+            error,
+            'Nao foi possivel atualizar o perfil.'
+          )
+
+          console.error('Erro ao atualizar perfil:', {
+            userId: user.id,
+            updates,
+            ...normalizedError,
+          })
+
+          return { data: null, error: normalizedError }
+        }
+
+        if (!data) {
+          const normalizedError = normalizeProfileUpdateError(
+            null,
+            'Nenhum registro foi retornado apos atualizar o perfil.'
+          )
+
+          console.error('Atualizacao do perfil sem retorno de dados:', {
+            userId: user.id,
+            updates,
+          })
+
+          return { data: null, error: normalizedError }
+        }
+
+        const nextProfile = data as UserProfile
+        setProfile(nextProfile)
+        return { data: nextProfile, error: null }
+      } catch (error) {
+        const normalizedError = normalizeProfileUpdateError(
+          error,
+          'Erro inesperado ao atualizar o perfil.'
+        )
+
+        console.error('Erro inesperado ao atualizar perfil:', {
+          userId: user.id,
+          updates,
+          error,
+        })
+
+        return { data: null, error: normalizedError }
+      }
+    },
+    [user]
+  )
 
   useEffect(() => {
     const init = async () => {
@@ -194,44 +322,46 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setSession(currentSession)
       setUser(currentSession?.user ?? null)
       await loadProfile(currentSession?.user ?? null)
-
       setLoading(false)
     }
 
-    init()
+    void init()
 
-    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
-      setSession(newSession)
-      setUser(newSession?.user ?? null)
-      await loadProfile(newSession?.user ?? null)
+    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
+      setSession(nextSession)
+      setUser(nextSession?.user ?? null)
+      await loadProfile(nextSession?.user ?? null)
     })
 
     return () => {
       listener.subscription.unsubscribe()
     }
-  }, [])
+  }, [loadProfile])
 
-  const login = async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
     })
 
     return { error }
-  }
+  }, [])
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     await supabase.auth.signOut()
     setProfile(null)
-  }
+  }, [])
 
   return (
-    <AuthContext.Provider value={{ session, user, profile, loading, login, logout, refreshProfile }}>
+    <AuthContext.Provider
+      value={{ session, user, profile, loading, login, logout, refreshProfile, updateOwnProfile }}
+    >
       {children}
     </AuthContext.Provider>
   )
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => {
   const ctx = useContext(AuthContext)
   if (!ctx) {
