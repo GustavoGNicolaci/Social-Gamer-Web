@@ -134,7 +134,7 @@ export function ProfilePage() {
       })
     : 'Data nao informada'
 
-  const visibleName = draftProfile.nome_completo || 'Nome nao informado'
+  const visibleFullName = draftProfile.nome_completo || 'Nome nao informado'
   const visibleUsername = draftProfile.username || 'usuario'
   const visibleBio = draftProfile.bio.trim()
 
@@ -274,12 +274,12 @@ export function ProfilePage() {
   const avatarContent = profile.avatar_url ? (
     <img
       src={profile.avatar_url}
-      alt={`Foto de perfil de ${visibleName}`}
+      alt={`Foto de perfil de ${visibleFullName}`}
       className="avatar-img profile-avatar-large"
     />
   ) : (
     <div className="avatar-placeholder-large profile-avatar-large">
-      {visibleName.charAt(0).toUpperCase()}
+      {visibleFullName.charAt(0).toUpperCase()}
     </div>
   )
 
@@ -330,8 +330,8 @@ export function ProfilePage() {
                 <div className="profile-info-header">
                   <div className="profile-heading">
                     <span className="profile-eyebrow">Perfil</span>
-                    <h1>{visibleName}</h1>
-                    <p className="profile-handle">@{visibleUsername}</p>
+                    <h1>@{visibleUsername}</h1>
+                    <p className="profile-handle">{visibleFullName}</p>
                   </div>
 
                   {isOwnerView && (
@@ -383,18 +383,6 @@ export function ProfilePage() {
                   >
                     <div className="profile-form-grid">
                       <label className="profile-field">
-                        <span>Nome exibido</span>
-                        <input
-                          type="text"
-                          className="profile-input"
-                          value={draftProfile.nome_completo}
-                          onChange={(event) => handleDraftChange('nome_completo', event.target.value)}
-                          placeholder="Como seu nome aparece no perfil"
-                          disabled={isSaving}
-                        />
-                      </label>
-
-                      <label className="profile-field">
                         <span>Username</span>
                         <div className="profile-input-wrap">
                           <span className="profile-input-prefix">@</span>
@@ -408,6 +396,19 @@ export function ProfilePage() {
                           />
                         </div>
                       </label>
+
+                      <label className="profile-field">
+                        <span>Nome completo</span>
+                        <input
+                          type="text"
+                          className="profile-input"
+                          value={draftProfile.nome_completo}
+                          onChange={(event) => handleDraftChange('nome_completo', event.target.value)}
+                          placeholder="Como seu nome aparece no perfil"
+                          disabled={isSaving}
+                        />
+                      </label>
+
                     </div>
 
                     <label className="profile-field">
