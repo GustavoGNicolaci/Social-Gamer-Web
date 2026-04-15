@@ -232,6 +232,7 @@
 .game-details-chip-section {
   display: grid;
   gap: 0.55rem;
+  padding-bottom: 0.35rem;
 }
 
 .game-details-chip-label {
@@ -271,7 +272,9 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
-  margin-top: 0.1rem;
+  margin-top: 0.8rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(219, 228, 255, 0.12);
 }
 
 .game-details-actions .game-button,
@@ -317,21 +320,71 @@
 }
 
 .game-details-wishlist-button {
+  --wishlist-border: rgba(118, 236, 221, 0.34);
+  --wishlist-surface: linear-gradient(135deg, rgba(14, 98, 110, 0.96), rgba(49, 177, 165, 0.96));
+  --wishlist-surface-hover: linear-gradient(
+    135deg,
+    rgba(20, 116, 129, 0.98),
+    rgba(84, 211, 194, 0.98)
+  );
+  --wishlist-shadow: 0 16px 30px rgba(17, 92, 100, 0.28);
+  --wishlist-shadow-hover: 0 18px 34px rgba(20, 120, 129, 0.32);
   position: relative;
+  border-color: var(--wishlist-border);
+  background: var(--wishlist-surface);
+  color: #f4fffd;
+  box-shadow:
+    var(--wishlist-shadow),
+    inset 0 1px 0 rgba(226, 255, 250, 0.18);
+}
+
+.game-details-wishlist-button:hover {
+  border-color: rgba(148, 244, 231, 0.52);
+  background: var(--wishlist-surface-hover);
+  box-shadow:
+    var(--wishlist-shadow-hover),
+    inset 0 1px 0 rgba(243, 255, 252, 0.24);
+}
+
+.game-details-wishlist-button:focus-visible {
+  outline: none;
+  border-color: rgba(167, 248, 236, 0.62);
+  box-shadow:
+    0 0 0 3px rgba(102, 223, 205, 0.24),
+    var(--wishlist-shadow-hover),
+    inset 0 1px 0 rgba(243, 255, 252, 0.24);
+}
+
+.game-details-wishlist-button:active {
+  transform: translateY(0);
+  background: linear-gradient(135deg, rgba(12, 86, 97, 0.98), rgba(40, 154, 143, 0.98));
+  box-shadow:
+    0 10px 22px rgba(17, 92, 100, 0.24),
+    inset 0 1px 0 rgba(226, 255, 250, 0.16);
 }
 
 .game-details-wishlist-button.is-saved {
-  border-color: rgba(116, 231, 183, 0.28);
-  background: linear-gradient(135deg, rgba(46, 125, 92, 0.92), rgba(73, 160, 120, 0.92));
+  border-color: rgba(116, 231, 183, 0.32);
+  background: linear-gradient(135deg, rgba(41, 124, 92, 0.96), rgba(80, 176, 132, 0.96));
   color: #f4fff7;
-  box-shadow: 0 16px 30px rgba(46, 125, 92, 0.24);
+  box-shadow:
+    0 16px 30px rgba(46, 125, 92, 0.24),
+    inset 0 1px 0 rgba(234, 255, 243, 0.18);
 }
 
 .game-details-wishlist-button:disabled {
   cursor: not-allowed;
-  opacity: 0.82;
+  opacity: 0.9;
   transform: none;
-  box-shadow: none;
+  box-shadow:
+    0 12px 24px rgba(17, 92, 100, 0.18),
+    inset 0 1px 0 rgba(226, 255, 250, 0.14);
+}
+
+.game-details-wishlist-button.is-saved:disabled {
+  box-shadow:
+    0 12px 24px rgba(46, 125, 92, 0.18),
+    inset 0 1px 0 rgba(234, 255, 243, 0.14);
 }
 
 .game-details-feedback {
