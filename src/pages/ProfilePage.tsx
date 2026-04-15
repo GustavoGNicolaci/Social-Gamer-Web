@@ -89,11 +89,6 @@ const getWishlistErrorMessage = (error: {
   return 'Nao foi possivel carregar sua lista de desejos agora.'
 }
 
-const normalizeList = (value: string[] | string | null | undefined) => {
-  if (!value) return []
-  return (Array.isArray(value) ? value : [value]).map(item => item.trim()).filter(Boolean)
-}
-
 const formatCompactDate = (value: string | null | undefined, fallback = 'Data nao informada') => {
   if (!value) return fallback
 
@@ -588,7 +583,6 @@ export function ProfilePage() {
                   {wishlistGames.map(item => {
                     const game = item.jogo
                     const visibleTitle = game?.titulo || 'Jogo indisponivel'
-                    const visibleGenres = normalizeList(game?.generos).slice(0, 3)
 
                     return (
                       <Link key={item.id} to={`/games/${item.jogo_id}`} className="profile-wishlist-card">
@@ -602,28 +596,10 @@ export function ProfilePage() {
 
                         <div className="profile-wishlist-body">
                           <span className="profile-wishlist-date">
-                            Salvo em {formatCompactDate(item.adicionado_em)}
+                            Adicionado em {formatCompactDate(item.adicionado_em)}
                           </span>
                           <h3>{visibleTitle}</h3>
-
-                          {visibleGenres.length > 0 ? (
-                            <div className="profile-wishlist-tags">
-                              {visibleGenres.map(genre => (
-                                <span key={genre} className="genre-chip profile-wishlist-tag">
-                                  {genre}
-                                </span>
-                              ))}
-                            </div>
-                          ) : (
-                            <p className="profile-wishlist-meta">Genero nao informado.</p>
-                          )}
-
-                          <div className="profile-wishlist-footer">
-                            <span>
-                              Lancamento: {formatCompactDate(game?.data_lancamento, 'Nao informado')}
-                            </span>
-                            <strong>Ver detalhes</strong>
-                          </div>
+                          <span className="profile-wishlist-cta">Ver detalhes</span>
                         </div>
                       </Link>
                     )
