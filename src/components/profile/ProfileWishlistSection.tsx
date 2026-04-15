@@ -33,6 +33,8 @@ interface ProfileWishlistSectionProps {
 }
 
 const HORIZONTAL_LAYOUT_THRESHOLD = 6
+const DRAG_EDGE_THRESHOLD = 72
+const DRAG_PAGE_ADVANCE_DELAY = 220
 
 function formatCompactDate(value: string | null | undefined, fallback = 'Data nao informada') {
   if (!value) return fallback
@@ -143,6 +145,8 @@ export function ProfileWishlistSection({
   const itemRefs = useRef(new Map<string, HTMLElement>())
   const layoutSnapshotRef = useRef(new Map<string, DOMRect>())
   const shouldAnimateLayoutRef = useRef(false)
+  const dragAutoPageTimeoutRef = useRef<number | null>(null)
+  const dragAutoPageDirectionRef = useRef<'previous' | 'next' | null>(null)
 
   const hasWishlistItems = orderedItems.length > 0
   const isPaginatedLayout = orderedItems.length > HORIZONTAL_LAYOUT_THRESHOLD
@@ -210,6 +214,14 @@ export function ProfileWishlistSection({
     setCurrentPage(previousPage => Math.min(previousPage, Math.max(totalPages - 1, 0)))
   }, [isPaginatedLayout, totalPages])
 
+  useEffect(() => {
+    return () => {
+      if (dragAutoPageTimeoutRef.current !== null) {
+        window.clearTimeout(dragAutoPageTimeoutRef.current)
+      }
+    }
+  }, [])
+
   useLayoutEffect(() => {
     if (!shouldAnimateLayoutRef.current) return
 
@@ -255,6 +267,34 @@ export function ProfileWishlistSection({
     shouldAnimateLayoutRef.current = true
   }
 
+  const clearAutoPageSchedule = () => {
+    if (dragAutoPageTimeoutRef.current !== null) {
+      window.clearTimeout(dragAutoPageTimeoutRef.current)
+      dragAutoPageTimeoutRef.current = null
+    }
+
+    dragAutoPageDirectionRef.current = null
+  }
+
+  const scheduleAutoPageAdvance = (direction: 'previous' | 'next') => {
+    if (dragAutoPageDirectionRef.current === direction) return
+
+    clearAutoPageSchedule()
+    dragAutoPageDirectionRef.current = direction
+    dragAutoPageTimeoutRef.current = window.setTimeout(() => {
+      setCurrentPage(previousPage => {
+        if (direction === 'previous') {
+          return Math.max(previousPage - 1, 0)
+        }
+
+        return Math.min(previousPage + 1, totalPages - 1)
+      })
+
+      dragAutoPageTimeoutRef.current = null
+      dragAutoPageDirectionRef.current = null
+    }, DRAG_PAGE_ADVANCE_DELAY)
+  }
+
   const handleDragStart = (itemId: string, event: DragEvent<HTMLButtonElement>) => {
     if (!canReorder) return
     if (!visibleItemIds.has(itemId)) return
@@ -285,7 +325,7 @@ export function ProfileWishlistSection({
 
   const handleDragOver = (targetItemId: string, event: DragEvent<HTMLElement>) => {
     if (!draggedItemId || draggedItemId === targetItemId || isSavingOrder) return
-    if (!visibleItemIds.has(draggedItemId) || !visibleItemIds.has(targetItemId)) return
+    if (!visibleItemIds.has(targetItemId)) return
 
     event.preventDefault()
     event.dataTransfer.dropEffect = 'move'
@@ -296,20 +336,59 @@ export function ProfileWishlistSection({
   }
 
   const handleDragEnd = () => {
+    clearAutoPageSchedule()
     setDraggedItemId(null)
     setDropTargetId(null)
+  }
+
+  const handleViewportDragOver = (event: DragEvent<HTMLDivElement>) => {
+    if (!isPaginatedLayout || !draggedItemId || isSavingOrder) return
+
+    event.preventDefault()
+
+    const viewportBounds = event.currentTarget.getBoundingClientRect()
+    const leftDistance = event.clientX - viewportBounds.left
+    const rightDistance = viewportBounds.right - event.clientX
+    const threshold = Math.min(DRAG_EDGE_THRESHOLD, viewportBounds.width * 0.18)
+
+    if (leftDistance <= threshold && canGoPrevPage) {
+      scheduleAutoPageAdvance('previous')
+      return
+    }
+
+    if (rightDistance <= threshold && canGoNextPage) {
+      scheduleAutoPageAdvance('next')
+      return
+    }
+
+    clearAutoPageSchedule()
+  }
+
+  const handleViewportDragLeave = (event: DragEvent<HTMLDivElement>) => {
+    const nextTarget = event.relatedTarget
+
+    if (
+      nextTarget instanceof Node &&
+      event.currentTarget.contains(nextTarget)
+    ) {
+      return
+    }
+
+    clearAutoPageSchedule()
   }
 
   const handleDrop = async (targetItemId: string, event: DragEvent<HTMLElement>) => {
     event.preventDefault()
 
     if (!draggedItemId || draggedItemId === targetItemId || isSavingOrder) {
+      clearAutoPageSchedule()
       setDraggedItemId(null)
       setDropTargetId(null)
       return
     }
 
-    if (!visibleItemIds.has(draggedItemId) || !visibleItemIds.has(targetItemId)) {
+    if (!visibleItemIds.has(targetItemId)) {
+      clearAutoPageSchedule()
       setDraggedItemId(null)
       setDropTargetId(null)
       return
@@ -319,6 +398,7 @@ export function ProfileWishlistSection({
     const targetIndex = orderedItems.findIndex(item => item.id === targetItemId)
 
     if (sourceIndex < 0 || targetIndex < 0) {
+      clearAutoPageSchedule()
       setDraggedItemId(null)
       setDropTargetId(null)
       return
@@ -331,6 +411,7 @@ export function ProfileWishlistSection({
 
     snapshotItemRects()
     setOrderedItems(reorderedItems)
+    clearAutoPageSchedule()
     setDraggedItemId(null)
     setDropTargetId(null)
     setIsSavingOrder(true)
@@ -407,7 +488,14 @@ export function ProfileWishlistSection({
               ) : null}
 
               {isPaginatedLayout ? (
-                <div className="profile-wishlist-viewport">
+                <div
+                  className="profile-wishlist-viewport"
+                  onDragOver={handleViewportDragOver}
+                  onDragLeave={handleViewportDragLeave}
+                  onDrop={() => {
+                    clearAutoPageSchedule()
+                  }}
+                >
                   <div className="profile-wishlist-track" style={paginatedTrackStyle}>
                     {pagedItems.map((pageItems, pageIndex) => (
                       <div key={`wishlist-page-${pageIndex}`} className="profile-wishlist-page">
