@@ -49,6 +49,12 @@ interface AddWishlistResult extends ServiceResult<WishlistEntry | null> {
   status: 'added' | 'duplicate' | 'error'
 }
 
+interface WishlistSortable {
+  id: string
+  prioridade: number | null
+  adicionado_em: string | null
+}
+
 function normalizeWishlistError(error: unknown, fallbackMessage: string): WishlistError {
   if (error && typeof error === 'object') {
     const message =
@@ -67,6 +73,78 @@ function normalizeWishlistError(error: unknown, fallbackMessage: string): Wishli
 function resolveWishlistGame(game: WishlistGameRelation) {
   if (Array.isArray(game)) return game[0] || null
   return game
+}
+
+function getComparableTimestamp(value: string | null) {
+  if (!value) return 0
+
+  const parsedDate = new Date(value)
+  return Number.isNaN(parsedDate.getTime()) ? 0 : parsedDate.getTime()
+}
+
+function sortWishlistItemsByDisplayOrder<T extends WishlistSortable>(items: T[]) {
+  const prioritizedItems = items
+    .filter(item => item.prioridade !== null)
+    .sort((leftItem, rightItem) => {
+      const priorityDelta = (leftItem.prioridade || 0) - (rightItem.prioridade || 0)
+      if (priorityDelta !== 0) return priorityDelta
+
+      const addedAtDelta =
+        getComparableTimestamp(rightItem.adicionado_em) -
+        getComparableTimestamp(leftItem.adicionado_em)
+      if (addedAtDelta !== 0) return addedAtDelta
+
+      return leftItem.id.localeCompare(rightItem.id)
+    })
+
+  const unprioritizedItems = items
+    .filter(item => item.prioridade === null)
+    .sort((leftItem, rightItem) => {
+      const addedAtDelta =
+        getComparableTimestamp(rightItem.adicionado_em) -
+        getComparableTimestamp(leftItem.adicionado_em)
+      if (addedAtDelta !== 0) return addedAtDelta
+
+      return leftItem.id.localeCompare(rightItem.id)
+    })
+
+  const maxPriority = prioritizedItems.reduce(
+    (currentMax, item) => Math.max(currentMax, item.prioridade || 0),
+    0
+  )
+
+  const effectivePriority = new Map<string, number>()
+
+  prioritizedItems.forEach(item => {
+    effectivePriority.set(item.id, item.prioridade || 0)
+  })
+
+  unprioritizedItems.forEach((item, index) => {
+    effectivePriority.set(item.id, maxPriority + index + 1)
+  })
+
+  return [...items].sort((leftItem, rightItem) => {
+    const priorityDelta =
+      (effectivePriority.get(leftItem.id) || 0) - (effectivePriority.get(rightItem.id) || 0)
+    if (priorityDelta !== 0) return priorityDelta
+
+    const addedAtDelta =
+      getComparableTimestamp(rightItem.adicionado_em) -
+      getComparableTimestamp(leftItem.adicionado_em)
+    if (addedAtDelta !== 0) return addedAtDelta
+
+    return leftItem.id.localeCompare(rightItem.id)
+  })
+}
+
+function getNextWishlistPriority(items: WishlistSortable[]) {
+  const maxPriority = items.reduce(
+    (currentMax, item) => Math.max(currentMax, item.prioridade || 0),
+    0
+  )
+  const unprioritizedCount = items.filter(item => item.prioridade === null).length
+
+  return maxPriority + unprioritizedCount + 1
 }
 
 export async function getWishlistEntry(
@@ -123,13 +201,29 @@ export async function addGameToWishlist({
   }
 
   try {
+    const { data: priorityRows, error: priorityError } = await supabase
+      .from('lista_desejos')
+      .select('id, prioridade, adicionado_em')
+      .eq('usuario_id', userId)
+
+    if (priorityError) {
+      return {
+        status: 'error',
+        data: null,
+        error: normalizeWishlistError(
+          priorityError,
+          'Nao foi possivel preparar a ordem da lista de desejos.'
+        ),
+      }
+    }
+
     const { data, error } = await supabase
       .from('lista_desejos')
       .insert({
         usuario_id: userId,
         jogo_id: gameId,
         adicionado_em: new Date().toISOString(),
-        prioridade: 1,
+        prioridade: getNextWishlistPriority((priorityRows || []) as WishlistEntry[]),
       })
       .select('id, usuario_id, jogo_id, adicionado_em, prioridade')
       .single()
@@ -182,6 +276,7 @@ export async function getWishlistGamesByUserId(
         )
       `)
       .eq('usuario_id', userId)
+      .order('prioridade', { ascending: true, nullsFirst: false })
       .order('adicionado_em', { ascending: false })
 
     if (error) {
@@ -191,10 +286,12 @@ export async function getWishlistGamesByUserId(
       }
     }
 
-    const normalizedItems = ((data || []) as WishlistGameRow[]).map(item => ({
-      ...item,
-      jogo: resolveWishlistGame(item.jogo),
-    }))
+    const normalizedItems = sortWishlistItemsByDisplayOrder(
+      ((data || []) as WishlistGameRow[]).map(item => ({
+        ...item,
+        jogo: resolveWishlistGame(item.jogo),
+      }))
+    )
 
     return {
       data: normalizedItems,
@@ -204,6 +301,66 @@ export async function getWishlistGamesByUserId(
     return {
       data: [],
       error: normalizeWishlistError(error, 'Erro inesperado ao carregar a lista de desejos.'),
+    }
+  }
+}
+
+export async function updateWishlistPriorities(
+  userId: string,
+  orderedItems: WishlistGameItem[]
+): Promise<ServiceResult<WishlistGameItem[]>> {
+  const itemsWithNextPriority = orderedItems.map((item, index) => ({
+    ...item,
+    prioridade: index + 1,
+  }))
+
+  const changedItems = itemsWithNextPriority.filter(
+    item => item.prioridade !== (orderedItems.find(currentItem => currentItem.id === item.id)?.prioridade || null)
+  )
+
+  if (changedItems.length === 0) {
+    return {
+      data: itemsWithNextPriority,
+      error: null,
+    }
+  }
+
+  try {
+    const updateResults = await Promise.all(
+      changedItems.map(async item => {
+        const { error } = await supabase
+          .from('lista_desejos')
+          .update({ prioridade: item.prioridade })
+          .eq('id', item.id)
+          .eq('usuario_id', userId)
+
+        return { id: item.id, error }
+      })
+    )
+
+    const failedUpdate = updateResults.find(result => result.error)
+
+    if (failedUpdate?.error) {
+      return {
+        data: orderedItems,
+        error: normalizeWishlistError(
+          failedUpdate.error,
+          'Nao foi possivel salvar a nova ordem da lista de desejos.'
+        ),
+      }
+    }
+
+    return {
+      data: itemsWithNextPriority,
+      error: null,
+    }
+  } catch (error) {
+    return {
+      data: orderedItems,
+      error: normalizeWishlistError(
+        error,
+        'Erro inesperado ao salvar a nova ordem da lista de desejos.'
+      ),
     }
   }
 }

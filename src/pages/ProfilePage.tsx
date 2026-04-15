@@ -1,6 +1,6 @@
 import { useEffect, useState, type ChangeEvent } from 'react'
-import { Link } from 'react-router-dom'
 import type { ProfileUpdateError, UserProfile } from '../contexts/AuthContext'
+import { ProfileWishlistSection } from '../components/profile/ProfileWishlistSection'
 import { useAuth } from '../contexts/AuthContext'
 import { uploadImage } from '../services/storageService'
 import { getWishlistGamesByUserId, type WishlistGameItem } from '../services/wishlistService'
@@ -87,24 +87,6 @@ const getWishlistErrorMessage = (error: {
   }
 
   return 'Nao foi possivel carregar sua lista de desejos agora.'
-}
-
-const formatCompactDate = (value: string | null | undefined, fallback = 'Data nao informada') => {
-  if (!value) return fallback
-
-  const parsedDate = new Date(value)
-  if (Number.isNaN(parsedDate.getTime())) return fallback
-
-  return parsedDate.toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  })
-}
-
-const getInitial = (value: string) => {
-  const firstCharacter = value.trim().charAt(0)
-  return firstCharacter ? firstCharacter.toUpperCase() : 'J'
 }
 
 export function ProfilePage() {
@@ -545,69 +527,14 @@ export function ProfilePage() {
             </div>
           </section>
 
-          <section className="profile-card profile-wishlist-section">
-            <div className="profile-card-glow profile-card-glow-left"></div>
-            <div className="profile-card-glow profile-card-glow-right"></div>
-
-            <div className="profile-wishlist-content">
-              <div className="profile-section-head">
-                <div className="profile-section-copy">
-                  <span className="profile-section-label">Wishlist</span>
-                  <h2>Jogos que quero jogar futuramente</h2>
-                  <p>Guarde aqui os titulos que voce quer explorar nas proximas jogatinas.</p>
-                </div>
-
-                <div className="profile-meta-item profile-wishlist-summary">
-                  <span>Total salvo</span>
-                  <strong>{wishlistLoading ? '...' : wishlistCountLabel}</strong>
-                </div>
-              </div>
-
-              {wishlistLoading ? (
-                <div className="profile-wishlist-empty">
-                  <h3>Carregando sua lista</h3>
-                  <p>Estamos buscando os jogos que voce marcou para jogar futuramente.</p>
-                </div>
-              ) : wishlistError ? (
-                <p className="profile-feedback is-error">{wishlistError}</p>
-              ) : wishlistGames.length === 0 ? (
-                <div className="profile-wishlist-empty">
-                  <h3>Sua lista de desejos ainda esta vazia</h3>
-                  <p>Quando voce salvar um jogo, ele vai aparecer aqui com acesso rapido ao catalogo.</p>
-                  <Link to="/games" className="profile-secondary-button profile-wishlist-link">
-                    Explorar jogos
-                  </Link>
-                </div>
-              ) : (
-                <div className="profile-wishlist-grid">
-                  {wishlistGames.map(item => {
-                    const game = item.jogo
-                    const visibleTitle = game?.titulo || 'Jogo indisponivel'
-
-                    return (
-                      <Link key={item.id} to={`/games/${item.jogo_id}`} className="profile-wishlist-card">
-                        <div className="profile-wishlist-cover">
-                          {game?.capa_url ? (
-                            <img src={game.capa_url} alt={`Capa do jogo ${visibleTitle}`} />
-                          ) : (
-                            <div className="profile-wishlist-fallback">{getInitial(visibleTitle)}</div>
-                          )}
-                        </div>
-
-                        <div className="profile-wishlist-body">
-                          <span className="profile-wishlist-date">
-                            Adicionado em {formatCompactDate(item.adicionado_em)}
-                          </span>
-                          <h3>{visibleTitle}</h3>
-                          <span className="profile-wishlist-cta">Ver detalhes</span>
-                        </div>
-                      </Link>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-          </section>
+          <ProfileWishlistSection
+            userId={profile.id}
+            items={wishlistGames}
+            isLoading={wishlistLoading}
+            errorMessage={wishlistError}
+            countLabel={wishlistCountLabel}
+            isOwnerView={isOwnerView}
+          />
         </div>
       </div>
     </div>
