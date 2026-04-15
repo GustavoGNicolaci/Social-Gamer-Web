@@ -3,8 +3,10 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type CSSProperties,
   type DragEvent,
   type MutableRefObject,
+  type MouseEvent,
 } from 'react'
 import { Link } from 'react-router-dom'
 import {
@@ -30,7 +32,7 @@ interface ProfileWishlistSectionProps {
   isOwnerView: boolean
 }
 
-const HORIZONTAL_LAYOUT_THRESHOLD = 7
+const HORIZONTAL_LAYOUT_THRESHOLD = 6
 
 function formatCompactDate(value: string | null | undefined, fallback = 'Data nao informada') {
   if (!value) return fallback
@@ -48,6 +50,24 @@ function formatCompactDate(value: string | null | undefined, fallback = 'Data na
 function getInitial(value: string) {
   const firstCharacter = value.trim().charAt(0)
   return firstCharacter ? firstCharacter.toUpperCase() : 'J'
+}
+
+function getItemsPerPage(viewportWidth: number) {
+  if (viewportWidth <= 480) return 1
+  if (viewportWidth <= 768) return 2
+  if (viewportWidth <= 992) return 3
+  if (viewportWidth <= 1200) return 4
+  return 6
+}
+
+function chunkWishlistItems(items: WishlistGameItem[], chunkSize: number) {
+  const itemGroups: WishlistGameItem[][] = []
+
+  for (let index = 0; index < items.length; index += chunkSize) {
+    itemGroups.push(items.slice(index, index + chunkSize))
+  }
+
+  return itemGroups
 }
 
 function getWishlistOrderErrorMessage(error: WishlistError | null) {
@@ -115,17 +135,32 @@ export function ProfileWishlistSection({
   const [isSavingOrder, setIsSavingOrder] = useState(false)
   const [orderStatus, setOrderStatus] = useState<OrderStatusState | null>(null)
   const [hasFinePointer, setHasFinePointer] = useState(false)
-  const [canScrollPrev, setCanScrollPrev] = useState(false)
-  const [canScrollNext, setCanScrollNext] = useState(false)
+  const [itemsPerPage, setItemsPerPage] = useState(() =>
+    typeof window === 'undefined' ? 6 : getItemsPerPage(window.innerWidth)
+  )
+  const [currentPage, setCurrentPage] = useState(0)
 
-  const railRef = useRef<HTMLDivElement | null>(null)
   const itemRefs = useRef(new Map<string, HTMLElement>())
   const layoutSnapshotRef = useRef(new Map<string, DOMRect>())
   const shouldAnimateLayoutRef = useRef(false)
 
   const hasWishlistItems = orderedItems.length > 0
-  const isHorizontalLayout = orderedItems.length > HORIZONTAL_LAYOUT_THRESHOLD
+  const isPaginatedLayout = orderedItems.length > HORIZONTAL_LAYOUT_THRESHOLD
   const canReorder = isOwnerView && orderedItems.length > 1 && hasFinePointer && !isSavingOrder
+  const pagedItems = isPaginatedLayout ? chunkWishlistItems(orderedItems, itemsPerPage) : []
+  const totalPages = isPaginatedLayout ? pagedItems.length : 1
+  const visiblePageItems = isPaginatedLayout ? pagedItems[currentPage] || [] : orderedItems
+  const visibleItemIds = new Set(visiblePageItems.map(item => item.id))
+  const canGoPrevPage = isPaginatedLayout && currentPage > 0
+  const canGoNextPage = isPaginatedLayout && currentPage < totalPages - 1
+
+  const wishlistColumnsStyle = {
+    '--wishlist-columns': String(itemsPerPage),
+  } as CSSProperties
+
+  const paginatedTrackStyle = {
+    transform: `translateX(-${currentPage * 100}%)`,
+  }
 
   useEffect(() => {
     setOrderedItems(items)
@@ -152,38 +187,28 @@ export function ProfileWishlistSection({
   }, [])
 
   useEffect(() => {
-    if (!isHorizontalLayout) {
-      setCanScrollPrev(false)
-      setCanScrollNext(false)
+    if (typeof window === 'undefined') return
+
+    const syncItemsPerPage = () => {
+      setItemsPerPage(getItemsPerPage(window.innerWidth))
+    }
+
+    syncItemsPerPage()
+    window.addEventListener('resize', syncItemsPerPage)
+
+    return () => {
+      window.removeEventListener('resize', syncItemsPerPage)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!isPaginatedLayout) {
+      setCurrentPage(0)
       return
     }
 
-    const rail = railRef.current
-    if (!rail) return
-
-    const syncRailNavigation = () => {
-      const maxScrollLeft = Math.max(rail.scrollWidth - rail.clientWidth, 0)
-      const tolerance = 6
-
-      setCanScrollPrev(rail.scrollLeft > tolerance)
-      setCanScrollNext(rail.scrollLeft < maxScrollLeft - tolerance)
-    }
-
-    syncRailNavigation()
-
-    const resizeObserver =
-      typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(syncRailNavigation)
-
-    resizeObserver?.observe(rail)
-    rail.addEventListener('scroll', syncRailNavigation, { passive: true })
-    window.addEventListener('resize', syncRailNavigation)
-
-    return () => {
-      resizeObserver?.disconnect()
-      rail.removeEventListener('scroll', syncRailNavigation)
-      window.removeEventListener('resize', syncRailNavigation)
-    }
-  }, [isHorizontalLayout, orderedItems])
+    setCurrentPage(previousPage => Math.min(previousPage, Math.max(totalPages - 1, 0)))
+  }, [isPaginatedLayout, totalPages])
 
   useLayoutEffect(() => {
     if (!shouldAnimateLayoutRef.current) return
@@ -230,23 +255,13 @@ export function ProfileWishlistSection({
     shouldAnimateLayoutRef.current = true
   }
 
-  const handleScrollRail = (direction: 'previous' | 'next') => {
-    const rail = railRef.current
-    if (!rail) return
-
-    const scrollOffset = rail.clientWidth * 0.85
-
-    rail.scrollBy({
-      left: direction === 'next' ? scrollOffset : -scrollOffset,
-      behavior: 'smooth',
-    })
-  }
-
   const handleDragStart = (itemId: string, event: DragEvent<HTMLButtonElement>) => {
     if (!canReorder) return
+    if (!visibleItemIds.has(itemId)) return
 
     const cardNode = itemRefs.current.get(itemId)
 
+    event.stopPropagation()
     event.dataTransfer.effectAllowed = 'move'
     event.dataTransfer.setData('text/plain', itemId)
 
@@ -259,8 +274,18 @@ export function ProfileWishlistSection({
     setDropTargetId(null)
   }
 
+  const handleDragHandlePointerDown = (event: MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation()
+  }
+
+  const handleDragHandleClick = (event: MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+  }
+
   const handleDragOver = (targetItemId: string, event: DragEvent<HTMLElement>) => {
     if (!draggedItemId || draggedItemId === targetItemId || isSavingOrder) return
+    if (!visibleItemIds.has(draggedItemId) || !visibleItemIds.has(targetItemId)) return
 
     event.preventDefault()
     event.dataTransfer.dropEffect = 'move'
@@ -279,6 +304,12 @@ export function ProfileWishlistSection({
     event.preventDefault()
 
     if (!draggedItemId || draggedItemId === targetItemId || isSavingOrder) {
+      setDraggedItemId(null)
+      setDropTargetId(null)
+      return
+    }
+
+    if (!visibleItemIds.has(draggedItemId) || !visibleItemIds.has(targetItemId)) {
       setDraggedItemId(null)
       setDropTargetId(null)
       return
@@ -360,50 +391,146 @@ export function ProfileWishlistSection({
           </div>
         ) : (
           <>
-            <div className={`profile-wishlist-shell${isHorizontalLayout ? ' is-horizontal' : ''}`}>
-              {isHorizontalLayout && canScrollPrev ? (
+            <div
+              className={`profile-wishlist-shell${isPaginatedLayout ? ' is-horizontal' : ''}`}
+              style={wishlistColumnsStyle}
+            >
+              {isPaginatedLayout && canGoPrevPage ? (
                 <button
                   type="button"
                   className="profile-wishlist-arrow profile-wishlist-arrow--prev"
-                  onClick={() => handleScrollRail('previous')}
-                  aria-label="Rolar wishlist para a esquerda"
+                  onClick={() => setCurrentPage(previousPage => Math.max(previousPage - 1, 0))}
+                  aria-label="Mostrar grupo anterior da wishlist"
                 >
                   <span aria-hidden="true">&lsaquo;</span>
                 </button>
               ) : null}
 
-              <div
-                ref={railRef}
-                className={isHorizontalLayout ? 'profile-wishlist-rail is-horizontal' : 'profile-wishlist-grid'}
-              >
-                {orderedItems.map(item => {
-                  const game = item.jogo
-                  const visibleTitle = game?.titulo || 'Jogo indisponivel'
-                  const isDraggedItem = draggedItemId === item.id
-                  const isDropTarget = dropTargetId === item.id && draggedItemId !== item.id
+              {isPaginatedLayout ? (
+                <div className="profile-wishlist-viewport">
+                  <div className="profile-wishlist-track" style={paginatedTrackStyle}>
+                    {pagedItems.map((pageItems, pageIndex) => (
+                      <div key={`wishlist-page-${pageIndex}`} className="profile-wishlist-page">
+                        {pageItems.map(item => {
+                          const game = item.jogo
+                          const visibleTitle = game?.titulo || 'Jogo indisponivel'
+                          const isDraggedItem = draggedItemId === item.id
+                          const isDropTarget = dropTargetId === item.id && draggedItemId !== item.id
+                          const canShowDragHandle = canReorder && visibleItemIds.has(item.id)
 
-                  return (
-                    <article
-                      key={item.id}
-                      ref={node => {
-                        registerItemRef(itemRefs, item.id, node)
-                      }}
-                      className={`profile-wishlist-card${isDraggedItem ? ' is-dragging' : ''}${isDropTarget ? ' is-drop-target' : ''}${isSavingOrder ? ' is-saving-order' : ''}`}
-                      onDragOver={event => handleDragOver(item.id, event)}
-                      onDrop={event => {
-                        void handleDrop(item.id, event)
-                      }}
-                    >
-                      <div className="profile-wishlist-card-meta">
-                        <span className="profile-wishlist-date">
-                          Adicionado em {formatCompactDate(item.adicionado_em)}
-                        </span>
+                          return (
+                            <article
+                              key={item.id}
+                              ref={node => {
+                                registerItemRef(itemRefs, item.id, node)
+                              }}
+                              className={`profile-wishlist-card${isDraggedItem ? ' is-dragging' : ''}${isDropTarget ? ' is-drop-target' : ''}${isSavingOrder ? ' is-saving-order' : ''}`}
+                              onDragOver={event => handleDragOver(item.id, event)}
+                              onDrop={event => {
+                                void handleDrop(item.id, event)
+                              }}
+                            >
+                              <Link to={`/games/${item.jogo_id}`} className="profile-wishlist-card-link">
+                                <div className="profile-wishlist-card-meta">
+                                  <span className="profile-wishlist-date">
+                                    Adicionado em {formatCompactDate(item.adicionado_em)}
+                                  </span>
+                                </div>
+
+                                <div className="profile-wishlist-cover">
+                                  {game?.capa_url ? (
+                                    <img src={game.capa_url} alt={`Capa do jogo ${visibleTitle}`} />
+                                  ) : (
+                                    <div className="profile-wishlist-fallback">
+                                      {getInitial(visibleTitle)}
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div className="profile-wishlist-body">
+                                  <h3>{visibleTitle}</h3>
+                                  <span className="profile-wishlist-cta">Ver detalhes</span>
+                                </div>
+                              </Link>
+
+                              {canShowDragHandle ? (
+                                <button
+                                  type="button"
+                                  className="profile-wishlist-drag-handle"
+                                  draggable
+                                  onMouseDown={handleDragHandlePointerDown}
+                                  onClick={handleDragHandleClick}
+                                  onDragStart={event => handleDragStart(item.id, event)}
+                                  onDragEnd={handleDragEnd}
+                                  aria-label={`Reordenar ${visibleTitle}`}
+                                  title="Arraste para reorganizar"
+                                  disabled={isSavingOrder}
+                                >
+                                  <svg viewBox="0 0 16 16" aria-hidden="true">
+                                    <circle cx="5" cy="4" r="1.1"></circle>
+                                    <circle cx="11" cy="4" r="1.1"></circle>
+                                    <circle cx="5" cy="8" r="1.1"></circle>
+                                    <circle cx="11" cy="8" r="1.1"></circle>
+                                    <circle cx="5" cy="12" r="1.1"></circle>
+                                    <circle cx="11" cy="12" r="1.1"></circle>
+                                  </svg>
+                                </button>
+                              ) : null}
+                            </article>
+                          )
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="profile-wishlist-grid">
+                  {orderedItems.map(item => {
+                    const game = item.jogo
+                    const visibleTitle = game?.titulo || 'Jogo indisponivel'
+                    const isDraggedItem = draggedItemId === item.id
+                    const isDropTarget = dropTargetId === item.id && draggedItemId !== item.id
+
+                    return (
+                      <article
+                        key={item.id}
+                        ref={node => {
+                          registerItemRef(itemRefs, item.id, node)
+                        }}
+                        className={`profile-wishlist-card${isDraggedItem ? ' is-dragging' : ''}${isDropTarget ? ' is-drop-target' : ''}${isSavingOrder ? ' is-saving-order' : ''}`}
+                        onDragOver={event => handleDragOver(item.id, event)}
+                        onDrop={event => {
+                          void handleDrop(item.id, event)
+                        }}
+                      >
+                        <Link to={`/games/${item.jogo_id}`} className="profile-wishlist-card-link">
+                          <div className="profile-wishlist-card-meta">
+                            <span className="profile-wishlist-date">
+                              Adicionado em {formatCompactDate(item.adicionado_em)}
+                            </span>
+                          </div>
+
+                          <div className="profile-wishlist-cover">
+                            {game?.capa_url ? (
+                              <img src={game.capa_url} alt={`Capa do jogo ${visibleTitle}`} />
+                            ) : (
+                              <div className="profile-wishlist-fallback">{getInitial(visibleTitle)}</div>
+                            )}
+                          </div>
+
+                          <div className="profile-wishlist-body">
+                            <h3>{visibleTitle}</h3>
+                            <span className="profile-wishlist-cta">Ver detalhes</span>
+                          </div>
+                        </Link>
 
                         {canReorder ? (
                           <button
                             type="button"
                             className="profile-wishlist-drag-handle"
                             draggable
+                            onMouseDown={handleDragHandlePointerDown}
+                            onClick={handleDragHandleClick}
                             onDragStart={event => handleDragStart(item.id, event)}
                             onDragEnd={handleDragEnd}
                             aria-label={`Reordenar ${visibleTitle}`}
@@ -420,33 +547,20 @@ export function ProfileWishlistSection({
                             </svg>
                           </button>
                         ) : null}
-                      </div>
+                      </article>
+                    )
+                  })}
+                </div>
+              )}
 
-                      <Link to={`/games/${item.jogo_id}`} className="profile-wishlist-card-link">
-                        <div className="profile-wishlist-cover">
-                          {game?.capa_url ? (
-                            <img src={game.capa_url} alt={`Capa do jogo ${visibleTitle}`} />
-                          ) : (
-                            <div className="profile-wishlist-fallback">{getInitial(visibleTitle)}</div>
-                          )}
-                        </div>
-
-                        <div className="profile-wishlist-body">
-                          <h3>{visibleTitle}</h3>
-                          <span className="profile-wishlist-cta">Ver detalhes</span>
-                        </div>
-                      </Link>
-                    </article>
-                  )
-                })}
-              </div>
-
-              {isHorizontalLayout && canScrollNext ? (
+              {isPaginatedLayout && canGoNextPage ? (
                 <button
                   type="button"
                   className="profile-wishlist-arrow profile-wishlist-arrow--next"
-                  onClick={() => handleScrollRail('next')}
-                  aria-label="Rolar wishlist para a direita"
+                  onClick={() =>
+                    setCurrentPage(previousPage => Math.min(previousPage + 1, totalPages - 1))
+                  }
+                  aria-label="Mostrar proximo grupo da wishlist"
                 >
                   <span aria-hidden="true">&rsaquo;</span>
                 </button>

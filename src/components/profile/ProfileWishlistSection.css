@@ -36,6 +36,8 @@
 }
 
 .profile-wishlist-shell {
+  --wishlist-columns: 6;
+
   position: relative;
 }
 
@@ -44,28 +46,22 @@
 }
 
 .profile-wishlist-grid,
-.profile-wishlist-rail {
+.profile-wishlist-page {
   display: grid;
   gap: 0.7rem;
+  grid-template-columns: repeat(var(--wishlist-columns), minmax(0, 1fr));
 }
 
-.profile-wishlist-grid {
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+.profile-wishlist-viewport {
+  overflow: hidden;
 }
 
-.profile-wishlist-rail.is-horizontal {
+.profile-wishlist-track {
+  display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: minmax(180px, 190px);
-  overflow-x: auto;
-  padding-bottom: 0.45rem;
-  scroll-behavior: smooth;
-  scroll-snap-type: x proximity;
-  scrollbar-width: thin;
-  overscroll-behavior-x: contain;
-}
-
-.profile-wishlist-rail.is-horizontal .profile-wishlist-card {
-  scroll-snap-align: start;
+  grid-auto-columns: 100%;
+  transition: transform 0.28s ease;
+  will-change: transform;
 }
 
 .profile-wishlist-card,
@@ -81,7 +77,6 @@
   position: relative;
   overflow: hidden;
   display: grid;
-  grid-template-rows: auto 1fr;
   min-height: 100%;
   transition:
     transform 0.2s ease,
@@ -115,16 +110,14 @@
   color: inherit;
   text-decoration: none;
   display: grid;
-  grid-template-rows: auto 1fr;
   min-height: 100%;
 }
 
 .profile-wishlist-card-meta {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 0.55rem;
-  padding: 0.7rem 0.75rem 0.1rem;
+  padding: 0.7rem 3.4rem 0.1rem 0.75rem;
 }
 
 .profile-wishlist-cover {
@@ -192,6 +185,10 @@
 }
 
 .profile-wishlist-drag-handle {
+  position: absolute;
+  top: 0.62rem;
+  right: 0.68rem;
+  z-index: 2;
   flex-shrink: 0;
   width: 32px;
   height: 32px;
@@ -312,36 +309,10 @@
   text-decoration: none;
 }
 
-@media (max-width: 1400px) {
-  .profile-wishlist-grid {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 1200px) {
-  .profile-wishlist-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 992px) {
-  .profile-wishlist-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .profile-wishlist-rail.is-horizontal {
-    grid-auto-columns: minmax(176px, 188px);
-  }
-}
-
 @media (max-width: 768px) {
   .profile-section-head {
     flex-direction: column;
     align-items: flex-start;
-  }
-
-  .profile-wishlist-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .profile-wishlist-summary {
@@ -350,28 +321,29 @@
   }
 
   .profile-wishlist-shell.is-horizontal {
-    padding-inline: 0;
-  }
-
-  .profile-wishlist-rail.is-horizontal {
-    grid-auto-columns: minmax(170px, 54vw);
+    padding-inline: 2.4rem;
   }
 
   .profile-wishlist-arrow {
-    display: none;
+    width: 36px;
+    height: 36px;
+    font-size: 1.4rem;
   }
 }
 
 @media (max-width: 480px) {
-  .profile-wishlist-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .profile-wishlist-rail.is-horizontal {
-    grid-auto-columns: minmax(154px, 72vw);
+  .profile-wishlist-shell.is-horizontal {
+    padding-inline: 2.1rem;
   }
 
   .profile-wishlist-card-meta {
-    padding-inline: 0.7rem;
+    padding-inline: 0.7rem 3.2rem;
+  }
+
+  .profile-wishlist-drag-handle {
+    width: 30px;
+    height: 30px;
+    top: 0.6rem;
+    right: 0.6rem;
   }
 }
