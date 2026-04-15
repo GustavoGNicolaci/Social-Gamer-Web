@@ -316,6 +316,43 @@
   box-shadow: 0 14px 28px rgba(0, 0, 0, 0.16);
 }
 
+.game-details-wishlist-button {
+  position: relative;
+}
+
+.game-details-wishlist-button.is-saved {
+  border-color: rgba(116, 231, 183, 0.28);
+  background: linear-gradient(135deg, rgba(46, 125, 92, 0.92), rgba(73, 160, 120, 0.92));
+  color: #f4fff7;
+  box-shadow: 0 16px 30px rgba(46, 125, 92, 0.24);
+}
+
+.game-details-wishlist-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.82;
+  transform: none;
+  box-shadow: none;
+}
+
+.game-details-feedback {
+  margin: 0;
+  color: rgba(222, 232, 255, 0.82);
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+.game-details-feedback.is-success {
+  color: #c9ffe0;
+}
+
+.game-details-feedback.is-error {
+  color: #ffd7d7;
+}
+
+.game-details-feedback.is-info {
+  color: #dbe4ff;
+}
+
 .game-details-highlights {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

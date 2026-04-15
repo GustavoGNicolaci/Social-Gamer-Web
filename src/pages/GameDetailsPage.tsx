@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { addGameToWishlist, getWishlistEntry } from '../services/wishlistService'
 import { supabase } from '../supabase-client'
 import './GameDetailsPage.css'
 
@@ -45,6 +46,13 @@ interface Avaliacao {
   comentarios?: Comentario[]
 }
 
+type FeedbackTone = 'success' | 'error' | 'info'
+
+interface FeedbackState {
+  tone: FeedbackTone
+  message: string
+}
+
 const REVIEW_SCORE_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
 const REVIEWS_QUERY = `
@@ -82,6 +90,38 @@ function getSummaryText(value: string | null | undefined) {
   if (normalizedValue.length <= 220) return normalizedValue
 
   return `${normalizedValue.slice(0, 217).trim()}...`
+}
+
+function getWishlistErrorMessage(error: {
+  code?: string
+  message: string
+  details?: string | null
+  hint?: string | null
+} | null) {
+  if (!error) {
+    return 'Nao foi possivel salvar este jogo na sua lista de desejos agora.'
+  }
+
+  const fullMessage = [error.message, error.details, error.hint].filter(Boolean).join(' ').toLowerCase()
+
+  if (
+    error.code === '42501' ||
+    fullMessage.includes('permission denied') ||
+    fullMessage.includes('row-level security') ||
+    fullMessage.includes('policy')
+  ) {
+    return 'Nao foi possivel acessar sua lista de desejos por permissao. Verifique as policies da tabela lista_desejos no Supabase.'
+  }
+
+  if (fullMessage.includes('duplicate') || fullMessage.includes('unique')) {
+    return 'Esse jogo ja esta na sua lista de desejos.'
+  }
+
+  if (fullMessage.includes('column')) {
+    return 'A estrutura da tabela lista_desejos nao corresponde ao frontend.'
+  }
+
+  return 'Nao foi possivel salvar este jogo na sua lista de desejos agora.'
 }
 
 function resolveUser(usuario: UsuarioRelacionamento) {
@@ -129,6 +169,10 @@ function GameDetailsPage() {
   const [submitting, setSubmitting] = useState(false)
   const [comentarioTexto, setComentarioTexto] = useState<Record<string, string>>({})
   const [submittingComentario, setSubmittingComentario] = useState<Record<string, boolean>>({})
+  const [wishlistLoading, setWishlistLoading] = useState(false)
+  const [wishlistSaving, setWishlistSaving] = useState(false)
+  const [isInWishlist, setIsInWishlist] = useState(false)
+  const [wishlistFeedback, setWishlistFeedback] = useState<FeedbackState | null>(null)
 
   useEffect(() => {
     let isMounted = true
@@ -170,6 +214,47 @@ function GameDetailsPage() {
       isMounted = false
     }
   }, [id])
+
+  useEffect(() => {
+    let isMounted = true
+
+    const loadWishlistStatus = async () => {
+      if (!user || !game) {
+        if (isMounted) {
+          setWishlistLoading(false)
+          setIsInWishlist(false)
+          setWishlistFeedback(null)
+        }
+        return
+      }
+
+      setWishlistLoading(true)
+      setWishlistFeedback(null)
+
+      const { data, error } = await getWishlistEntry(user.id, game.id)
+
+      if (!isMounted) return
+
+      if (error) {
+        console.error('Erro ao verificar wishlist do jogo:', error)
+        setWishlistFeedback({
+          tone: 'error',
+          message: 'Nao foi possivel verificar sua lista de desejos agora.',
+        })
+        setIsInWishlist(false)
+      } else {
+        setIsInWishlist(Boolean(data))
+      }
+
+      setWishlistLoading(false)
+    }
+
+    void loadWishlistStatus()
+
+    return () => {
+      isMounted = false
+    }
+  }, [game, user])
 
   const handleSubmitAvaliacao = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -218,6 +303,40 @@ function GameDetailsPage() {
     }
 
     setSubmittingComentario(prevState => ({ ...prevState, [reviewId]: false }))
+  }
+
+  const handleAddToWishlist = async () => {
+    if (!user || !game || wishlistLoading || wishlistSaving || isInWishlist) return
+
+    setWishlistSaving(true)
+    setWishlistFeedback(null)
+
+    const result = await addGameToWishlist({
+      userId: user.id,
+      gameId: game.id,
+    })
+
+    if (result.status === 'added') {
+      setIsInWishlist(true)
+      setWishlistFeedback({
+        tone: 'success',
+        message: 'Jogo salvo na sua lista de desejos.',
+      })
+    } else if (result.status === 'duplicate') {
+      setIsInWishlist(true)
+      setWishlistFeedback({
+        tone: 'info',
+        message: 'Esse jogo ja esta na sua lista de desejos.',
+      })
+    } else {
+      console.error('Erro ao salvar jogo na wishlist:', result.error)
+      setWishlistFeedback({
+        tone: 'error',
+        message: getWishlistErrorMessage(result.error),
+      })
+    }
+
+    setWishlistSaving(false)
   }
 
   if (loading) {
@@ -279,6 +398,13 @@ function GameDetailsPage() {
     totalAvaliacoes === 1 ? '1 avaliacao' : `${totalAvaliacoes} avaliacoes`
   const totalComentariosLabel =
     totalComentarios === 1 ? '1 comentario' : `${totalComentarios} comentarios`
+  const wishlistButtonLabel = wishlistLoading
+    ? 'Verificando...'
+    : wishlistSaving
+      ? 'Salvando...'
+      : isInWishlist
+        ? 'Na sua lista'
+        : 'Salvar na lista'
 
   return (
     <div className="page-container">
@@ -346,10 +472,35 @@ function GameDetailsPage() {
                   </Link>
                 )}
 
+                {user ? (
+                  <button
+                    type="button"
+                    className={`game-button game-details-secondary-button game-details-wishlist-button${isInWishlist ? ' is-saved' : ''}`}
+                    onClick={handleAddToWishlist}
+                    disabled={wishlistLoading || wishlistSaving || isInWishlist}
+                    aria-live="polite"
+                  >
+                    {wishlistButtonLabel}
+                  </button>
+                ) : (
+                  <Link
+                    to="/login"
+                    className="game-button game-details-secondary-button game-details-wishlist-button"
+                  >
+                    Fazer login para salvar
+                  </Link>
+                )}
+
                 <Link to="/games" className="game-button game-details-secondary-button">
                   Voltar ao catalogo
                 </Link>
               </div>
+
+              {wishlistFeedback && (
+                <p className={`game-details-feedback is-${wishlistFeedback.tone}`}>
+                  {wishlistFeedback.message}
+                </p>
+              )}
             </div>
           </div>
         </section>

@@ -1,7 +1,9 @@
 import { useEffect, useState, type ChangeEvent } from 'react'
+import { Link } from 'react-router-dom'
 import type { ProfileUpdateError, UserProfile } from '../contexts/AuthContext'
 import { useAuth } from '../contexts/AuthContext'
 import { uploadImage } from '../services/storageService'
+import { getWishlistGamesByUserId, type WishlistGameItem } from '../services/wishlistService'
 import './ProfilePage.css'
 
 type FeedbackTone = 'success' | 'error'
@@ -63,6 +65,53 @@ const getProfileErrorMessage = (error: ProfileUpdateError | null) => {
   return 'Nao foi possivel salvar as alteracoes do perfil agora.'
 }
 
+const getWishlistErrorMessage = (error: {
+  code?: string
+  message: string
+  details?: string | null
+  hint?: string | null
+} | null) => {
+  if (!error) {
+    return 'Nao foi possivel carregar sua lista de desejos agora.'
+  }
+
+  const fullMessage = [error.message, error.details, error.hint].filter(Boolean).join(' ').toLowerCase()
+
+  if (
+    error.code === '42501' ||
+    fullMessage.includes('permission denied') ||
+    fullMessage.includes('row-level security') ||
+    fullMessage.includes('policy')
+  ) {
+    return 'Nao foi possivel carregar a lista de desejos por permissao. Verifique as policies da tabela lista_desejos no Supabase.'
+  }
+
+  return 'Nao foi possivel carregar sua lista de desejos agora.'
+}
+
+const normalizeList = (value: string[] | string | null | undefined) => {
+  if (!value) return []
+  return (Array.isArray(value) ? value : [value]).map(item => item.trim()).filter(Boolean)
+}
+
+const formatCompactDate = (value: string | null | undefined, fallback = 'Data nao informada') => {
+  if (!value) return fallback
+
+  const parsedDate = new Date(value)
+  if (Number.isNaN(parsedDate.getTime())) return fallback
+
+  return parsedDate.toLocaleDateString('pt-BR', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  })
+}
+
+const getInitial = (value: string) => {
+  const firstCharacter = value.trim().charAt(0)
+  return firstCharacter ? firstCharacter.toUpperCase() : 'J'
+}
+
 export function ProfilePage() {
   const { user, profile, loading, updateOwnProfile } = useAuth()
   const [draftProfile, setDraftProfile] = useState<ProfileDraft>(() => createProfileDraft(null))
@@ -71,6 +120,9 @@ export function ProfilePage() {
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
   const [saveFeedback, setSaveFeedback] = useState<FeedbackState | null>(null)
   const [avatarFeedback, setAvatarFeedback] = useState<FeedbackState | null>(null)
+  const [wishlistGames, setWishlistGames] = useState<WishlistGameItem[]>([])
+  const [wishlistLoading, setWishlistLoading] = useState(false)
+  const [wishlistError, setWishlistError] = useState<string | null>(null)
 
   useEffect(() => {
     if (profile && !isEditing) {
@@ -82,6 +134,44 @@ export function ProfilePage() {
       setDraftProfile(createProfileDraft(null))
     }
   }, [profile, isEditing])
+
+  useEffect(() => {
+    let isMounted = true
+
+    const loadWishlist = async () => {
+      if (!user || !profile) {
+        if (isMounted) {
+          setWishlistGames([])
+          setWishlistError(null)
+          setWishlistLoading(false)
+        }
+        return
+      }
+
+      setWishlistLoading(true)
+      setWishlistError(null)
+
+      const { data, error } = await getWishlistGamesByUserId(profile.id)
+
+      if (!isMounted) return
+
+      if (error) {
+        console.error('Erro ao carregar wishlist do perfil:', error)
+        setWishlistGames([])
+        setWishlistError(getWishlistErrorMessage(error))
+      } else {
+        setWishlistGames(data)
+      }
+
+      setWishlistLoading(false)
+    }
+
+    void loadWishlist()
+
+    return () => {
+      isMounted = false
+    }
+  }, [profile, user])
 
   if (loading) {
     return (
@@ -137,6 +227,8 @@ export function ProfilePage() {
   const visibleFullName = draftProfile.nome_completo || 'Nome nao informado'
   const visibleUsername = draftProfile.username || 'usuario'
   const visibleBio = draftProfile.bio.trim()
+  const wishlistCountLabel =
+    wishlistGames.length === 1 ? '1 jogo salvo' : `${wishlistGames.length} jogos salvos`
 
   const resetDraft = () => {
     setDraftProfile(createProfileDraft(profile))
@@ -455,6 +547,89 @@ export function ProfilePage() {
                   <p className={`profile-feedback is-${saveFeedback.tone}`}>{saveFeedback.message}</p>
                 )}
               </div>
+            </div>
+          </section>
+
+          <section className="profile-card profile-wishlist-section">
+            <div className="profile-card-glow profile-card-glow-left"></div>
+            <div className="profile-card-glow profile-card-glow-right"></div>
+
+            <div className="profile-wishlist-content">
+              <div className="profile-section-head">
+                <div className="profile-section-copy">
+                  <span className="profile-section-label">Wishlist</span>
+                  <h2>Jogos que quero jogar futuramente</h2>
+                  <p>Guarde aqui os titulos que voce quer explorar nas proximas jogatinas.</p>
+                </div>
+
+                <div className="profile-meta-item profile-wishlist-summary">
+                  <span>Total salvo</span>
+                  <strong>{wishlistLoading ? '...' : wishlistCountLabel}</strong>
+                </div>
+              </div>
+
+              {wishlistLoading ? (
+                <div className="profile-wishlist-empty">
+                  <h3>Carregando sua lista</h3>
+                  <p>Estamos buscando os jogos que voce marcou para jogar futuramente.</p>
+                </div>
+              ) : wishlistError ? (
+                <p className="profile-feedback is-error">{wishlistError}</p>
+              ) : wishlistGames.length === 0 ? (
+                <div className="profile-wishlist-empty">
+                  <h3>Sua lista de desejos ainda esta vazia</h3>
+                  <p>Quando voce salvar um jogo, ele vai aparecer aqui com acesso rapido ao catalogo.</p>
+                  <Link to="/games" className="profile-secondary-button profile-wishlist-link">
+                    Explorar jogos
+                  </Link>
+                </div>
+              ) : (
+                <div className="profile-wishlist-grid">
+                  {wishlistGames.map(item => {
+                    const game = item.jogo
+                    const visibleTitle = game?.titulo || 'Jogo indisponivel'
+                    const visibleGenres = normalizeList(game?.generos).slice(0, 3)
+
+                    return (
+                      <Link key={item.id} to={`/games/${item.jogo_id}`} className="profile-wishlist-card">
+                        <div className="profile-wishlist-cover">
+                          {game?.capa_url ? (
+                            <img src={game.capa_url} alt={`Capa do jogo ${visibleTitle}`} />
+                          ) : (
+                            <div className="profile-wishlist-fallback">{getInitial(visibleTitle)}</div>
+                          )}
+                        </div>
+
+                        <div className="profile-wishlist-body">
+                          <span className="profile-wishlist-date">
+                            Salvo em {formatCompactDate(item.adicionado_em)}
+                          </span>
+                          <h3>{visibleTitle}</h3>
+
+                          {visibleGenres.length > 0 ? (
+                            <div className="profile-wishlist-tags">
+                              {visibleGenres.map(genre => (
+                                <span key={genre} className="genre-chip profile-wishlist-tag">
+                                  {genre}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="profile-wishlist-meta">Genero nao informado.</p>
+                          )}
+
+                          <div className="profile-wishlist-footer">
+                            <span>
+                              Lancamento: {formatCompactDate(game?.data_lancamento, 'Nao informado')}
+                            </span>
+                            <strong>Ver detalhes</strong>
+                          </div>
+                        </div>
+                      </Link>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           </section>
         </div>

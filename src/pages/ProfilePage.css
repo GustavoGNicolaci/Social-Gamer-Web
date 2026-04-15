@@ -56,6 +56,10 @@
   padding: 1.5rem;
 }
 
+.profile-wishlist-section {
+  padding: 1.5rem;
+}
+
 .profile-card-glow {
   position: absolute;
   width: 280px;
@@ -431,6 +435,175 @@
   color: rgba(200, 210, 255, 0.72);
 }
 
+.profile-wishlist-content {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 1rem;
+}
+
+.profile-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.profile-section-copy {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.profile-section-copy h2 {
+  margin: 0;
+  color: #fff;
+}
+
+.profile-section-copy p {
+  color: rgba(238, 242, 255, 0.78);
+  line-height: 1.7;
+}
+
+.profile-wishlist-summary {
+  min-width: 220px;
+}
+
+.profile-wishlist-summary strong {
+  font-size: 1.05rem;
+}
+
+.profile-wishlist-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.profile-wishlist-card,
+.profile-wishlist-empty {
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background:
+    radial-gradient(circle at top left, rgba(102, 126, 234, 0.1), transparent 34%),
+    rgba(255, 255, 255, 0.04);
+}
+
+.profile-wishlist-card {
+  overflow: hidden;
+  text-decoration: none;
+  color: inherit;
+  display: grid;
+  min-height: 100%;
+  transition:
+    transform 0.25s ease,
+    border-color 0.25s ease,
+    box-shadow 0.25s ease;
+}
+
+.profile-wishlist-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(160, 177, 255, 0.24);
+  box-shadow: 0 20px 42px rgba(0, 0, 0, 0.22);
+}
+
+.profile-wishlist-cover {
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.2), transparent 34%),
+    linear-gradient(135deg, rgba(102, 126, 234, 0.82), rgba(118, 75, 162, 0.88));
+}
+
+.profile-wishlist-cover img,
+.profile-wishlist-fallback {
+  width: 100%;
+  height: 100%;
+}
+
+.profile-wishlist-cover img {
+  display: block;
+  object-fit: cover;
+}
+
+.profile-wishlist-fallback {
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-size: clamp(2.3rem, 5vw, 3.6rem);
+  font-weight: 800;
+}
+
+.profile-wishlist-body {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+}
+
+.profile-wishlist-body h3 {
+  margin: 0;
+  color: #fff;
+  font-size: 1.1rem;
+  line-height: 1.4;
+}
+
+.profile-wishlist-date,
+.profile-wishlist-meta {
+  margin: 0;
+  color: rgba(200, 210, 255, 0.72);
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.profile-wishlist-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.profile-wishlist-tag {
+  border-radius: 999px;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.78rem;
+}
+
+.profile-wishlist-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: center;
+  color: rgba(238, 242, 255, 0.82);
+  font-size: 0.9rem;
+}
+
+.profile-wishlist-footer strong {
+  color: #fff;
+  font-size: 0.9rem;
+}
+
+.profile-wishlist-empty {
+  display: grid;
+  gap: 0.85rem;
+  padding: 1.2rem;
+}
+
+.profile-wishlist-empty h3 {
+  margin: 0;
+  color: #fff;
+}
+
+.profile-wishlist-empty p {
+  margin: 0;
+  color: rgba(238, 242, 255, 0.78);
+  line-height: 1.7;
+}
+
+.profile-wishlist-link {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
 .profile-secondary-button,
 .profile-save-button {
   border-radius: 14px;
@@ -499,6 +672,10 @@
     padding: 1.25rem;
   }
 
+  .profile-wishlist-section {
+    padding: 1.25rem;
+  }
+
   .profile-card-main,
   .profile-form-grid {
     grid-template-columns: 1fr;
@@ -521,6 +698,21 @@
     flex-direction: column;
     align-items: stretch;
   }
+
+  .profile-section-head,
+  .profile-wishlist-footer {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .profile-wishlist-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-wishlist-summary {
+    min-width: 0;
+    width: 100%;
+  }
 }
 
 @media (max-width: 480px) {
@@ -529,7 +721,8 @@
   }
 
   .profile-state-card,
-  .profile-card {
+  .profile-card,
+  .profile-wishlist-section {
     padding: 1.1rem;
   }
 
