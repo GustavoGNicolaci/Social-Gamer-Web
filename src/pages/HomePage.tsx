@@ -9,7 +9,6 @@ interface Game {
   titulo: string
   capa_url: string | null
   generos: string[] | string | null
-  data_lancamento: string | null
 }
 
 interface Activity {
@@ -81,15 +80,6 @@ function formatCompactDate(value: string | null | undefined, fallback = 'Agora')
   })
 }
 
-function formatFullDate(value: string | null | undefined, fallback = 'Data nao informada') {
-  if (!value) return fallback
-
-  const parsedDate = new Date(value)
-  if (Number.isNaN(parsedDate.getTime())) return fallback
-
-  return parsedDate.toLocaleDateString('pt-BR')
-}
-
 function formatCount(value: number) {
   return value.toLocaleString('pt-BR')
 }
@@ -99,10 +89,10 @@ function getInitial(value: string) {
   return firstCharacter ? firstCharacter.toUpperCase() : 'U'
 }
 
-function truncateText(value: string | null | undefined, maxLength = 150) {
+function truncateText(value: string | null | undefined, maxLength = 96) {
   const normalizedValue = value?.trim() || ''
 
-  if (!normalizedValue) return 'Compartilhe opinioes, avaliacoes e descubra o que a comunidade anda jogando.'
+  if (!normalizedValue) return 'Nova atividade publicada na comunidade.'
   if (normalizedValue.length <= maxLength) return normalizedValue
 
   return `${normalizedValue.slice(0, maxLength - 3).trim()}...`
@@ -152,103 +142,6 @@ function iconWishlist() {
   )
 }
 
-function iconProfile() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path
-        d="M12 12C14.7614 12 17 9.76142 17 7C17 4.23858 14.7614 2 12 2C9.23858 2 7 4.23858 7 7C7 9.76142 9.23858 12 12 12Z"
-        stroke="currentColor"
-        strokeWidth="1.7"
-      />
-      <path
-        d="M4 20C4 17.2386 7.58172 15 12 15C16.4183 15 20 17.2386 20 20"
-        stroke="currentColor"
-        strokeWidth="1.7"
-        strokeLinecap="round"
-      />
-    </svg>
-  )
-}
-
-function iconCommunity() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path
-        d="M8.5 11C10.433 11 12 9.433 12 7.5C12 5.567 10.433 4 8.5 4C6.567 4 5 5.567 5 7.5C5 9.433 6.567 11 8.5 11Z"
-        stroke="currentColor"
-        strokeWidth="1.7"
-      />
-      <path
-        d="M15.5 10C17.1569 10 18.5 8.65685 18.5 7C18.5 5.34315 17.1569 4 15.5 4C13.8431 4 12.5 5.34315 12.5 7C12.5 8.65685 13.8431 10 15.5 10Z"
-        stroke="currentColor"
-        strokeWidth="1.7"
-      />
-      <path
-        d="M3.5 19C3.5 16.7909 5.73858 15 8.5 15C11.2614 15 13.5 16.7909 13.5 19"
-        stroke="currentColor"
-        strokeWidth="1.7"
-        strokeLinecap="round"
-      />
-      <path
-        d="M12.5 19C12.5 17.3431 13.8431 16 15.5 16C17.1569 16 18.5 17.3431 18.5 19"
-        stroke="currentColor"
-        strokeWidth="1.7"
-        strokeLinecap="round"
-      />
-    </svg>
-  )
-}
-
-function iconPlayers() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path
-        d="M7 6H17C18.1046 6 19 6.89543 19 8V14C19 15.1046 18.1046 16 17 16H13L9 19V16H7C5.89543 16 5 15.1046 5 14V8C5 6.89543 5.89543 6 7 6Z"
-        stroke="currentColor"
-        strokeWidth="1.7"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M9 10H15M9 13H13"
-        stroke="currentColor"
-        strokeWidth="1.7"
-        strokeLinecap="round"
-      />
-    </svg>
-  )
-}
-
-function iconConnections() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path
-        d="M8 8H6C4.89543 8 4 8.89543 4 10V14C4 15.1046 4.89543 16 6 16H8"
-        stroke="currentColor"
-        strokeWidth="1.7"
-        strokeLinecap="round"
-      />
-      <path
-        d="M16 8H18C19.1046 8 20 8.89543 20 10V14C20 15.1046 19.1046 16 18 16H16"
-        stroke="currentColor"
-        strokeWidth="1.7"
-        strokeLinecap="round"
-      />
-      <path
-        d="M9 12H15"
-        stroke="currentColor"
-        strokeWidth="1.7"
-        strokeLinecap="round"
-      />
-      <path
-        d="M9 9.5H15M9 14.5H15"
-        stroke="currentColor"
-        strokeWidth="1.7"
-        strokeLinecap="round"
-      />
-    </svg>
-  )
-}
-
 function HomePage() {
   const { user, profile } = useAuth()
   const [recentActivities, setRecentActivities] = useState<Activity[]>([])
@@ -284,7 +177,7 @@ function HomePage() {
               usuarios!inner(username, avatar_url)
             `)
             .order('data_publicacao', { ascending: false })
-            .limit(8),
+            .limit(6),
           supabase
             .from('comentarios')
             .select(`
@@ -297,12 +190,12 @@ function HomePage() {
               )
             `)
             .order('data_comentario', { ascending: false })
-            .limit(8),
+            .limit(6),
           supabase
             .from('jogos')
-            .select('id, titulo, capa_url, generos, data_lancamento')
+            .select('id, titulo, capa_url, generos')
             .order('id', { ascending: false })
-            .limit(4),
+            .limit(3),
           supabase.from('jogos').select('id', { count: 'exact', head: true }),
           supabase.from('avaliacoes').select('id', { count: 'exact', head: true }),
           supabase.from('comentarios').select('id', { count: 'exact', head: true }),
@@ -332,9 +225,7 @@ function HomePage() {
             authorName: reviewUser?.username || 'Usuario',
             authorAvatar: reviewUser?.avatar_url || null,
             gameTitle: reviewGame?.titulo || 'Jogo desconhecido',
-            text: truncateText(
-              review.texto_review || 'Compartilhou uma avaliacao com a comunidade.'
-            ),
+            text: truncateText(review.texto_review || 'Nova avaliacao publicada.'),
             score: review.nota ?? null,
             publishedAt: review.data_publicacao,
           }
@@ -351,7 +242,7 @@ function HomePage() {
             authorName: commentUser?.username || 'Usuario',
             authorAvatar: commentUser?.avatar_url || null,
             gameTitle: relatedGame?.titulo || 'uma avaliacao',
-            text: truncateText(comment.texto, 132),
+            text: truncateText(comment.texto, 88),
             score: null,
             publishedAt: comment.data_comentario,
           }
@@ -363,7 +254,7 @@ function HomePage() {
               new Date(rightActivity.publishedAt).getTime() -
               new Date(leftActivity.publishedAt).getTime()
           )
-          .slice(0, 6)
+          .slice(0, 4)
 
         setRecentActivities(mergedActivities)
         setTrendingGames(((featuredGamesResponse.data || []) as Game[]) || [])
@@ -393,58 +284,26 @@ function HomePage() {
       <div className="page-container">
         <div className="page-content home-page">
           <section className="home-state-card">
-            <span className="home-state-badge">Home</span>
-            <h1>Carregando sua vitrine gamer</h1>
-            <p>
-              Estamos preparando catalogo, destaques da comunidade e atalhos para voce explorar a
-              plataforma com mais clareza.
-            </p>
+            <span className="home-eyebrow">Home</span>
+            <h1>Carregando...</h1>
+            <p>Preparando seus destaques e atalhos principais.</p>
           </section>
         </div>
       </div>
     )
   }
 
-  const profileName = profile?.username ? `, @${profile.username}` : ''
-  const heroKicker = user ? `Bem-vindo de volta${profileName}` : 'Sua proxima jogatina comeca aqui'
-  const secondaryHeroAction = user
-    ? { to: '/profile', label: 'Ver perfil e wishlist' }
-    : { to: '/register', label: 'Entrar / criar conta' }
+  const heroEyebrow = user && profile?.username ? `Bem-vindo, @${profile.username}` : 'Social Gamer'
+  const secondaryAction = user
+    ? { to: '/profile', label: 'Meu perfil' }
+    : { to: '/register', label: 'Criar conta' }
+  const featuredGame = trendingGames[0] || null
+  const featuredGenres = normalizeList(featuredGame?.generos).slice(0, 2).join(', ')
 
-  const heroMetrics = [
-    {
-      value: formatCount(siteStats.games),
-      label: 'jogos no catalogo',
-      description: 'Busca e filtros para navegar com contexto.',
-    },
-    {
-      value: formatCount(siteStats.reviews),
-      label: 'avaliacoes publicadas',
-      description: 'Notas reais da comunidade para apoiar a escolha.',
-    },
-    {
-      value: formatCount(siteStats.comments),
-      label: 'comentarios ativos',
-      description: 'Conversas em andamento direto nas paginas dos jogos.',
-    },
-  ]
-
-  const flowSteps = [
-    {
-      step: '01',
-      title: 'Descubra',
-      description: 'Explore o catalogo com filtros por genero, plataforma e estudio.',
-    },
-    {
-      step: '02',
-      title: 'Avalie',
-      description: 'Leia reviews, publique sua nota e participe dos comentarios.',
-    },
-    {
-      step: '03',
-      title: 'Organize',
-      description: 'Salve jogos na wishlist e mantenha seu perfil pronto para voltar quando quiser.',
-    },
+  const heroStats = [
+    { value: formatCount(siteStats.games), label: 'jogos' },
+    { value: formatCount(siteStats.reviews), label: 'reviews' },
+    { value: formatCount(siteStats.comments), label: 'comentarios' },
   ]
 
   const featureCards: Array<{
@@ -452,188 +311,100 @@ function HomePage() {
     description: string
     ctaLabel: string
     ctaTo: string
-    eyebrow: string
     icon: ReactNode
   }> = [
     {
-      eyebrow: 'Catalogo',
-      title: 'Explore jogos com filtros mais uteis',
-      description:
-        'Pesquise por titulo e combine genero, plataforma e estudio para encontrar mais rapido o jogo certo.',
-      ctaLabel: 'Ver jogos',
+      title: 'Explorar jogos',
+      description: 'Busque e filtre o catalogo em poucos cliques.',
+      ctaLabel: 'Abrir catalogo',
       ctaTo: '/games',
       icon: iconCatalog(),
     },
     {
-      eyebrow: 'Comunidade',
-      title: 'Leia reviews e comentarios por jogo',
-      description:
-        'Cada pagina de jogo reune descricao, notas da comunidade, comentarios e contexto para decidir melhor.',
-      ctaLabel: 'Abrir catalogo',
+      title: 'Ver opinioes',
+      description: 'Leia reviews e comentarios direto na pagina de cada jogo.',
+      ctaLabel: 'Ver jogos',
       ctaTo: '/games',
       icon: iconReview(),
     },
     {
-      eyebrow: 'Wishlist',
-      title: 'Guarde o que voce quer jogar depois',
-      description:
-        'Salve titulos direto na pagina do jogo e acompanhe sua lista de desejos no perfil.',
-      ctaLabel: user ? 'Ver wishlist' : 'Entrar para salvar jogos',
+      title: 'Salvar favoritos',
+      description: 'Monte sua wishlist e deixe seu perfil pronto para voltar depois.',
+      ctaLabel: user ? 'Abrir perfil' : 'Entrar agora',
       ctaTo: user ? '/profile' : '/login',
       icon: iconWishlist(),
     },
-    {
-      eyebrow: 'Perfil',
-      title: 'Monte uma presenca com a sua cara',
-      description:
-        'Edite username, nome, bio e avatar para deixar seu perfil pronto para a comunidade.',
-      ctaLabel: user ? 'Abrir perfil' : 'Criar conta',
-      ctaTo: user ? '/profile' : '/register',
-      icon: iconProfile(),
-    },
   ]
-
-  const roadmapItems: Array<{
-    badge: string
-    title: string
-    description: string
-    note: string
-    icon: ReactNode
-  }> = [
-    {
-      badge: 'Em breve',
-      title: 'Comunidades tematicas',
-      description:
-        'Espacos por genero, franquia e estilo de jogo para reunir conversas, indicacoes e descobertas em grupo.',
-      note: 'Foco em convivencia e descoberta social.',
-      icon: iconCommunity(),
-    },
-    {
-      badge: 'Planejado',
-      title: 'Encontrar jogadores compativeis',
-      description:
-        'Sugestoes de pessoas com gostos parecidos para facilitar novas conexoes e jogatinas.',
-      note: 'Mais afinidade, menos busca manual.',
-      icon: iconPlayers(),
-    },
-    {
-      badge: 'Roadmap social',
-      title: 'Perfis e conexoes mais completos',
-      description:
-        'Perfis mais ricos, relacoes entre usuarios e sinais sociais para acompanhar quem compartilha interesses parecidos.',
-      note: 'Uma plataforma em evolucao continua.',
-      icon: iconConnections(),
-    },
-  ]
-
-  const spotlightGames = trendingGames.slice(0, 3)
-  const heroSpotlight = trendingGames[0] || null
-  const heroSpotlightGenres = normalizeList(heroSpotlight?.generos).slice(0, 2).join(' | ')
 
   return (
     <div className="page-container">
       <div className="page-content home-page">
         <section className="home-hero">
           <div className="home-hero-copy">
-            <span className="home-kicker">{heroKicker}</span>
-            <h1>Descubra jogos, registre suas opinioes e acompanhe a conversa da comunidade.</h1>
-            <p className="home-hero-lead">
-              O Social Gamer junta catalogo, reviews, comentarios, wishlist e perfil em uma Home
-              que apresenta melhor o valor da plataforma logo no primeiro contato.
+            <span className="home-eyebrow">{heroEyebrow}</span>
+            <h1>Descubra jogos e guarde o que vale sua proxima jogatina.</h1>
+            <p className="home-hero-text">
+              Explore o catalogo, veja o que a comunidade achou e organize sua lista com mais
+              clareza.
             </p>
 
             <div className="home-hero-actions">
-              <Link to="/games" className="home-action home-action-primary">
+              <Link to="/games" className="home-button home-button-primary">
                 Explorar jogos
               </Link>
-              <Link
-                to={secondaryHeroAction.to}
-                className="home-action home-action-secondary"
-              >
-                {secondaryHeroAction.label}
+              <Link to={secondaryAction.to} className="home-button home-button-secondary">
+                {secondaryAction.label}
               </Link>
             </div>
 
-            <div className="home-hero-metrics" aria-label="Metricas da plataforma">
-              {heroMetrics.map(metric => (
-                <article key={metric.label} className="home-metric-card">
-                  <strong>{metric.value}</strong>
-                  <span>{metric.label}</span>
-                  <small>{metric.description}</small>
+            <div className="home-stats" aria-label="Numeros da plataforma">
+              {heroStats.map(stat => (
+                <article key={stat.label} className="home-stat-card">
+                  <strong>{stat.value}</strong>
+                  <span>{stat.label}</span>
                 </article>
               ))}
             </div>
           </div>
 
-          <div className="home-hero-panel">
-            <article className="home-surface-card home-showcase-card">
-              <span className="home-surface-kicker">Em destaque agora</span>
-              <h2>{heroSpotlight?.titulo || 'Catalogo pronto para explorar'}</h2>
+          <div className="home-hero-side">
+            <article className="home-hero-card">
+              <span className="home-eyebrow">Destaque</span>
+              <h2>{featuredGame?.titulo || 'Catalogo pronto para explorar'}</h2>
               <p>
-                {heroSpotlight
-                  ? `${heroSpotlightGenres || 'Multiplos generos'} com pagina dedicada, comentarios e espaco para a sua avaliacao.`
-                  : 'Abra o catalogo para ver jogos, detalhes, reviews e comentarios em um fluxo mais direto.'}
+                {featuredGame
+                  ? featuredGenres || 'Veja detalhes, reviews e comentarios da comunidade.'
+                  : 'Entre no catalogo para encontrar seu proximo jogo.'}
               </p>
 
-              <div className="home-showcase-list">
-                {spotlightGames.length > 0 ? (
-                  spotlightGames.map(game => (
-                    <Link key={game.id} to={`/games/${game.id}`} className="home-showcase-link">
-                      <span>{game.titulo}</span>
-                      <small>{normalizeList(game.generos).slice(0, 2).join(', ') || 'Sem genero informado'}</small>
-                    </Link>
-                  ))
-                ) : (
-                  <div className="home-empty-inline">
-                    Os destaques vao aparecer aqui assim que o catalogo estiver carregado.
-                  </div>
-                )}
-              </div>
-            </article>
-
-            <article className="home-surface-card home-value-card">
-              <span className="home-surface-kicker">Por que usar</span>
-              <ul className="home-value-list">
-                <li>Entenda rapido o que ja da para fazer na plataforma.</li>
-                <li>Leia sinais reais da comunidade antes de escolher um jogo.</li>
-                <li>Organize favoritos e acompanhe sua propria jornada gamer.</li>
-              </ul>
+              {featuredGame ? (
+                <Link to={`/games/${featuredGame.id}`} className="home-inline-link">
+                  Ver pagina do jogo
+                </Link>
+              ) : (
+                <Link to="/games" className="home-inline-link">
+                  Ir para o catalogo
+                </Link>
+              )}
             </article>
           </div>
-        </section>
-
-        <section className="home-flow" aria-label="Como a plataforma ajuda voce">
-          {flowSteps.map(step => (
-            <article key={step.step} className="home-flow-card">
-              <span className="home-flow-step">{step.step}</span>
-              <div>
-                <h2>{step.title}</h2>
-                <p>{step.description}</p>
-              </div>
-            </article>
-          ))}
         </section>
 
         <section className="home-section">
           <div className="home-section-head">
             <div>
-              <span className="home-section-kicker">Recursos atuais</span>
-              <h2>O que voce ja pode fazer agora</h2>
+              <span className="home-eyebrow">Essencial</span>
+              <h2>O que voce pode fazer aqui</h2>
             </div>
-            <p>
-              A Home passa a explicar melhor as funcionalidades reais do sistema sem prometer
-              interacoes que ainda nao existem.
-            </p>
           </div>
 
           <div className="home-feature-grid">
             {featureCards.map(feature => (
               <article key={feature.title} className="home-feature-card">
                 <div className="home-feature-icon">{feature.icon}</div>
-                <span className="home-feature-kicker">{feature.eyebrow}</span>
                 <h3>{feature.title}</h3>
                 <p>{feature.description}</p>
-                <Link to={feature.ctaTo} className="home-card-link">
+                <Link to={feature.ctaTo} className="home-inline-link">
                   {feature.ctaLabel}
                 </Link>
               </article>
@@ -641,133 +412,89 @@ function HomePage() {
           </div>
         </section>
 
-        <section className="home-live-grid">
-          <div className="home-panel">
-            <div className="home-panel-head">
-              <div>
-                <span className="home-section-kicker">Conteudo vivo</span>
-                <h2>Atividades recentes da comunidade</h2>
-              </div>
-              <p>Reviews e comentarios reais ajudam a mostrar movimento e utilidade logo na Home.</p>
+        <section className="home-section">
+          <div className="home-section-head">
+            <div>
+              <span className="home-eyebrow">Agora na plataforma</span>
+              <h2>Jogos e atividade recente</h2>
             </div>
+          </div>
 
-            {recentActivities.length === 0 ? (
-              <div className="home-empty-state">
-                <h3>Ainda nao ha atividades recentes</h3>
-                <p>
-                  Assim que a comunidade publicar reviews e comentarios, eles aparecerao aqui com
-                  prioridade para o conteudo mais novo.
-                </p>
-              </div>
-            ) : (
-              <div className="home-activity-list">
-                {recentActivities.map(activity => (
-                  <article key={`${activity.type}-${activity.id}`} className="home-activity-card">
-                    <div className="home-activity-top">
-                      <div className="home-user-chip">
-                        {activity.authorAvatar ? (
-                          <img
-                            src={activity.authorAvatar}
-                            alt={`Avatar de ${activity.authorName}`}
-                            className="home-user-avatar"
-                          />
+          <div className="home-grid">
+            <div className="home-panel">
+              <h3 className="home-panel-title">Jogos em destaque</h3>
+
+              {trendingGames.length === 0 ? (
+                <div className="home-empty-state">
+                  <p>Nenhum jogo disponivel no momento.</p>
+                </div>
+              ) : (
+                <div className="home-spotlight-list">
+                  {trendingGames.map(game => (
+                    <Link key={game.id} to={`/games/${game.id}`} className="home-spotlight-card">
+                      <div className="home-spotlight-cover">
+                        {game.capa_url ? (
+                          <img src={game.capa_url} alt={`Capa do jogo ${game.titulo}`} />
                         ) : (
-                          <span className="home-user-avatar home-user-avatar-fallback">
-                            {getInitial(activity.authorName)}
-                          </span>
+                          <div className="home-spotlight-fallback">{getInitial(game.titulo)}</div>
                         )}
-
-                        <div>
-                          <strong>{activity.authorName}</strong>
-                          <span>{formatCompactDate(activity.publishedAt)}</span>
-                        </div>
                       </div>
 
-                      <div className="home-activity-meta">
-                        <span
-                          className={`home-activity-badge${activity.type === 'comment' ? ' is-comment' : ''}`}
-                        >
-                          {activity.type === 'review' ? 'Review' : 'Comentario'}
-                        </span>
+                      <div className="home-spotlight-copy">
+                        <h3>{game.titulo}</h3>
+                        <p>{normalizeList(game.generos).slice(0, 2).join(', ') || 'Sem genero informado'}</p>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="home-panel">
+              <h3 className="home-panel-title">Movimento recente</h3>
+
+              {recentActivities.length === 0 ? (
+                <div className="home-empty-state">
+                  <p>As novas reviews e comentarios vao aparecer aqui.</p>
+                </div>
+              ) : (
+                <div className="home-activity-list">
+                  {recentActivities.map(activity => (
+                    <article key={`${activity.type}-${activity.id}`} className="home-activity-card">
+                      <div className="home-activity-top">
+                        <div className="home-user-chip">
+                          {activity.authorAvatar ? (
+                            <img
+                              src={activity.authorAvatar}
+                              alt={`Avatar de ${activity.authorName}`}
+                              className="home-user-avatar"
+                            />
+                          ) : (
+                            <span className="home-user-avatar home-user-avatar-fallback">
+                              {getInitial(activity.authorName)}
+                            </span>
+                          )}
+
+                          <div>
+                            <strong>{activity.authorName}</strong>
+                            <span>{formatCompactDate(activity.publishedAt)}</span>
+                          </div>
+                        </div>
+
                         {activity.score !== null ? (
                           <span className="home-score-pill">{activity.score}/10</span>
-                        ) : null}
+                        ) : (
+                          <span className="home-tag">Comentario</span>
+                        )}
                       </div>
-                    </div>
 
-                    <h3>{activity.gameTitle}</h3>
-                    <p>{activity.text}</p>
-                  </article>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <aside className="home-panel home-panel-sidebar">
-            <div className="home-panel-head">
-              <div>
-                <span className="home-section-kicker">Descoberta</span>
-                <h2>Jogos em destaque</h2>
-              </div>
-              <p>Uma selecao visual para levar o usuario do interesse inicial direto para o catalogo.</p>
+                      <h4>{activity.gameTitle}</h4>
+                      <p>{activity.text}</p>
+                    </article>
+                  ))}
+                </div>
+              )}
             </div>
-
-            {trendingGames.length === 0 ? (
-              <div className="home-empty-state home-empty-state-compact">
-                <h3>Nenhum jogo em destaque agora</h3>
-                <p>Quando o catalogo tiver itens disponiveis, eles vao aparecer aqui.</p>
-              </div>
-            ) : (
-              <div className="home-spotlight-list">
-                {trendingGames.map(game => (
-                  <Link key={game.id} to={`/games/${game.id}`} className="home-spotlight-card">
-                    <div className="home-spotlight-cover">
-                      {game.capa_url ? (
-                        <img src={game.capa_url} alt={`Capa do jogo ${game.titulo}`} />
-                      ) : (
-                        <div className="home-spotlight-fallback">{getInitial(game.titulo)}</div>
-                      )}
-                    </div>
-
-                    <div className="home-spotlight-copy">
-                      <div>
-                        <h3>{game.titulo}</h3>
-                        <p>
-                          {normalizeList(game.generos).slice(0, 2).join(', ') ||
-                            'Genero nao informado'}
-                        </p>
-                      </div>
-                      <span>{formatFullDate(game.data_lancamento, 'Data nao informada')}</span>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </aside>
-        </section>
-
-        <section className="home-roadmap">
-          <div className="home-section-head home-roadmap-head">
-            <div>
-              <span className="home-section-kicker">Em evolucao</span>
-              <h2>O que vem por ai</h2>
-            </div>
-            <p>
-              A proxima etapa da Home antecipa a direcao social da plataforma com uma secao de
-              roadmap clara, bonita e sem parecer improvisada.
-            </p>
-          </div>
-
-          <div className="home-roadmap-grid">
-            {roadmapItems.map(item => (
-              <article key={item.title} className="home-roadmap-card">
-                <div className="home-roadmap-icon">{item.icon}</div>
-                <span className="home-roadmap-badge">{item.badge}</span>
-                <h3>{item.title}</h3>
-                <p>{item.description}</p>
-                <small>{item.note}</small>
-              </article>
-            ))}
           </div>
         </section>
       </div>

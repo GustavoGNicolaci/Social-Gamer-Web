@@ -1,71 +1,84 @@
 .home-page {
   display: flex;
   flex-direction: column;
-  gap: 1.75rem;
+  gap: 1.5rem;
 }
 
 .home-state-card,
-.home-panel,
+.home-hero,
+.home-hero-card,
 .home-feature-card,
-.home-flow-card,
-.home-roadmap-card,
-.home-surface-card {
+.home-panel,
+.home-spotlight-card,
+.home-activity-card {
   position: relative;
   overflow: hidden;
   border: 1px solid rgba(158, 177, 255, 0.12);
-  border-radius: 28px;
+  border-radius: 26px;
   background:
     linear-gradient(180deg, rgba(16, 21, 41, 0.94), rgba(12, 16, 31, 0.9)),
-    linear-gradient(135deg, rgba(102, 126, 234, 0.14), rgba(29, 211, 176, 0.08));
-  box-shadow: 0 22px 46px rgba(4, 10, 28, 0.34);
+    linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(29, 211, 176, 0.06));
+  box-shadow: 0 20px 40px rgba(4, 10, 28, 0.28);
 }
 
 .home-state-card::before,
-.home-panel::before,
+.home-hero::before,
+.home-hero-card::before,
 .home-feature-card::before,
-.home-flow-card::before,
-.home-roadmap-card::before,
-.home-surface-card::before {
+.home-panel::before,
+.home-spotlight-card::before,
+.home-activity-card::before {
   content: '';
   position: absolute;
   inset: 1px;
   border-radius: inherit;
   background:
     radial-gradient(circle at top left, rgba(255, 255, 255, 0.12), transparent 30%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 40%);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 40%);
   pointer-events: none;
+}
+
+.home-eyebrow {
+  display: inline-flex;
+  width: fit-content;
+  padding: 0.45rem 0.8rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #dce7ff;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.home-state-card,
+.home-panel {
+  padding: 1.35rem;
+}
+
+.home-state-card {
+  display: grid;
+  gap: 0.75rem;
 }
 
 .home-hero {
-  position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1.3fr) minmax(320px, 0.92fr);
-  gap: 1.4rem;
-  padding: clamp(1.5rem, 2vw + 1rem, 2.6rem);
-  border-radius: 34px;
-  overflow: hidden;
-  border: 1px solid rgba(191, 219, 254, 0.14);
+  grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.75fr);
+  gap: 1rem;
+  padding: clamp(1.35rem, 2vw + 0.8rem, 2.2rem);
   background:
-    radial-gradient(circle at top right, rgba(45, 212, 191, 0.18), transparent 34%),
-    radial-gradient(circle at bottom left, rgba(245, 158, 11, 0.14), transparent 28%),
-    linear-gradient(135deg, rgba(8, 13, 28, 0.98), rgba(21, 17, 45, 0.95) 52%, rgba(8, 53, 66, 0.9));
-  box-shadow: 0 28px 56px rgba(4, 10, 28, 0.42);
-  isolation: isolate;
-}
-
-.home-hero::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(120deg, rgba(255, 255, 255, 0.06), transparent 38%),
-    radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.08), transparent 24%);
-  pointer-events: none;
-  z-index: 0;
+    radial-gradient(circle at top right, rgba(45, 212, 191, 0.16), transparent 30%),
+    radial-gradient(circle at bottom left, rgba(125, 211, 252, 0.12), transparent 30%),
+    linear-gradient(135deg, rgba(8, 13, 28, 0.98), rgba(21, 17, 45, 0.95) 55%, rgba(8, 53, 66, 0.88));
 }
 
 .home-hero-copy,
-.home-hero-panel {
+.home-hero-side,
+.home-feature-card,
+.home-panel,
+.home-spotlight-card,
+.home-activity-card {
   position: relative;
   z-index: 1;
 }
@@ -74,511 +87,270 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 1.2rem;
-}
-
-.home-kicker,
-.home-state-badge,
-.home-section-kicker,
-.home-feature-kicker,
-.home-surface-kicker,
-.home-roadmap-badge,
-.home-flow-step {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  width: fit-content;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  font-size: 0.75rem;
-  font-weight: 800;
-}
-
-.home-kicker,
-.home-state-badge,
-.home-section-kicker,
-.home-feature-kicker,
-.home-surface-kicker {
-  padding: 0.55rem 0.9rem;
-  border-radius: 999px;
-  color: #dce7ff;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  gap: 1rem;
 }
 
 .home-hero h1,
-.home-state-card h1 {
+.home-state-card h1,
+.home-section-head h2 {
   margin: 0;
-  font-size: clamp(2.6rem, 4vw, 4.5rem);
-  line-height: 1;
+  color: #f8fbff;
+  line-height: 1.05;
+}
+
+.home-hero h1 {
+  font-size: clamp(2.4rem, 4vw, 4rem);
   letter-spacing: -0.045em;
-  color: #f7fbff;
+  max-width: 12ch;
   text-wrap: balance;
 }
 
-.home-hero-lead,
+.home-state-card h1,
+.home-section-head h2 {
+  font-size: clamp(1.65rem, 2vw, 2.2rem);
+}
+
+.home-hero-text,
 .home-state-card p,
-.home-panel-head p,
 .home-section-head p,
 .home-feature-card p,
-.home-flow-card p,
-.home-roadmap-card p,
-.home-showcase-card p,
-.home-value-list li,
+.home-hero-card p,
+.home-spotlight-copy p,
 .home-empty-state p,
-.home-activity-card p,
-.home-spotlight-copy p {
+.home-activity-card p {
   margin: 0;
   color: rgba(227, 234, 255, 0.8);
-  font-size: 1rem;
-  line-height: 1.65;
+  line-height: 1.6;
+}
+
+.home-hero-text {
+  max-width: 36rem;
+  font-size: 1.02rem;
 }
 
 .home-hero-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.85rem;
+  gap: 0.8rem;
 }
 
-.home-action {
+.home-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 52px;
-  padding: 0.95rem 1.4rem;
+  min-height: 50px;
+  padding: 0.9rem 1.35rem;
   border-radius: 999px;
   text-decoration: none;
-  font-size: 0.98rem;
+  font-size: 0.96rem;
   font-weight: 800;
   transition:
     transform 0.25s ease,
     box-shadow 0.25s ease,
-    border-color 0.25s ease,
     background 0.25s ease,
+    border-color 0.25s ease,
     color 0.25s ease;
 }
 
-.home-action:hover {
+.home-button:hover {
   transform: translateY(-2px);
   color: inherit;
 }
 
-.home-action-primary {
+.home-button-primary {
   color: #0f172a;
   background: linear-gradient(135deg, #f8fafc, #c7d2fe 58%, #7dd3fc);
-  box-shadow: 0 18px 30px rgba(125, 211, 252, 0.22);
+  box-shadow: 0 16px 28px rgba(125, 211, 252, 0.22);
 }
 
-.home-action-primary:hover {
+.home-button-primary:hover {
   color: #0f172a;
-  box-shadow: 0 22px 36px rgba(125, 211, 252, 0.28);
 }
 
-.home-action-secondary {
+.home-button-secondary {
   color: #f8fbff;
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.16);
-  box-shadow: 0 16px 28px rgba(5, 10, 24, 0.18);
 }
 
-.home-action-secondary:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.22);
-}
-
-.home-hero-metrics {
+.home-stats {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.85rem;
-}
-
-.home-metric-card {
-  padding: 1rem 1rem 1.1rem;
-  border-radius: 22px;
-  background: rgba(255, 255, 255, 0.07);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
-}
-
-.home-metric-card strong {
-  display: block;
-  margin-bottom: 0.3rem;
-  color: #fff;
-  font-size: 1.9rem;
-  line-height: 1;
-}
-
-.home-metric-card span {
-  display: block;
-  margin-bottom: 0.35rem;
-  color: rgba(232, 238, 255, 0.92);
-  font-size: 0.92rem;
-  font-weight: 700;
-}
-
-.home-metric-card small,
-.home-roadmap-card small,
-.home-showcase-link small,
-.home-spotlight-copy span,
-.home-user-chip span {
-  color: rgba(208, 218, 255, 0.66);
-  font-size: 0.82rem;
-  line-height: 1.45;
-}
-
-.home-hero-panel {
-  display: grid;
-  gap: 1rem;
-}
-
-.home-surface-card {
-  padding: 1.4rem;
-}
-
-.home-showcase-card h2,
-.home-section-head h2,
-.home-panel-head h2,
-.home-roadmap-head h2 {
-  margin: 0.35rem 0 0.55rem;
-  color: #f8fbff;
-  font-size: clamp(1.45rem, 2vw, 2rem);
-  line-height: 1.1;
-}
-
-.home-showcase-list {
-  display: grid;
-  gap: 0.8rem;
-  margin-top: 1rem;
-}
-
-.home-showcase-link {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.8rem;
-  padding: 0.85rem 1rem;
-  border-radius: 18px;
-  text-decoration: none;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  transition:
-    transform 0.25s ease,
-    background 0.25s ease,
-    border-color 0.25s ease;
-}
-
-.home-showcase-link:hover {
-  color: inherit;
-  transform: translateX(4px);
-  background: rgba(255, 255, 255, 0.09);
-  border-color: rgba(191, 219, 254, 0.24);
-}
-
-.home-showcase-link span {
-  color: #f5f7ff;
-  font-size: 0.98rem;
-  font-weight: 700;
-}
-
-.home-empty-inline {
-  padding: 0.95rem 1rem;
-  border-radius: 18px;
-  color: rgba(227, 234, 255, 0.72);
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px dashed rgba(191, 219, 254, 0.18);
-  line-height: 1.55;
-}
-
-.home-value-list {
-  margin: 1rem 0 0;
-  padding: 0;
-  list-style: none;
-  display: grid;
   gap: 0.75rem;
 }
 
-.home-value-list li {
-  position: relative;
-  padding-left: 1.1rem;
+.home-stat-card {
+  padding: 0.95rem 1rem;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.home-value-list li::before {
-  content: '';
-  position: absolute;
-  top: 0.72rem;
-  left: 0;
-  width: 0.45rem;
-  height: 0.45rem;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #7dd3fc, #fbbf24);
-  box-shadow: 0 0 0 6px rgba(125, 211, 252, 0.08);
+.home-stat-card strong {
+  display: block;
+  color: #fff;
+  font-size: 1.6rem;
+  line-height: 1;
+  margin-bottom: 0.25rem;
 }
 
-.home-flow {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 1rem;
+.home-stat-card span,
+.home-user-chip span {
+  color: rgba(221, 230, 255, 0.72);
+  font-size: 0.85rem;
 }
 
-.home-flow-card {
+.home-hero-side {
   display: flex;
-  gap: 1rem;
-  align-items: flex-start;
-  padding: 1.35rem;
+  align-items: stretch;
 }
 
-.home-flow-step {
-  min-width: 3rem;
-  min-height: 3rem;
-  justify-content: center;
-  border-radius: 18px;
-  color: #111827;
-  background: linear-gradient(135deg, #f8fafc, #7dd3fc);
-  box-shadow: 0 14px 28px rgba(125, 211, 252, 0.18);
+.home-hero-card {
+  width: 100%;
+  display: grid;
+  align-content: start;
+  gap: 0.8rem;
+  padding: 1.3rem;
+  background:
+    linear-gradient(180deg, rgba(17, 24, 39, 0.84), rgba(10, 14, 27, 0.84)),
+    linear-gradient(135deg, rgba(102, 126, 234, 0.18), rgba(34, 197, 94, 0.08));
 }
 
-.home-flow-card h2,
+.home-hero-card h2,
 .home-feature-card h3,
-.home-roadmap-card h3,
-.home-activity-card h3,
+.home-panel-title,
 .home-spotlight-copy h3,
-.home-empty-state h3 {
-  margin: 0 0 0.45rem;
+.home-activity-card h4 {
+  margin: 0;
   color: #f8fbff;
-  font-size: 1.2rem;
   line-height: 1.2;
 }
 
-.home-section,
-.home-roadmap {
-  display: flex;
-  flex-direction: column;
-  gap: 1.15rem;
+.home-hero-card h2 {
+  font-size: 1.45rem;
 }
 
-.home-section-head,
-.home-panel-head {
-  display: flex;
-  align-items: end;
-  justify-content: space-between;
-  gap: 1.25rem;
-}
-
-.home-section-head p,
-.home-panel-head p {
-  max-width: 38rem;
-}
-
-.home-feature-grid,
-.home-roadmap-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 1rem;
-}
-
-.home-feature-card,
-.home-roadmap-card {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.8rem;
-  padding: 1.4rem;
-}
-
-.home-feature-icon,
-.home-roadmap-icon {
-  width: 3.4rem;
-  height: 3.4rem;
-  display: grid;
-  place-items: center;
-  border-radius: 20px;
-  color: #f8fbff;
-  background:
-    radial-gradient(circle at top left, rgba(255, 255, 255, 0.22), transparent 32%),
-    linear-gradient(135deg, rgba(34, 197, 94, 0.24), rgba(59, 130, 246, 0.42));
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.18),
-    0 14px 28px rgba(15, 23, 42, 0.2);
-}
-
-.home-feature-icon svg,
-.home-roadmap-icon svg {
-  width: 1.55rem;
-  height: 1.55rem;
-}
-
-.home-card-link {
+.home-inline-link {
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
-  margin-top: auto;
+  width: fit-content;
   color: #dfe8ff;
-  font-size: 0.95rem;
-  font-weight: 800;
   text-decoration: none;
+  font-size: 0.94rem;
+  font-weight: 800;
   transition: color 0.2s ease, transform 0.2s ease;
 }
 
-.home-card-link::after {
+.home-inline-link::after {
   content: '->';
   font-size: 0.8rem;
 }
 
-.home-card-link:hover {
+.home-inline-link:hover {
   color: #fff;
   transform: translateX(2px);
 }
 
-.home-live-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.3fr) minmax(320px, 0.88fr);
+.home-section {
+  display: flex;
+  flex-direction: column;
   gap: 1rem;
-  align-items: start;
+}
+
+.home-section-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.home-section-head p {
+  max-width: 26rem;
+}
+
+.home-feature-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.home-feature-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.8rem;
+  padding: 1.3rem;
+}
+
+.home-feature-icon {
+  width: 3.1rem;
+  height: 3.1rem;
+  display: grid;
+  place-items: center;
+  border-radius: 18px;
+  color: #f8fbff;
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.22), transparent 32%),
+    linear-gradient(135deg, rgba(34, 197, 94, 0.2), rgba(59, 130, 246, 0.38));
+}
+
+.home-feature-icon svg {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.home-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
 }
 
 .home-panel {
-  padding: 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
 }
 
-.home-panel-sidebar {
-  position: sticky;
-  top: calc(96px + 1rem);
+.home-panel-title {
+  font-size: 1.15rem;
 }
 
 .home-empty-state {
-  display: grid;
-  gap: 0.4rem;
-  padding: 1.25rem;
-  border-radius: 22px;
-  border: 1px dashed rgba(191, 219, 254, 0.16);
-  background: rgba(255, 255, 255, 0.03);
+  padding: 1rem;
+  border-radius: 18px;
+  border: 1px dashed rgba(191, 219, 254, 0.18);
+  background: rgba(255, 255, 255, 0.04);
 }
 
-.home-empty-state-compact {
-  min-height: 100%;
-}
-
-.home-activity-list,
-.home-spotlight-list {
-  display: grid;
-  gap: 0.95rem;
-}
-
-.home-activity-card,
-.home-spotlight-card {
-  position: relative;
+.home-spotlight-list,
+.home-activity-list {
   display: grid;
   gap: 0.8rem;
-  padding: 1.15rem;
-  border-radius: 22px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(191, 219, 254, 0.09);
-  transition:
-    transform 0.25s ease,
-    border-color 0.25s ease,
-    background 0.25s ease,
-    box-shadow 0.25s ease;
 }
 
-.home-activity-card:hover,
-.home-spotlight-card:hover {
+.home-spotlight-card {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.9rem;
+  text-decoration: none;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.home-spotlight-card:hover,
+.home-activity-card:hover {
   transform: translateY(-2px);
   border-color: rgba(191, 219, 254, 0.2);
-  background: rgba(255, 255, 255, 0.07);
-  box-shadow: 0 16px 30px rgba(7, 12, 26, 0.16);
-}
-
-.home-activity-top,
-.home-activity-meta,
-.home-user-chip {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.8rem;
-}
-
-.home-user-chip {
-  justify-content: flex-start;
-}
-
-.home-user-chip strong {
-  display: block;
-  color: #f8fbff;
-  font-size: 0.95rem;
-}
-
-.home-user-avatar,
-.home-user-avatar-fallback {
-  width: 2.85rem;
-  height: 2.85rem;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.home-user-avatar {
-  display: block;
-  object-fit: cover;
-  border: 2px solid rgba(255, 255, 255, 0.14);
-}
-
-.home-user-avatar-fallback {
-  display: grid;
-  place-items: center;
-  color: #fff;
-  font-weight: 800;
-  background: linear-gradient(135deg, #38bdf8, #818cf8);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
-}
-
-.home-activity-badge,
-.home-score-pill,
-.home-roadmap-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 2rem;
-  padding: 0.35rem 0.7rem;
-  border-radius: 999px;
-  font-size: 0.78rem;
-  font-weight: 800;
-}
-
-.home-activity-badge {
-  color: #f8fbff;
-  background: rgba(59, 130, 246, 0.18);
-  border: 1px solid rgba(96, 165, 250, 0.28);
-}
-
-.home-activity-badge.is-comment {
-  background: rgba(45, 212, 191, 0.14);
-  border-color: rgba(45, 212, 191, 0.26);
-}
-
-.home-score-pill {
-  color: #111827;
-  background: linear-gradient(135deg, #fde68a, #f59e0b);
-  box-shadow: 0 10px 20px rgba(245, 158, 11, 0.16);
-}
-
-.home-activity-card h3 {
-  margin-bottom: 0;
-}
-
-.home-spotlight-card {
-  grid-template-columns: 92px minmax(0, 1fr);
-  align-items: center;
-  text-decoration: none;
 }
 
 .home-spotlight-cover {
-  width: 92px;
-  height: 116px;
-  border-radius: 20px;
+  width: 76px;
+  height: 96px;
+  border-radius: 18px;
   overflow: hidden;
   background: rgba(255, 255, 255, 0.08);
-  box-shadow: 0 16px 30px rgba(7, 12, 26, 0.18);
 }
 
 .home-spotlight-cover img,
@@ -596,305 +368,252 @@
   display: grid;
   place-items: center;
   color: #fff;
-  font-size: 2rem;
+  font-size: 1.8rem;
   font-weight: 800;
   background: linear-gradient(135deg, #2563eb, #06b6d4);
 }
 
 .home-spotlight-copy {
   display: grid;
-  gap: 0.75rem;
+  gap: 0.3rem;
 }
 
-.home-spotlight-copy h3 {
-  margin-bottom: 0.25rem;
-}
-
-.home-roadmap {
-  padding: 1.6rem;
-  border-radius: 32px;
-  border: 1px solid rgba(191, 219, 254, 0.12);
-  background:
-    radial-gradient(circle at top right, rgba(99, 102, 241, 0.16), transparent 34%),
-    radial-gradient(circle at bottom left, rgba(45, 212, 191, 0.14), transparent 30%),
-    linear-gradient(135deg, rgba(12, 16, 34, 0.96), rgba(15, 22, 41, 0.94));
-  box-shadow: 0 24px 50px rgba(4, 10, 28, 0.34);
-}
-
-.home-roadmap-head {
-  margin-bottom: 0.2rem;
-}
-
-.home-roadmap-badge {
-  color: #f8fbff;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-}
-
-.home-state-card {
-  padding: 2rem;
+.home-activity-card {
   display: grid;
-  gap: 0.9rem;
+  gap: 0.7rem;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.05);
 }
 
-.home-action:focus-visible,
-.home-card-link:focus-visible,
-.home-showcase-link:focus-visible,
+.home-activity-top,
+.home-user-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.home-user-chip {
+  justify-content: flex-start;
+}
+
+.home-user-chip strong {
+  display: block;
+  color: #f8fbff;
+  font-size: 0.92rem;
+}
+
+.home-user-avatar,
+.home-user-avatar-fallback {
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.home-user-avatar {
+  display: block;
+  object-fit: cover;
+  border: 2px solid rgba(255, 255, 255, 0.14);
+}
+
+.home-user-avatar-fallback {
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-weight: 800;
+  background: linear-gradient(135deg, #38bdf8, #818cf8);
+}
+
+.home-score-pill,
+.home-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2rem;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.home-score-pill {
+  color: #111827;
+  background: linear-gradient(135deg, #fde68a, #f59e0b);
+}
+
+.home-tag {
+  color: #f8fbff;
+  background: rgba(59, 130, 246, 0.18);
+  border: 1px solid rgba(96, 165, 250, 0.25);
+}
+
+.home-button:focus-visible,
+.home-inline-link:focus-visible,
 .home-spotlight-card:focus-visible {
   outline: 2px solid rgba(191, 219, 254, 0.9);
   outline-offset: 3px;
 }
 
 body.light .home-state-card,
-body.light .home-panel,
+body.light .home-hero,
+body.light .home-hero-card,
 body.light .home-feature-card,
-body.light .home-flow-card,
-body.light .home-roadmap-card,
-body.light .home-surface-card {
+body.light .home-panel,
+body.light .home-spotlight-card,
+body.light .home-activity-card {
   border-color: rgba(148, 163, 184, 0.2);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(243, 247, 255, 0.94)),
-    linear-gradient(135deg, rgba(102, 126, 234, 0.08), rgba(34, 197, 94, 0.06));
-  box-shadow: 0 18px 38px rgba(94, 109, 148, 0.14);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(243, 247, 255, 0.94)),
+    linear-gradient(135deg, rgba(102, 126, 234, 0.06), rgba(34, 197, 94, 0.04));
+  box-shadow: 0 16px 34px rgba(94, 109, 148, 0.14);
 }
 
 body.light .home-state-card::before,
-body.light .home-panel::before,
+body.light .home-hero::before,
+body.light .home-hero-card::before,
 body.light .home-feature-card::before,
-body.light .home-flow-card::before,
-body.light .home-roadmap-card::before,
-body.light .home-surface-card::before {
+body.light .home-panel::before,
+body.light .home-spotlight-card::before,
+body.light .home-activity-card::before {
   background:
     radial-gradient(circle at top left, rgba(255, 255, 255, 0.95), transparent 34%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.8), transparent 50%);
 }
 
 body.light .home-hero {
-  border-color: rgba(148, 163, 184, 0.18);
   background:
-    radial-gradient(circle at top right, rgba(34, 197, 94, 0.12), transparent 34%),
-    radial-gradient(circle at bottom left, rgba(245, 158, 11, 0.1), transparent 26%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(235, 242, 255, 0.96) 54%, rgba(225, 248, 246, 0.96));
-  box-shadow: 0 24px 50px rgba(94, 109, 148, 0.16);
+    radial-gradient(circle at top right, rgba(34, 197, 94, 0.1), transparent 30%),
+    radial-gradient(circle at bottom left, rgba(125, 211, 252, 0.1), transparent 30%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(235, 242, 255, 0.96) 56%, rgba(225, 248, 246, 0.94));
 }
 
-body.light .home-kicker,
-body.light .home-state-badge,
-body.light .home-section-kicker,
-body.light .home-feature-kicker,
-body.light .home-surface-kicker,
-body.light .home-roadmap-badge {
+body.light .home-eyebrow {
   color: #28425c;
-  background: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.84);
   border-color: rgba(148, 163, 184, 0.18);
 }
 
 body.light .home-hero h1,
-body.light .home-showcase-card h2,
+body.light .home-state-card h1,
 body.light .home-section-head h2,
-body.light .home-panel-head h2,
-body.light .home-roadmap-head h2,
-body.light .home-flow-card h2,
+body.light .home-hero-card h2,
 body.light .home-feature-card h3,
-body.light .home-roadmap-card h3,
-body.light .home-activity-card h3,
+body.light .home-panel-title,
 body.light .home-spotlight-copy h3,
-body.light .home-empty-state h3,
+body.light .home-activity-card h4,
 body.light .home-user-chip strong {
   color: #16213b;
 }
 
-body.light .home-hero-lead,
+body.light .home-hero-text,
 body.light .home-state-card p,
-body.light .home-panel-head p,
 body.light .home-section-head p,
 body.light .home-feature-card p,
-body.light .home-flow-card p,
-body.light .home-roadmap-card p,
-body.light .home-showcase-card p,
-body.light .home-value-list li,
+body.light .home-hero-card p,
+body.light .home-spotlight-copy p,
 body.light .home-empty-state p,
-body.light .home-activity-card p,
-body.light .home-spotlight-copy p {
-  color: rgba(23, 35, 61, 0.74);
+body.light .home-activity-card p {
+  color: rgba(23, 35, 61, 0.72);
 }
 
-body.light .home-metric-card {
-  background: rgba(255, 255, 255, 0.72);
-  border-color: rgba(148, 163, 184, 0.18);
-}
-
-body.light .home-metric-card strong,
-body.light .home-metric-card span,
-body.light .home-showcase-link span {
-  color: #16213b;
-}
-
-body.light .home-metric-card small,
-body.light .home-roadmap-card small,
-body.light .home-showcase-link small,
-body.light .home-spotlight-copy span,
-body.light .home-user-chip span {
-  color: rgba(23, 35, 61, 0.56);
-}
-
-body.light .home-action-primary {
+body.light .home-button-primary {
   color: #17233d;
   background: linear-gradient(135deg, #ffffff, #dbeafe 58%, #93c5fd);
 }
 
-body.light .home-action-primary:hover {
+body.light .home-button-primary:hover {
   color: #17233d;
 }
 
-body.light .home-action-secondary {
+body.light .home-button-secondary {
   color: #17233d;
-  background: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.74);
   border-color: rgba(148, 163, 184, 0.18);
 }
 
-body.light .home-showcase-link,
-body.light .home-activity-card,
-body.light .home-spotlight-card,
-body.light .home-empty-state,
-body.light .home-empty-inline {
-  background: rgba(255, 255, 255, 0.66);
+body.light .home-stat-card,
+body.light .home-empty-state {
+  background: rgba(255, 255, 255, 0.68);
   border-color: rgba(148, 163, 184, 0.18);
 }
 
-body.light .home-empty-inline {
-  color: rgba(23, 35, 61, 0.64);
+body.light .home-stat-card strong {
+  color: #16213b;
 }
 
-body.light .home-card-link {
+body.light .home-stat-card span,
+body.light .home-user-chip span {
+  color: rgba(23, 35, 61, 0.58);
+}
+
+body.light .home-inline-link {
   color: #304ab3;
 }
 
-body.light .home-card-link:hover {
+body.light .home-inline-link:hover {
   color: #1f3180;
 }
 
-body.light .home-roadmap {
-  border-color: rgba(148, 163, 184, 0.18);
-  background:
-    radial-gradient(circle at top right, rgba(99, 102, 241, 0.08), transparent 34%),
-    radial-gradient(circle at bottom left, rgba(45, 212, 191, 0.08), transparent 28%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(240, 244, 255, 0.96));
-  box-shadow: 0 20px 40px rgba(94, 109, 148, 0.14);
-}
-
-@media (max-width: 1200px) {
-  .home-feature-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .home-roadmap-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 1040px) {
+@media (max-width: 1080px) {
   .home-hero,
-  .home-live-grid,
-  .home-section-head,
-  .home-panel-head,
-  .home-roadmap-head {
+  .home-grid {
     grid-template-columns: 1fr;
-  }
-
-  .home-hero,
-  .home-live-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .home-panel-sidebar {
-    position: relative;
-    top: 0;
-  }
-
-  .home-section-head,
-  .home-panel-head {
-    align-items: flex-start;
   }
 }
 
 @media (max-width: 900px) {
-  .home-hero-metrics,
-  .home-flow,
-  .home-roadmap-grid {
+  .home-feature-grid,
+  .home-stats {
     grid-template-columns: 1fr;
   }
 
-  .home-spotlight-card {
-    grid-template-columns: 80px minmax(0, 1fr);
-  }
-
-  .home-spotlight-cover {
-    width: 80px;
-    height: 104px;
+  .home-section-head {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
 
 @media (max-width: 768px) {
   .home-page {
-    gap: 1.25rem;
+    gap: 1.2rem;
   }
 
   .home-hero,
-  .home-panel,
   .home-state-card,
-  .home-roadmap {
+  .home-panel {
     padding: 1.2rem;
   }
 
-  .home-feature-grid,
-  .home-roadmap-grid {
-    grid-template-columns: 1fr;
+  .home-hero h1 {
+    font-size: clamp(2.1rem, 10vw, 3rem);
   }
 
-  .home-hero h1,
-  .home-state-card h1 {
-    font-size: clamp(2.1rem, 10vw, 3.1rem);
+  .home-feature-grid {
+    grid-template-columns: 1fr;
   }
 
   .home-hero-actions {
     flex-direction: column;
   }
 
-  .home-action {
+  .home-button {
     width: 100%;
-  }
-
-  .home-activity-top,
-  .home-activity-meta {
-    flex-direction: column;
-    align-items: flex-start;
   }
 }
 
 @media (max-width: 560px) {
-  .home-feature-icon,
-  .home-roadmap-icon {
-    width: 3rem;
-    height: 3rem;
-    border-radius: 18px;
-  }
-
-  .home-flow-card {
-    flex-direction: column;
-  }
-
-  .home-showcase-link {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
   .home-spotlight-card {
-    grid-template-columns: 1fr;
+    grid-template-columns: 64px minmax(0, 1fr);
   }
 
   .home-spotlight-cover {
-    width: 100%;
-    height: 200px;
+    width: 64px;
+    height: 84px;
+  }
+
+  .home-activity-top {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
