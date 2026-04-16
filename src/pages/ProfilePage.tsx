@@ -1,7 +1,15 @@
-import { useEffect, useState, type ChangeEvent } from 'react'
+import { useCallback, useEffect, useState, type ChangeEvent } from 'react'
 import type { ProfileUpdateError, UserProfile } from '../contexts/AuthContext'
+import { ProfileGameStatusSection } from '../components/profile/ProfileGameStatusSection'
 import { ProfileWishlistSection } from '../components/profile/ProfileWishlistSection'
 import { useAuth } from '../contexts/AuthContext'
+import {
+  getGameStatusesByUserId,
+  saveGameStatus,
+  type GameStatusError,
+  type GameStatusItem,
+  type GameStatusValue,
+} from '../services/gameStatusService'
 import { uploadImage } from '../services/storageService'
 import { getWishlistGamesByUserId, type WishlistGameItem } from '../services/wishlistService'
 import './ProfilePage.css'
@@ -18,6 +26,8 @@ interface ProfileDraft {
   username: string
   bio: string
 }
+
+type ProfileTab = 'status' | 'wishlist'
 
 const createProfileDraft = (profile: UserProfile | null): ProfileDraft => ({
   nome_completo: profile?.nome_completo || '',
@@ -89,14 +99,50 @@ const getWishlistErrorMessage = (error: {
   return 'Nao foi possivel carregar sua lista de desejos agora.'
 }
 
+const getGameStatusErrorMessage = (
+  error: GameStatusError | null,
+  action: 'load' | 'save'
+) => {
+  if (!error) {
+    return action === 'load'
+      ? 'Nao foi possivel carregar os status dos jogos agora.'
+      : 'Nao foi possivel salvar o status deste jogo agora.'
+  }
+
+  const fullMessage = [error.message, error.details, error.hint].filter(Boolean).join(' ').toLowerCase()
+
+  if (
+    error.code === '42501' ||
+    fullMessage.includes('permission denied') ||
+    fullMessage.includes('row-level security') ||
+    fullMessage.includes('policy')
+  ) {
+    return action === 'load'
+      ? 'Nao foi possivel carregar os status por permissao. Verifique as policies da tabela status_jogo no Supabase.'
+      : 'Nao foi possivel salvar o status por permissao. Verifique as policies da tabela status_jogo no Supabase.'
+  }
+
+  if (fullMessage.includes('column')) {
+    return 'Nao foi possivel continuar porque a estrutura da tabela status_jogo nao corresponde ao frontend.'
+  }
+
+  return action === 'load'
+    ? 'Nao foi possivel carregar os status dos jogos agora.'
+    : 'Nao foi possivel salvar o status deste jogo agora.'
+}
+
 export function ProfilePage() {
   const { user, profile, loading, updateOwnProfile } = useAuth()
   const [draftProfile, setDraftProfile] = useState<ProfileDraft>(() => createProfileDraft(null))
+  const [activeTab, setActiveTab] = useState<ProfileTab>('status')
   const [isEditing, setIsEditing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
   const [saveFeedback, setSaveFeedback] = useState<FeedbackState | null>(null)
   const [avatarFeedback, setAvatarFeedback] = useState<FeedbackState | null>(null)
+  const [statusGames, setStatusGames] = useState<GameStatusItem[]>([])
+  const [statusLoading, setStatusLoading] = useState(false)
+  const [statusError, setStatusError] = useState<string | null>(null)
   const [wishlistGames, setWishlistGames] = useState<WishlistGameItem[]>([])
   const [wishlistLoading, setWishlistLoading] = useState(false)
   const [wishlistError, setWishlistError] = useState<string | null>(null)
@@ -113,11 +159,28 @@ export function ProfilePage() {
   }, [profile, isEditing])
 
   useEffect(() => {
+    setActiveTab('status')
+  }, [profile?.id])
+
+  const loadStatusGames = useCallback(async (userId: string) => {
+    const result = await getGameStatusesByUserId(userId)
+
+    if (result.error) {
+      console.error('Erro ao carregar status dos jogos do perfil:', result.error)
+    }
+
+    return result
+  }, [])
+
+  useEffect(() => {
     let isMounted = true
 
-    const loadWishlist = async () => {
-      if (!user || !profile) {
+    const loadProfileCollections = async () => {
+      if (!profile) {
         if (isMounted) {
+          setStatusGames([])
+          setStatusError(null)
+          setStatusLoading(false)
           setWishlistGames([])
           setWishlistError(null)
           setWishlistLoading(false)
@@ -125,30 +188,43 @@ export function ProfilePage() {
         return
       }
 
+      setStatusLoading(true)
+      setStatusError(null)
       setWishlistLoading(true)
       setWishlistError(null)
 
-      const { data, error } = await getWishlistGamesByUserId(profile.id)
+      const [statusResult, wishlistResult] = await Promise.all([
+        loadStatusGames(profile.id),
+        getWishlistGamesByUserId(profile.id),
+      ])
 
       if (!isMounted) return
 
-      if (error) {
-        console.error('Erro ao carregar wishlist do perfil:', error)
-        setWishlistGames([])
-        setWishlistError(getWishlistErrorMessage(error))
+      if (statusResult.error) {
+        setStatusGames([])
+        setStatusError(getGameStatusErrorMessage(statusResult.error, 'load'))
       } else {
-        setWishlistGames(data)
+        setStatusGames(statusResult.data)
       }
 
+      if (wishlistResult.error) {
+        console.error('Erro ao carregar wishlist do perfil:', wishlistResult.error)
+        setWishlistGames([])
+        setWishlistError(getWishlistErrorMessage(wishlistResult.error))
+      } else {
+        setWishlistGames(wishlistResult.data)
+      }
+
+      setStatusLoading(false)
       setWishlistLoading(false)
     }
 
-    void loadWishlist()
+    void loadProfileCollections()
 
     return () => {
       isMounted = false
     }
-  }, [profile, user])
+  }, [loadStatusGames, profile])
 
   if (loading) {
     return (
@@ -204,6 +280,8 @@ export function ProfilePage() {
   const visibleFullName = draftProfile.nome_completo || 'Nome nao informado'
   const visibleUsername = draftProfile.username || 'usuario'
   const visibleBio = draftProfile.bio.trim()
+  const statusCountLabel =
+    statusGames.length === 1 ? '1 jogo com status' : `${statusGames.length} jogos com status`
   const wishlistCountLabel =
     wishlistGames.length === 1 ? '1 jogo salvo' : `${wishlistGames.length} jogos salvos`
 
@@ -337,6 +415,78 @@ export function ProfilePage() {
       })
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  const handleRefreshStatusGames = async () => {
+    if (!profile) {
+      setStatusGames([])
+      setStatusError(null)
+      setStatusLoading(false)
+      return
+    }
+
+    setStatusLoading(true)
+    setStatusError(null)
+
+    const { data, error } = await loadStatusGames(profile.id)
+
+    if (error) {
+      setStatusGames([])
+      setStatusError(getGameStatusErrorMessage(error, 'load'))
+    } else {
+      setStatusGames(data)
+      setStatusError(null)
+    }
+
+    setStatusLoading(false)
+  }
+
+  const handleSaveGameStatus = async ({
+    gameId,
+    status,
+    favorito,
+  }: {
+    gameId: number
+    status: GameStatusValue
+    favorito: boolean
+  }) => {
+    if (!profile) {
+      return {
+        ok: false,
+        message: 'Nao foi possivel identificar o perfil para salvar este status.',
+      }
+    }
+
+    const { error } = await saveGameStatus({
+      userId: profile.id,
+      gameId,
+      status,
+      favorito,
+    })
+
+    if (error) {
+      return {
+        ok: false,
+        message: getGameStatusErrorMessage(error, 'save'),
+      }
+    }
+
+    const { data, error: reloadError } = await loadStatusGames(profile.id)
+
+    if (reloadError) {
+      setStatusError(getGameStatusErrorMessage(reloadError, 'load'))
+      return {
+        ok: false,
+        message: 'O status foi salvo, mas nao foi possivel atualizar a lista agora.',
+      }
+    }
+
+    setStatusGames(data)
+    setStatusError(null)
+
+    return {
+      ok: true,
     }
   }
 
@@ -527,14 +677,75 @@ export function ProfilePage() {
             </div>
           </section>
 
-          <ProfileWishlistSection
-            userId={profile.id}
-            items={wishlistGames}
-            isLoading={wishlistLoading}
-            errorMessage={wishlistError}
-            countLabel={wishlistCountLabel}
-            isOwnerView={isOwnerView}
-          />
+          <section className="profile-tabs-shell" aria-label="Conteudo do perfil">
+            <div className="profile-tabs" role="tablist" aria-label="Navegacao interna do perfil">
+              <button
+                id="profile-tab-status"
+                type="button"
+                role="tab"
+                className={`profile-tab-button${activeTab === 'status' ? ' is-active' : ''}`}
+                aria-selected={activeTab === 'status'}
+                aria-controls="profile-panel-status"
+                onClick={() => setActiveTab('status')}
+              >
+                <span>Status dos jogos</span>
+                <small>{statusCountLabel}</small>
+              </button>
+
+              <button
+                id="profile-tab-wishlist"
+                type="button"
+                role="tab"
+                className={`profile-tab-button${activeTab === 'wishlist' ? ' is-active' : ''}`}
+                aria-selected={activeTab === 'wishlist'}
+                aria-controls="profile-panel-wishlist"
+                onClick={() => setActiveTab('wishlist')}
+              >
+                <span>Wishlist</span>
+                <small>{wishlistCountLabel}</small>
+              </button>
+            </div>
+
+            <div
+              id="profile-panel-status"
+              className="profile-tab-panel"
+              role="tabpanel"
+              aria-labelledby="profile-tab-status"
+              hidden={activeTab !== 'status'}
+            >
+              {activeTab === 'status' ? (
+                <ProfileGameStatusSection
+                  userId={profile.id}
+                  items={statusGames}
+                  isLoading={statusLoading}
+                  errorMessage={statusError}
+                  countLabel={statusCountLabel}
+                  isOwnerView={isOwnerView}
+                  onSaveStatus={handleSaveGameStatus}
+                  onRefresh={handleRefreshStatusGames}
+                />
+              ) : null}
+            </div>
+
+            <div
+              id="profile-panel-wishlist"
+              className="profile-tab-panel"
+              role="tabpanel"
+              aria-labelledby="profile-tab-wishlist"
+              hidden={activeTab !== 'wishlist'}
+            >
+              {activeTab === 'wishlist' ? (
+                <ProfileWishlistSection
+                  userId={profile.id}
+                  items={wishlistGames}
+                  isLoading={wishlistLoading}
+                  errorMessage={wishlistError}
+                  countLabel={wishlistCountLabel}
+                  isOwnerView={isOwnerView}
+                />
+              ) : null}
+            </div>
+          </section>
         </div>
       </div>
     </div>

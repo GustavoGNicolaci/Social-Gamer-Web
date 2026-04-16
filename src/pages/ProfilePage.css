@@ -3,6 +3,70 @@
   gap: 1.25rem;
 }
 
+.profile-tabs-shell {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.profile-tabs {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.profile-tab-button {
+  min-width: 220px;
+  display: grid;
+  gap: 0.15rem;
+  justify-items: start;
+  padding: 0.9rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #fff;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease,
+    background 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.profile-tab-button span {
+  font-size: 0.96rem;
+  font-weight: 700;
+}
+
+.profile-tab-button small {
+  color: rgba(200, 210, 255, 0.76);
+  font-size: 0.8rem;
+}
+
+.profile-tab-button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(191, 219, 254, 0.28);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.profile-tab-button.is-active {
+  border-color: rgba(160, 177, 255, 0.38);
+  background:
+    radial-gradient(circle at top left, rgba(102, 126, 234, 0.18), transparent 34%),
+    rgba(255, 255, 255, 0.09);
+  box-shadow: 0 16px 32px rgba(9, 12, 24, 0.22);
+}
+
+.profile-tab-button:focus-visible {
+  outline: 2px solid rgba(191, 219, 254, 0.85);
+  outline-offset: 2px;
+}
+
+.profile-tab-panel {
+  min-width: 0;
+}
+
 .profile-page h1,
 .profile-page p {
   margin-bottom: 0;
@@ -499,6 +563,15 @@
 }
 
 @media (max-width: 768px) {
+  .profile-tabs {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .profile-tab-button {
+    min-width: 0;
+  }
+
   .profile-card {
     padding: 1.25rem;
   }
@@ -534,6 +607,10 @@
 @media (max-width: 480px) {
   .profile-page {
     gap: 1rem;
+  }
+
+  .profile-tab-button {
+    padding: 0.85rem 0.9rem;
   }
 
   .profile-state-card,
