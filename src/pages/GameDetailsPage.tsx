@@ -105,15 +105,6 @@ function formatDate(value: string | null | undefined, fallback = 'Nao informado'
   return parsedDate.toLocaleDateString('pt-BR')
 }
 
-function getSummaryText(value: string | null | undefined) {
-  const normalizedValue = value?.trim() || ''
-
-  if (!normalizedValue) return 'Descricao nao informada.'
-  if (normalizedValue.length <= 220) return normalizedValue
-
-  return `${normalizedValue.slice(0, 217).trim()}...`
-}
-
 function getWishlistErrorMessage(error: {
   code?: string
   message: string
@@ -572,7 +563,6 @@ function GameDetailsPage() {
   const plataformas = normalizeList(game.plataformas)
   const releaseDate = formatDate(game.data_lancamento)
   const descricaoCompleta = game.descricao?.trim() || 'Descricao nao informada.'
-  const resumoDescricao = getSummaryText(game.descricao)
   const totalAvaliacoes = avaliacoes.length
   const totalComentarios = avaliacoes.reduce(
     (commentCount, avaliacao) => commentCount + (avaliacao.comentarios?.length || 0),
@@ -648,7 +638,6 @@ function GameDetailsPage() {
             <div className="game-details-hero-copy">
               <span className="game-details-eyebrow">Detalhes do jogo</span>
               <h1>{game.titulo}</h1>
-              <p className="game-details-summary">{resumoDescricao}</p>
 
               <div className="game-details-chip-section">
                 <span className="game-details-chip-label">Categorias</span>
