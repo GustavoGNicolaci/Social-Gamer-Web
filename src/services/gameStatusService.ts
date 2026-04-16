@@ -1,4 +1,5 @@
 import { supabase } from '../supabase-client'
+import type { CatalogGamePreview } from './gameCatalogService'
 
 export type GameStatusValue = 'jogando' | 'zerado' | 'dropado'
 
@@ -18,15 +19,7 @@ export interface GameStatusEntry {
   favorito: boolean
 }
 
-export interface StatusGame {
-  id: number
-  titulo: string
-  capa_url: string | null
-  desenvolvedora: string[] | string | null
-  generos: string[] | string | null
-  data_lancamento: string | null
-  plataformas: string[] | string | null
-}
+export type StatusGame = CatalogGamePreview
 
 export interface GameStatusItem extends GameStatusEntry {
   jogo: StatusGame | null
@@ -184,44 +177,6 @@ export async function getGameStatusEntry(
   }
 }
 
-export async function searchGamesForStatus(
-  query: string
-): Promise<ServiceResult<StatusGame[]>> {
-  const normalizedQuery = query.trim()
-
-  if (!normalizedQuery) {
-    return {
-      data: [],
-      error: null,
-    }
-  }
-
-  try {
-    const { data, error } = await supabase
-      .from('jogos')
-      .select('id, titulo, capa_url, desenvolvedora, generos, data_lancamento, plataformas')
-      .ilike('titulo', `%${normalizedQuery}%`)
-      .order('titulo', { ascending: true })
-      .limit(8)
-
-    if (error) {
-      return {
-        data: [],
-        error: normalizeGameStatusError(error, 'Nao foi possivel buscar jogos para adicionar um status.'),
-      }
-    }
-
-    return {
-      data: (data || []) as StatusGame[],
-      error: null,
-    }
-  } catch (error) {
-    return {
-      data: [],
-      error: normalizeGameStatusError(error, 'Erro inesperado ao buscar jogos para adicionar um status.'),
-    }
-  }
-}
 
 export async function saveGameStatus({
   userId,

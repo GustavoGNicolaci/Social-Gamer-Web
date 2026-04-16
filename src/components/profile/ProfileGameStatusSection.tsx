@@ -8,12 +8,14 @@ import {
 } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  searchGamesForStatus,
-  type GameStatusError,
   type GameStatusItem,
   type GameStatusValue,
-  type StatusGame,
 } from '../../services/gameStatusService'
+import {
+  searchCatalogGamesByTitle,
+  type CatalogGamePreview,
+  type GameCatalogError,
+} from '../../services/gameCatalogService'
 import './ProfileGameStatusSection.css'
 
 type StatusSortValue = 'recent' | 'oldest' | 'favorites' | 'title'
@@ -95,7 +97,7 @@ function getStatusGridColumns(viewportWidth: number) {
   return 6
 }
 
-function getStatusSearchErrorMessage(error: GameStatusError | null) {
+function getStatusSearchErrorMessage(error: GameCatalogError | null) {
   if (!error) {
     return 'Nao foi possivel buscar jogos agora.'
   }
@@ -211,10 +213,10 @@ export function ProfileGameStatusSection({
   onRefresh,
 }: ProfileGameStatusSectionProps) {
   const [searchQuery, setSearchQuery] = useState('')
-  const [searchResults, setSearchResults] = useState<StatusGame[]>([])
+  const [searchResults, setSearchResults] = useState<CatalogGamePreview[]>([])
   const [searchLoading, setSearchLoading] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
-  const [selectedGame, setSelectedGame] = useState<StatusGame | null>(null)
+  const [selectedGame, setSelectedGame] = useState<CatalogGamePreview | null>(null)
   const [composerStatus, setComposerStatus] = useState<GameStatusValue>('jogando')
   const [composerFavorito, setComposerFavorito] = useState(false)
   const [sortValue, setSortValue] = useState<StatusSortValue>('recent')
@@ -339,7 +341,7 @@ export function ProfileGameStatusSection({
     setSearchLoading(true)
 
     searchTimeoutRef.current = window.setTimeout(async () => {
-      const { data, error } = await searchGamesForStatus(trimmedValue)
+      const { data, error } = await searchCatalogGamesByTitle(trimmedValue)
 
       if (searchRequestIdRef.current !== requestId) return
 
@@ -356,7 +358,7 @@ export function ProfileGameStatusSection({
     }, SEARCH_DEBOUNCE_DELAY)
   }
 
-  const handleSelectGame = (game: StatusGame) => {
+  const handleSelectGame = (game: CatalogGamePreview) => {
     clearScheduledSearch()
     setSelectedGame(game)
     setComposerStatus('jogando')
