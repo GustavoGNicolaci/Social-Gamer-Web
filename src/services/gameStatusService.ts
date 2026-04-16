@@ -135,6 +135,50 @@ export async function getGameStatusesByUserId(
   }
 }
 
+export async function getGameStatusEntry(
+  userId: string,
+  gameId: number
+): Promise<ServiceResult<GameStatusEntry | null>> {
+  try {
+    const { data, error } = await supabase
+      .from('status_jogo')
+      .select('id, usuario_id, jogo_id, status, created_at, favorito')
+      .eq('usuario_id', userId)
+      .eq('jogo_id', gameId)
+      .maybeSingle()
+
+    if (error) {
+      return {
+        data: null,
+        error: normalizeGameStatusError(error, 'Nao foi possivel carregar o status deste jogo.'),
+      }
+    }
+
+    if (!data) {
+      return {
+        data: null,
+        error: null,
+      }
+    }
+
+    const entry = data as GameStatusEntry
+
+    return {
+      data: {
+        ...entry,
+        status: normalizeStatusValue(entry.status),
+        favorito: Boolean(entry.favorito),
+      },
+      error: null,
+    }
+  } catch (error) {
+    return {
+      data: null,
+      error: normalizeGameStatusError(error, 'Erro inesperado ao carregar o status deste jogo.'),
+    }
+  }
+}
+
 export async function searchGamesForStatus(
   query: string
 ): Promise<ServiceResult<StatusGame[]>> {

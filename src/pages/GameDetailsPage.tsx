@@ -1,6 +1,13 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import {
+  getGameStatusEntry,
+  saveGameStatus,
+  type GameStatusEntry,
+  type GameStatusError,
+  type GameStatusValue,
+} from '../services/gameStatusService'
 import { addGameToWishlist, getWishlistEntry } from '../services/wishlistService'
 import { supabase } from '../supabase-client'
 import './GameDetailsPage.css'
@@ -53,7 +60,16 @@ interface FeedbackState {
   message: string
 }
 
+type QuickProfileStatusValue = Extract<GameStatusValue, 'jogando' | 'zerado'>
+
 const REVIEW_SCORE_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+const QUICK_PROFILE_STATUS_OPTIONS: Array<{
+  value: QuickProfileStatusValue
+  label: string
+}> = [
+  { value: 'jogando', label: 'Jogando' },
+  { value: 'zerado', label: 'Zerei' },
+]
 
 const REVIEWS_QUERY = `
   *,
@@ -124,6 +140,35 @@ function getWishlistErrorMessage(error: {
   return 'Nao foi possivel salvar este jogo na sua lista de desejos agora.'
 }
 
+function getGameStatusErrorMessage(error: GameStatusError | null) {
+  if (!error) {
+    return 'Nao foi possivel salvar este jogo no seu perfil agora.'
+  }
+
+  const fullMessage = [error.message, error.details, error.hint].filter(Boolean).join(' ').toLowerCase()
+
+  if (
+    error.code === '42501' ||
+    fullMessage.includes('permission denied') ||
+    fullMessage.includes('row-level security') ||
+    fullMessage.includes('policy')
+  ) {
+    return 'Nao foi possivel salvar este jogo no perfil por permissao. Verifique as policies da tabela status_jogo no Supabase.'
+  }
+
+  if (fullMessage.includes('column')) {
+    return 'A estrutura da tabela status_jogo nao corresponde ao frontend.'
+  }
+
+  return 'Nao foi possivel salvar este jogo no seu perfil agora.'
+}
+
+function getGameStatusLabel(status: GameStatusValue | null | undefined) {
+  if (status === 'zerado') return 'Zerei'
+  if (status === 'dropado') return 'Dropado'
+  return 'Jogando'
+}
+
 function resolveUser(usuario: UsuarioRelacionamento) {
   if (Array.isArray(usuario)) return usuario[0] || null
   return usuario
@@ -173,6 +218,11 @@ function GameDetailsPage() {
   const [wishlistSaving, setWishlistSaving] = useState(false)
   const [isInWishlist, setIsInWishlist] = useState(false)
   const [wishlistFeedback, setWishlistFeedback] = useState<FeedbackState | null>(null)
+  const [gameStatusLoading, setGameStatusLoading] = useState(false)
+  const [gameStatusSaving, setGameStatusSaving] = useState(false)
+  const [pendingGameStatus, setPendingGameStatus] = useState<QuickProfileStatusValue | null>(null)
+  const [gameStatusEntry, setGameStatusEntry] = useState<GameStatusEntry | null>(null)
+  const [gameStatusFeedback, setGameStatusFeedback] = useState<FeedbackState | null>(null)
 
   useEffect(() => {
     let isMounted = true
@@ -250,6 +300,47 @@ function GameDetailsPage() {
     }
 
     void loadWishlistStatus()
+
+    return () => {
+      isMounted = false
+    }
+  }, [game, user])
+
+  useEffect(() => {
+    let isMounted = true
+
+    const loadGameStatus = async () => {
+      if (!user || !game) {
+        if (isMounted) {
+          setGameStatusLoading(false)
+          setGameStatusEntry(null)
+          setGameStatusFeedback(null)
+        }
+        return
+      }
+
+      setGameStatusLoading(true)
+      setGameStatusFeedback(null)
+
+      const { data, error } = await getGameStatusEntry(user.id, game.id)
+
+      if (!isMounted) return
+
+      if (error) {
+        console.error('Erro ao verificar status do jogo no perfil:', error)
+        setGameStatusEntry(null)
+        setGameStatusFeedback({
+          tone: 'error',
+          message: 'Nao foi possivel verificar o status deste jogo no seu perfil agora.',
+        })
+      } else {
+        setGameStatusEntry(data)
+      }
+
+      setGameStatusLoading(false)
+    }
+
+    void loadGameStatus()
 
     return () => {
       isMounted = false
@@ -339,6 +430,41 @@ function GameDetailsPage() {
     setWishlistSaving(false)
   }
 
+  const handleSaveGameStatus = async (nextStatus: QuickProfileStatusValue) => {
+    if (!user || !game || gameStatusLoading || gameStatusSaving) return
+    if (gameStatusEntry?.status === nextStatus) return
+
+    setGameStatusSaving(true)
+    setPendingGameStatus(nextStatus)
+    setGameStatusFeedback(null)
+
+    const { data, error } = await saveGameStatus({
+      userId: user.id,
+      gameId: game.id,
+      status: nextStatus,
+      favorito: gameStatusEntry?.favorito || false,
+    })
+
+    if (error) {
+      console.error('Erro ao salvar status do jogo pelo detalhe:', error)
+      setGameStatusFeedback({
+        tone: 'error',
+        message: getGameStatusErrorMessage(error),
+      })
+    } else {
+      setGameStatusEntry(data)
+      setGameStatusFeedback({
+        tone: 'success',
+        message: gameStatusEntry
+          ? 'Status do jogo atualizado no seu perfil.'
+          : 'Jogo adicionado ao seu perfil.',
+      })
+    }
+
+    setGameStatusSaving(false)
+    setPendingGameStatus(null)
+  }
+
   if (loading) {
     return (
       <div className="page-container">
@@ -405,6 +531,14 @@ function GameDetailsPage() {
       : isInWishlist
         ? 'Na sua lista'
         : 'Salvar na lista'
+  const profileStatusTitle = gameStatusEntry
+    ? 'Atualize rapidamente este jogo no seu perfil'
+    : 'Adicione este jogo direto ao seu perfil'
+  const profileStatusSubtitle = gameStatusLoading
+    ? 'Verificando como esse jogo aparece no seu perfil...'
+    : gameStatusEntry
+      ? `Status atual: ${getGameStatusLabel(gameStatusEntry.status)}`
+      : 'Escolha um status rapido sem sair da pagina.'
 
   return (
     <div className="page-container">
@@ -496,9 +630,45 @@ function GameDetailsPage() {
                 </Link>
               </div>
 
+              {user ? (
+                <div className="game-details-profile-status-card">
+                  <div className="game-details-profile-status-copy">
+                    <span className="game-details-panel-kicker">Perfil</span>
+                    <strong>{profileStatusTitle}</strong>
+                    <p>{profileStatusSubtitle}</p>
+                  </div>
+
+                  <div className="game-details-profile-status-actions">
+                    {QUICK_PROFILE_STATUS_OPTIONS.map(option => {
+                      const isSelected = gameStatusEntry?.status === option.value
+
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          className={`game-button game-details-profile-status-button${isSelected ? ' is-selected' : ''}`}
+                          onClick={() => void handleSaveGameStatus(option.value)}
+                          disabled={gameStatusLoading || gameStatusSaving || isSelected}
+                        >
+                          {gameStatusSaving && pendingGameStatus === option.value
+                            ? 'Salvando...'
+                            : option.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              ) : null}
+
               {wishlistFeedback && (
                 <p className={`game-details-feedback is-${wishlistFeedback.tone}`}>
                   {wishlistFeedback.message}
+                </p>
+              )}
+
+              {gameStatusFeedback && (
+                <p className={`game-details-feedback is-${gameStatusFeedback.tone}`}>
+                  {gameStatusFeedback.message}
                 </p>
               )}
             </div>

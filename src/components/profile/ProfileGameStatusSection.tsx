@@ -1,4 +1,11 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type FormEvent,
+} from 'react'
 import { Link } from 'react-router-dom'
 import {
   searchGamesForStatus,
@@ -10,6 +17,7 @@ import {
 import './ProfileGameStatusSection.css'
 
 type FeedbackTone = 'success' | 'error'
+type StatusSortValue = 'recent' | 'oldest' | 'favorites' | 'title'
 
 interface FeedbackState {
   tone: FeedbackTone
@@ -36,26 +44,18 @@ interface ProfileGameStatusSectionProps {
   onRefresh: () => Promise<void>
 }
 
-const STATUS_GROUPS: Array<{
-  value: GameStatusValue
-  label: string
-  description: string
-}> = [
-  {
-    value: 'jogando',
-    label: 'Jogando',
-    description: 'Titulos que ainda estao em andamento.',
-  },
-  {
-    value: 'zerado',
-    label: 'Zerado',
-    description: 'Jogos concluidos e prontos para revisitar.',
-  },
-  {
-    value: 'dropado',
-    label: 'Dropado',
-    description: 'Experiencias pausadas ou deixadas de lado.',
-  },
+const SEARCH_DEBOUNCE_DELAY = 220
+const STATUS_SORT_OPTIONS: Array<{ value: StatusSortValue; label: string }> = [
+  { value: 'recent', label: 'Mais recentes' },
+  { value: 'oldest', label: 'Mais antigos' },
+  { value: 'favorites', label: 'Favoritos primeiro' },
+  { value: 'title', label: 'Titulo A-Z' },
+]
+
+const STATUS_OPTIONS: Array<{ value: GameStatusValue; label: string }> = [
+  { value: 'jogando', label: 'Jogando' },
+  { value: 'zerado', label: 'Zerei' },
+  { value: 'dropado', label: 'Dropado' },
 ]
 
 function formatCompactDate(value: string | null | undefined, fallback = 'Data nao informada') {
@@ -83,17 +83,16 @@ function getTimestamp(value: string | null | undefined) {
   return Number.isNaN(parsedDate.getTime()) ? 0 : parsedDate.getTime()
 }
 
-function sortStatusItems(leftItem: GameStatusItem, rightItem: GameStatusItem) {
-  if (leftItem.favorito !== rightItem.favorito) {
-    return leftItem.favorito ? -1 : 1
-  }
+function getStatusLabel(status: GameStatusValue) {
+  return STATUS_OPTIONS.find(option => option.value === status)?.label || 'Status'
+}
 
-  const createdAtDelta = getTimestamp(rightItem.created_at) - getTimestamp(leftItem.created_at)
-  if (createdAtDelta !== 0) return createdAtDelta
-
-  const leftTitle = leftItem.jogo?.titulo || ''
-  const rightTitle = rightItem.jogo?.titulo || ''
-  return leftTitle.localeCompare(rightTitle, 'pt-BR')
+function getStatusGridColumns(viewportWidth: number) {
+  if (viewportWidth <= 480) return 1
+  if (viewportWidth <= 768) return 2
+  if (viewportWidth <= 992) return 3
+  if (viewportWidth <= 1200) return 4
+  return 6
 }
 
 function getStatusSearchErrorMessage(error: GameStatusError | null) {
@@ -115,6 +114,91 @@ function getStatusSearchErrorMessage(error: GameStatusError | null) {
   return 'Nao foi possivel buscar jogos agora.'
 }
 
+function sortStatusItems(items: GameStatusItem[], sortValue: StatusSortValue) {
+  return [...items].sort((leftItem, rightItem) => {
+    const leftTitle = leftItem.jogo?.titulo || ''
+    const rightTitle = rightItem.jogo?.titulo || ''
+    const recentDelta = getTimestamp(rightItem.created_at) - getTimestamp(leftItem.created_at)
+    const oldestDelta = getTimestamp(leftItem.created_at) - getTimestamp(rightItem.created_at)
+
+    if (sortValue === 'favorites') {
+      if (leftItem.favorito !== rightItem.favorito) {
+        return leftItem.favorito ? -1 : 1
+      }
+
+      if (recentDelta !== 0) return recentDelta
+      return leftTitle.localeCompare(rightTitle, 'pt-BR')
+    }
+
+    if (sortValue === 'oldest') {
+      if (oldestDelta !== 0) return oldestDelta
+      if (leftItem.favorito !== rightItem.favorito) {
+        return leftItem.favorito ? -1 : 1
+      }
+      return leftTitle.localeCompare(rightTitle, 'pt-BR')
+    }
+
+    if (sortValue === 'title') {
+      const titleDelta = leftTitle.localeCompare(rightTitle, 'pt-BR')
+      if (titleDelta !== 0) return titleDelta
+      if (leftItem.favorito !== rightItem.favorito) {
+        return leftItem.favorito ? -1 : 1
+      }
+      return recentDelta
+    }
+
+    if (recentDelta !== 0) return recentDelta
+    if (leftItem.favorito !== rightItem.favorito) {
+      return leftItem.favorito ? -1 : 1
+    }
+    return leftTitle.localeCompare(rightTitle, 'pt-BR')
+  })
+}
+
+function PaginationControls({
+  currentPage,
+  totalPages,
+  onChangePage,
+}: {
+  currentPage: number
+  totalPages: number
+  onChangePage: (page: number) => void
+}) {
+  if (totalPages <= 1) return null
+
+  return (
+    <nav className="profile-status-pagination" aria-label="Paginacao dos jogos do perfil">
+      <button
+        type="button"
+        onClick={() => onChangePage(Math.max(currentPage - 1, 0))}
+        disabled={currentPage === 0}
+      >
+        Anterior
+      </button>
+
+      {Array.from({ length: totalPages }, (_, index) => index).map(page => (
+        <button
+          key={`status-page-${page}`}
+          type="button"
+          onClick={() => onChangePage(page)}
+          className={page === currentPage ? 'is-active' : ''}
+          aria-current={page === currentPage ? 'page' : undefined}
+        >
+          {page + 1}
+        </button>
+      ))}
+
+      <button
+        type="button"
+        onClick={() => onChangePage(Math.min(currentPage + 1, totalPages - 1))}
+        disabled={currentPage === totalPages - 1}
+      >
+        Proxima
+      </button>
+    </nav>
+  )
+}
+
 export function ProfileGameStatusSection({
   userId,
   items,
@@ -132,74 +216,163 @@ export function ProfileGameStatusSection({
   const [selectedGame, setSelectedGame] = useState<StatusGame | null>(null)
   const [composerStatus, setComposerStatus] = useState<GameStatusValue>('jogando')
   const [composerFavorito, setComposerFavorito] = useState(false)
+  const [sortValue, setSortValue] = useState<StatusSortValue>('recent')
+  const [showSortMenu, setShowSortMenu] = useState(false)
+  const [gridColumns, setGridColumns] = useState(() =>
+    typeof window === 'undefined' ? 6 : getStatusGridColumns(window.innerWidth)
+  )
+  const [currentPage, setCurrentPage] = useState(0)
   const [isCreatingStatus, setIsCreatingStatus] = useState(false)
   const [savingItemIds, setSavingItemIds] = useState<string[]>([])
   const [feedback, setFeedback] = useState<FeedbackState | null>(null)
+
+  const sortMenuRef = useRef<HTMLDivElement | null>(null)
+  const searchTimeoutRef = useRef<number | null>(null)
+  const searchRequestIdRef = useRef(0)
 
   const trackedGameIds = useMemo(() => new Set(items.map(item => item.jogo_id)), [items])
   const availableSearchResults = useMemo(
     () => searchResults.filter(game => !trackedGameIds.has(game.id)),
     [searchResults, trackedGameIds]
   )
-  const groupedItems = useMemo(
-    () =>
-      STATUS_GROUPS.map(group => ({
-        ...group,
-        items: items.filter(item => item.status === group.value).sort(sortStatusItems),
-      })),
-    [items]
+  const sortedItems = useMemo(() => sortStatusItems(items, sortValue), [items, sortValue])
+  const hasStatusItems = sortedItems.length > 0
+  const itemsPerPage = gridColumns * 4
+  const totalPages = Math.max(Math.ceil(sortedItems.length / itemsPerPage), 1)
+  const safeCurrentPage = Math.min(currentPage, totalPages - 1)
+  const visibleItems = sortedItems.slice(
+    safeCurrentPage * itemsPerPage,
+    safeCurrentPage * itemsPerPage + itemsPerPage
   )
-
-  const hasStatusItems = items.length > 0
   const searchResultsId = `profile-status-search-results-${userId}`
-  const visibleSelectedGame = selectedGame && !trackedGameIds.has(selectedGame.id) ? selectedGame : null
+  const visibleSelectedGame =
+    selectedGame && !trackedGameIds.has(selectedGame.id) ? selectedGame : null
+  const shouldShowAutosuggest =
+    isOwnerView &&
+    !visibleSelectedGame &&
+    searchQuery.trim().length >= 2 &&
+    (searchLoading || Boolean(searchError) || availableSearchResults.length > 0)
+  const shouldShowEmptyAutosuggest =
+    isOwnerView &&
+    !visibleSelectedGame &&
+    searchQuery.trim().length >= 2 &&
+    !searchLoading &&
+    !searchError &&
+    availableSearchResults.length === 0
+  const statusGridStyle = {
+    '--status-columns': String(gridColumns),
+  } as CSSProperties
+  const sortLabel = STATUS_SORT_OPTIONS.find(option => option.value === sortValue)?.label || 'Mais recentes'
 
-  const handleSearchSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
+  useEffect(() => {
+    if (typeof window === 'undefined') return
 
-    const trimmedQuery = searchQuery.trim()
-    if (!trimmedQuery) {
-      setSearchResults([])
-      setSelectedGame(null)
-      setSearchError('Digite o nome de um jogo para pesquisar no catalogo.')
-      return
+    const syncGridColumns = () => {
+      setGridColumns(getStatusGridColumns(window.innerWidth))
     }
 
-    setSearchLoading(true)
+    syncGridColumns()
+    window.addEventListener('resize', syncGridColumns)
+
+    return () => {
+      window.removeEventListener('resize', syncGridColumns)
+    }
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (searchTimeoutRef.current !== null) {
+        window.clearTimeout(searchTimeoutRef.current)
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!sortMenuRef.current?.contains(event.target as Node)) {
+        setShowSortMenu(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handlePointerDown)
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+    }
+  }, [])
+
+  const clearScheduledSearch = () => {
+    if (searchTimeoutRef.current !== null) {
+      window.clearTimeout(searchTimeoutRef.current)
+      searchTimeoutRef.current = null
+    }
+  }
+
+  const resetComposer = () => {
+    setSelectedGame(null)
+    setComposerStatus('jogando')
+    setComposerFavorito(false)
+  }
+
+  const handleSearchChange = (value: string) => {
+    clearScheduledSearch()
+    searchRequestIdRef.current += 1
+    setSearchQuery(value)
     setSearchError(null)
     setFeedback(null)
 
-    const { data, error } = await searchGamesForStatus(trimmedQuery)
+    if (visibleSelectedGame) {
+      resetComposer()
+    }
 
-    if (error) {
-      setSearchResults([])
-      setSelectedGame(null)
-      setSearchError(getStatusSearchErrorMessage(error))
+    const trimmedValue = value.trim()
+
+    if (!trimmedValue || trimmedValue.length < 2) {
       setSearchLoading(false)
+      setSearchResults([])
       return
     }
 
-    const availableResults = data.filter(game => !trackedGameIds.has(game.id))
-    setSearchResults(availableResults)
+    const requestId = searchRequestIdRef.current
+    setSearchLoading(true)
 
-    if (selectedGame && availableResults.every(game => game.id !== selectedGame.id)) {
-      setSelectedGame(null)
-    }
+    searchTimeoutRef.current = window.setTimeout(async () => {
+      const { data, error } = await searchGamesForStatus(trimmedValue)
 
-    setSearchLoading(false)
+      if (searchRequestIdRef.current !== requestId) return
+
+      if (error) {
+        setSearchResults([])
+        setSearchError(getStatusSearchErrorMessage(error))
+      } else {
+        setSearchResults(data)
+        setSearchError(null)
+      }
+
+      setSearchLoading(false)
+      searchTimeoutRef.current = null
+    }, SEARCH_DEBOUNCE_DELAY)
   }
 
   const handleSelectGame = (game: StatusGame) => {
+    clearScheduledSearch()
     setSelectedGame(game)
     setComposerStatus('jogando')
     setComposerFavorito(false)
+    setSearchQuery('')
+    setSearchResults([])
+    setSearchLoading(false)
+    setSearchError(null)
     setFeedback(null)
   }
 
   const handleCancelSelectedGame = () => {
-    setSelectedGame(null)
-    setComposerStatus('jogando')
-    setComposerFavorito(false)
+    clearScheduledSearch()
+    setSearchQuery('')
+    setSearchResults([])
+    setSearchLoading(false)
+    setSearchError(null)
+    resetComposer()
   }
 
   const handleCreateStatus = async (event: FormEvent<HTMLFormElement>) => {
@@ -226,14 +399,16 @@ export function ProfileGameStatusSection({
 
     const selectedTitle = visibleSelectedGame.titulo
 
+    clearScheduledSearch()
+    setCurrentPage(0)
     setSearchQuery('')
     setSearchResults([])
-    setSelectedGame(null)
-    setComposerStatus('jogando')
-    setComposerFavorito(false)
+    setSearchLoading(false)
+    setSearchError(null)
+    resetComposer()
     setFeedback({
       tone: 'success',
-      message: `${selectedTitle} foi adicionado aos seus status.`,
+      message: `${selectedTitle} foi adicionado ao seu perfil.`,
     })
     setIsCreatingStatus(false)
   }
@@ -274,6 +449,12 @@ export function ProfileGameStatusSection({
     })
   }
 
+  const handleSelectSort = (nextSortValue: StatusSortValue) => {
+    setSortValue(nextSortValue)
+    setCurrentPage(0)
+    setShowSortMenu(false)
+  }
+
   return (
     <section className="profile-card profile-status-section">
       <div className="profile-card-glow profile-card-glow-left"></div>
@@ -283,294 +464,314 @@ export function ProfileGameStatusSection({
         <div className="profile-section-head">
           <div className="profile-section-copy">
             <span className="profile-section-label">Status dos jogos</span>
-            <h2>Separe o que esta jogando, zerado ou dropado</h2>
-            <p>Organize sua jornada por status sem misturar os jogos com a wishlist.</p>
+            <h2>Uma lista so para tudo o que ja entrou no seu perfil</h2>
+            <p>Busque rapido, organize por filtro e navegue pela sua colecao no mesmo ritmo da wishlist.</p>
           </div>
 
           <div className="profile-meta-item profile-status-summary">
-            <span>Total com status</span>
+            <span>Total salvo</span>
             <strong>{isLoading ? '...' : countLabel}</strong>
           </div>
         </div>
 
-        {isOwnerView ? (
-          <div className="profile-status-search-card">
-            <div className="profile-status-search-head">
-              <div>
-                <h3>Adicionar jogo aos seus status</h3>
-                <p>Busque no catalogo e escolha como esse jogo aparece no seu perfil.</p>
-              </div>
-            </div>
-
-            <form className="profile-status-search-form" onSubmit={handleSearchSubmit}>
-              <label className="profile-status-search-field">
-                <span>Buscar jogo</span>
+        <div className="profile-status-toolbar">
+          {isOwnerView ? (
+            <div className="profile-status-search-shell">
+              <label className="profile-status-search-field" htmlFor="profile-status-search-input">
+                <span>Buscar jogo no catalogo</span>
                 <input
+                  id="profile-status-search-input"
                   type="text"
                   value={searchQuery}
-                  onChange={event => setSearchQuery(event.target.value)}
+                  onChange={event => handleSearchChange(event.target.value)}
                   className="profile-input"
-                  placeholder="Ex.: Hollow Knight, Celeste, Zelda..."
-                  disabled={searchLoading || isCreatingStatus}
+                  placeholder="Digite para ver resultados imediatos..."
+                  autoComplete="off"
+                  disabled={isCreatingStatus}
+                  aria-expanded={shouldShowAutosuggest || shouldShowEmptyAutosuggest}
+                  aria-controls={searchResultsId}
                 />
               </label>
 
-              <button
-                type="submit"
-                className="profile-save-button profile-status-search-button"
-                disabled={searchLoading || isCreatingStatus}
-              >
-                {searchLoading ? 'Buscando...' : 'Buscar no catalogo'}
-              </button>
-            </form>
-
-            {searchError ? <p className="profile-feedback is-error">{searchError}</p> : null}
-
-            {!searchError && !searchLoading && searchQuery.trim() && availableSearchResults.length === 0 ? (
-              <div className="profile-status-search-empty">
-                <h4>Nenhum jogo disponivel para adicionar</h4>
-                <p>
-                  Tente outro termo ou escolha um titulo que ainda nao tenha status salvo no seu
-                  perfil.
+              {searchQuery.trim().length === 1 && !searchLoading ? (
+                <p className="profile-status-search-helper">
+                  Continue digitando para mostrar sugestoes do catalogo.
                 </p>
-              </div>
-            ) : null}
+              ) : null}
 
-            {availableSearchResults.length > 0 ? (
-              <div className="profile-status-search-results" id={searchResultsId}>
-                {availableSearchResults.map(game => {
-                  const isSelected = visibleSelectedGame?.id === game.id
-
-                  return (
-                    <button
-                      key={game.id}
-                      type="button"
-                      className={`profile-status-search-result${isSelected ? ' is-selected' : ''}`}
-                      onClick={() => handleSelectGame(game)}
-                    >
-                      <div className="profile-status-search-result-cover">
-                        {game.capa_url ? (
-                          <img src={game.capa_url} alt={`Capa do jogo ${game.titulo}`} />
-                        ) : (
-                          <div className="profile-status-search-result-fallback">
-                            {getInitial(game.titulo)}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="profile-status-search-result-copy">
-                        <strong>{game.titulo}</strong>
-                        <span>{isSelected ? 'Selecionado para adicionar' : 'Selecionar jogo'}</span>
-                      </div>
-                    </button>
-                  )
-                })}
-              </div>
-            ) : null}
-
-            {visibleSelectedGame ? (
-              <form className="profile-status-composer" onSubmit={handleCreateStatus}>
-                <div className="profile-status-composer-preview">
-                  <div className="profile-status-composer-cover">
-                    {visibleSelectedGame.capa_url ? (
-                      <img
-                        src={visibleSelectedGame.capa_url}
-                        alt={`Capa do jogo ${visibleSelectedGame.titulo}`}
-                      />
-                    ) : (
-                      <div className="profile-status-search-result-fallback">
-                        {getInitial(visibleSelectedGame.titulo)}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="profile-status-composer-copy">
-                    <span className="profile-section-label">Novo status</span>
-                    <h3>{visibleSelectedGame.titulo}</h3>
-                    <p>Escolha como esse jogo deve aparecer na aba de status do seu perfil.</p>
-                  </div>
-                </div>
-
-                <div className="profile-status-composer-controls">
-                  <div className="profile-status-choice-group" role="group" aria-label="Escolher status inicial">
-                    {STATUS_GROUPS.map(statusOption => (
+              {shouldShowAutosuggest || shouldShowEmptyAutosuggest ? (
+                <div className="profile-status-autosuggest" id={searchResultsId}>
+                  {searchLoading ? (
+                    <p className="profile-status-autosuggest-state">Buscando jogos...</p>
+                  ) : searchError ? (
+                    <p className="profile-status-autosuggest-state is-error">{searchError}</p>
+                  ) : shouldShowEmptyAutosuggest ? (
+                    <p className="profile-status-autosuggest-state">
+                      Nenhum jogo novo encontrado para esse termo.
+                    </p>
+                  ) : (
+                    availableSearchResults.map(game => (
                       <button
-                        key={`composer-status-${statusOption.value}`}
+                        key={game.id}
                         type="button"
-                        className={`profile-status-choice${composerStatus === statusOption.value ? ' is-active' : ''}`}
-                        onClick={() => setComposerStatus(statusOption.value)}
-                        disabled={isCreatingStatus}
+                        className="profile-status-autosuggest-item"
+                        onClick={() => handleSelectGame(game)}
                       >
-                        {statusOption.label}
+                        <div className="profile-status-autosuggest-cover">
+                          {game.capa_url ? (
+                            <img src={game.capa_url} alt={`Capa do jogo ${game.titulo}`} />
+                          ) : (
+                            <div className="profile-status-autosuggest-fallback">
+                              {getInitial(game.titulo)}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="profile-status-autosuggest-copy">
+                          <strong>{game.titulo}</strong>
+                          <span>Adicionar ao perfil</span>
+                        </div>
                       </button>
-                    ))}
-                  </div>
-
-                  <button
-                    type="button"
-                    className={`profile-status-favorite-toggle${composerFavorito ? ' is-active' : ''}`}
-                    aria-pressed={composerFavorito}
-                    onClick={() => setComposerFavorito(currentValue => !currentValue)}
-                    disabled={isCreatingStatus}
-                  >
-                    {composerFavorito ? 'Favorito ativo' : 'Marcar como favorito'}
-                  </button>
+                    ))
+                  )}
                 </div>
+              ) : null}
+            </div>
+          ) : (
+            <div className="profile-status-toolbar-placeholder"></div>
+          )}
 
-                <div className="profile-status-composer-actions">
+          <div className="profile-status-sort" ref={sortMenuRef}>
+            <button
+              type="button"
+              className={`profile-status-sort-trigger${showSortMenu ? ' is-open' : ''}`}
+              onClick={() => setShowSortMenu(currentValue => !currentValue)}
+              aria-haspopup="menu"
+              aria-expanded={showSortMenu}
+            >
+              <span>Ordenar</span>
+              <strong>{sortLabel}</strong>
+            </button>
+
+            {showSortMenu ? (
+              <div className="profile-status-sort-menu" role="menu" aria-label="Ordenar jogos do perfil">
+                {STATUS_SORT_OPTIONS.map(option => (
                   <button
+                    key={option.value}
                     type="button"
-                    className="profile-secondary-button"
-                    onClick={handleCancelSelectedGame}
-                    disabled={isCreatingStatus}
+                    className={`profile-status-sort-option${sortValue === option.value ? ' is-active' : ''}`}
+                    onClick={() => handleSelectSort(option.value)}
+                    role="menuitemradio"
+                    aria-checked={sortValue === option.value}
                   >
-                    Cancelar
+                    {option.label}
                   </button>
-
-                  <button type="submit" className="profile-save-button" disabled={isCreatingStatus}>
-                    {isCreatingStatus ? 'Salvando...' : 'Salvar status'}
-                  </button>
-                </div>
-              </form>
+                ))}
+              </div>
             ) : null}
           </div>
+        </div>
+
+        {visibleSelectedGame ? (
+          <form className="profile-status-composer" onSubmit={handleCreateStatus}>
+            <div className="profile-status-composer-preview">
+              <div className="profile-status-composer-cover">
+                {visibleSelectedGame.capa_url ? (
+                  <img
+                    src={visibleSelectedGame.capa_url}
+                    alt={`Capa do jogo ${visibleSelectedGame.titulo}`}
+                  />
+                ) : (
+                  <div className="profile-status-card-fallback">
+                    {getInitial(visibleSelectedGame.titulo)}
+                  </div>
+                )}
+              </div>
+
+              <div className="profile-status-composer-copy">
+                <span className="profile-section-label">Novo jogo no perfil</span>
+                <h3>{visibleSelectedGame.titulo}</h3>
+                <p>Escolha o status inicial e confirme se ele deve entrar como favorito.</p>
+              </div>
+            </div>
+
+            <div className="profile-status-composer-actions">
+              <label className="profile-status-control-field">
+                <span>Status inicial</span>
+                <select
+                  value={composerStatus}
+                  className="profile-status-select"
+                  onChange={event => setComposerStatus(event.target.value as GameStatusValue)}
+                  disabled={isCreatingStatus}
+                >
+                  {STATUS_OPTIONS.map(option => (
+                    <option key={`composer-status-${option.value}`} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <div className="profile-status-composer-buttons">
+                <button
+                  type="button"
+                  className={`profile-status-favorite-toggle${composerFavorito ? ' is-active' : ''}`}
+                  aria-pressed={composerFavorito}
+                  onClick={() => setComposerFavorito(currentValue => !currentValue)}
+                  disabled={isCreatingStatus}
+                >
+                  {composerFavorito ? 'Favorito ativo' : 'Marcar favorito'}
+                </button>
+
+                <button
+                  type="button"
+                  className="profile-secondary-button"
+                  onClick={handleCancelSelectedGame}
+                  disabled={isCreatingStatus}
+                >
+                  Cancelar
+                </button>
+
+                <button type="submit" className="profile-save-button" disabled={isCreatingStatus}>
+                  {isCreatingStatus ? 'Salvando...' : 'Salvar no perfil'}
+                </button>
+              </div>
+            </div>
+          </form>
         ) : null}
 
         {feedback ? <p className={`profile-feedback is-${feedback.tone}`}>{feedback.message}</p> : null}
 
         {isLoading ? (
           <div className="profile-status-empty">
-            <h3>Carregando seus status</h3>
-            <p>Estamos buscando os jogos organizados por andamento, conclusao e pausa.</p>
+            <h3>Carregando seus jogos</h3>
+            <p>Estamos montando a grade com tudo o que voce adicionou ao seu perfil.</p>
           </div>
         ) : errorMessage ? (
           <div className="profile-status-empty">
-            <h3>Ocorreu um problema ao carregar os status</h3>
+            <h3>Ocorreu um problema ao carregar os jogos do perfil</h3>
             <p>{errorMessage}</p>
-            <button type="button" className="profile-secondary-button" onClick={() => void onRefresh()}>
+            <button
+              type="button"
+              className="profile-secondary-button"
+              onClick={() => void onRefresh()}
+            >
               Tentar novamente
             </button>
           </div>
         ) : !hasStatusItems ? (
           <div className="profile-status-empty">
-            <h3>{isOwnerView ? 'Nenhum jogo com status ainda' : 'Este perfil ainda nao tem status salvos'}</h3>
+            <h3>{isOwnerView ? 'Seu perfil ainda nao tem jogos salvos' : 'Este perfil ainda nao tem jogos salvos'}</h3>
             <p>
               {isOwnerView
-                ? 'Use a busca acima para adicionar jogos e separar o que esta jogando, zerado ou dropado.'
-                : 'Quando este usuario organizar os jogos por status, eles vao aparecer aqui.'}
+                ? 'Use a busca acima para adicionar o primeiro jogo e começar a organizar seu perfil.'
+                : 'Quando este usuario adicionar jogos ao perfil, eles vao aparecer aqui.'}
             </p>
           </div>
         ) : (
-          <div className="profile-status-groups">
-            {groupedItems.map(group => (
-              <article key={group.value} className="profile-status-group">
-                <div className="profile-status-group-head">
-                  <div className="profile-status-group-copy">
-                    <span className={`profile-status-pill is-${group.value}`}>{group.label}</span>
-                    <p>{group.description}</p>
-                  </div>
+          <>
+            <div className="profile-status-list-head">
+              <p>
+                {sortedItems.length === 1
+                  ? '1 jogo encontrado nesta visualizacao.'
+                  : `${sortedItems.length} jogos encontrados nesta visualizacao.`}
+              </p>
+              <span>
+                Pagina {safeCurrentPage + 1} de {totalPages}
+              </span>
+            </div>
 
-                  <span className="profile-status-group-count">
-                    {group.items.length === 1 ? '1 jogo' : `${group.items.length} jogos`}
-                  </span>
-                </div>
+            <div className="profile-status-grid" style={statusGridStyle}>
+              {visibleItems.map(item => {
+                const visibleTitle = item.jogo?.titulo || 'Jogo indisponivel'
+                const isSavingItem = savingItemIds.includes(item.id)
 
-                {group.items.length === 0 ? (
-                  <div className="profile-status-group-empty">
-                    <p>Nenhum jogo marcado como {group.label.toLowerCase()} por enquanto.</p>
-                  </div>
-                ) : (
-                  <div className="profile-status-grid">
-                    {group.items.map(item => {
-                      const visibleTitle = item.jogo?.titulo || 'Jogo indisponivel'
-                      const isSavingItem = savingItemIds.includes(item.id)
+                return (
+                  <article
+                    key={item.id}
+                    className={`profile-status-card${item.favorito ? ' is-favorite' : ''}${isSavingItem ? ' is-saving' : ''}`}
+                  >
+                    <Link to={`/games/${item.jogo_id}`} className="profile-status-card-link">
+                      <div className="profile-status-card-meta">
+                        <span className={`profile-status-pill is-${item.status}`}>
+                          {getStatusLabel(item.status)}
+                        </span>
+                        {item.favorito ? (
+                          <span className="profile-status-favorite-pill">Favorito</span>
+                        ) : null}
+                      </div>
 
-                      return (
-                        <article
-                          key={item.id}
-                          className={`profile-status-card${item.favorito ? ' is-favorite' : ''}${isSavingItem ? ' is-saving' : ''}`}
-                        >
-                          <Link to={`/games/${item.jogo_id}`} className="profile-status-card-link">
-                            <div className="profile-status-card-cover">
-                              {item.jogo?.capa_url ? (
-                                <img src={item.jogo.capa_url} alt={`Capa do jogo ${visibleTitle}`} />
-                              ) : (
-                                <div className="profile-status-card-fallback">
-                                  {getInitial(visibleTitle)}
-                                </div>
-                              )}
-                            </div>
+                      <div className="profile-status-card-cover">
+                        {item.jogo?.capa_url ? (
+                          <img src={item.jogo.capa_url} alt={`Capa do jogo ${visibleTitle}`} />
+                        ) : (
+                          <div className="profile-status-card-fallback">{getInitial(visibleTitle)}</div>
+                        )}
+                      </div>
 
-                            <div className="profile-status-card-body">
-                              <div className="profile-status-card-badges">
-                                <span className={`profile-status-pill is-${item.status}`}>
-                                  {STATUS_GROUPS.find(groupOption => groupOption.value === item.status)?.label ||
-                                    'Status'}
-                                </span>
-                                {item.favorito ? (
-                                  <span className="profile-status-favorite-pill">Favorito</span>
-                                ) : null}
-                              </div>
+                      <div className="profile-status-card-body">
+                        <span className="profile-status-date">
+                          Atualizado em {formatCompactDate(item.created_at)}
+                        </span>
+                        <h3>{visibleTitle}</h3>
+                        <span className="profile-status-card-cta">Ver detalhes</span>
+                      </div>
+                    </Link>
 
-                              <h3>{visibleTitle}</h3>
-                              <p>Atualizado em {formatCompactDate(item.created_at)}</p>
-                              <span className="profile-status-card-cta">Ver detalhes</span>
-                            </div>
-                          </Link>
+                    {isOwnerView ? (
+                      <div className="profile-status-card-actions">
+                        <label className="profile-status-control-field">
+                          <span>Status</span>
+                          <select
+                            value={item.status}
+                            className="profile-status-select"
+                            onChange={event =>
+                              void handleUpdateExistingItem(
+                                item,
+                                event.target.value as GameStatusValue,
+                                item.favorito
+                              )
+                            }
+                            disabled={isSavingItem}
+                          >
+                            {STATUS_OPTIONS.map(option => (
+                              <option key={`${item.id}-${option.value}`} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
 
-                          {isOwnerView ? (
-                            <div className="profile-status-card-controls">
-                              <div
-                                className="profile-status-choice-group"
-                                role="group"
-                                aria-label={`Alterar status de ${visibleTitle}`}
-                              >
-                                {STATUS_GROUPS.map(statusOption => (
-                                  <button
-                                    key={`${item.id}-${statusOption.value}`}
-                                    type="button"
-                                    className={`profile-status-choice${item.status === statusOption.value ? ' is-active' : ''}`}
-                                    onClick={() =>
-                                      void handleUpdateExistingItem(
-                                        item,
-                                        statusOption.value,
-                                        item.favorito
-                                      )
-                                    }
-                                    disabled={isSavingItem}
-                                  >
-                                    {statusOption.label}
-                                  </button>
-                                ))}
-                              </div>
+                        <div className="profile-status-card-action-row">
+                          <button
+                            type="button"
+                            className={`profile-status-favorite-toggle${item.favorito ? ' is-active' : ''}`}
+                            aria-pressed={item.favorito}
+                            onClick={() =>
+                              void handleUpdateExistingItem(item, item.status, !item.favorito)
+                            }
+                            disabled={isSavingItem}
+                          >
+                            {item.favorito ? 'Favorito ativo' : 'Marcar favorito'}
+                          </button>
 
-                              <div className="profile-status-card-footer">
-                                <button
-                                  type="button"
-                                  className={`profile-status-favorite-toggle${item.favorito ? ' is-active' : ''}`}
-                                  aria-pressed={item.favorito}
-                                  onClick={() =>
-                                    void handleUpdateExistingItem(item, item.status, !item.favorito)
-                                  }
-                                  disabled={isSavingItem}
-                                >
-                                  {item.favorito ? 'Favorito ativo' : 'Marcar favorito'}
-                                </button>
-
-                                {isSavingItem ? (
-                                  <span className="profile-status-saving-label">Salvando...</span>
-                                ) : null}
-                              </div>
-                            </div>
+                          {isSavingItem ? (
+                            <span className="profile-status-saving-label">Salvando...</span>
                           ) : null}
-                        </article>
-                      )
-                    })}
-                  </div>
-                )}
-              </article>
-            ))}
-          </div>
+                        </div>
+                      </div>
+                    ) : null}
+                  </article>
+                )
+              })}
+            </div>
+
+            <PaginationControls
+              currentPage={safeCurrentPage}
+              totalPages={totalPages}
+              onChangePage={setCurrentPage}
+            />
+          </>
         )}
       </div>
     </section>

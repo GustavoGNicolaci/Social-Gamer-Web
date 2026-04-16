@@ -277,6 +277,62 @@
   border-top: 1px solid rgba(219, 228, 255, 0.12);
 }
 
+.game-details-profile-status-card {
+  display: grid;
+  gap: 0.85rem;
+  padding: 1rem 1.05rem;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background:
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.08), transparent 34%),
+    rgba(255, 255, 255, 0.04);
+}
+
+.game-details-profile-status-copy {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.game-details-profile-status-copy strong {
+  color: #fff;
+  font-size: 1rem;
+}
+
+.game-details-profile-status-copy p {
+  margin: 0;
+  color: rgba(238, 242, 255, 0.78);
+  line-height: 1.6;
+}
+
+.game-details-profile-status-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.game-details-profile-status-button {
+  min-width: 150px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.06);
+  color: #eef2ff;
+  box-shadow: none;
+}
+
+.game-details-profile-status-button:hover:not(:disabled) {
+  border-color: rgba(191, 219, 254, 0.34);
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.16);
+}
+
+.game-details-profile-status-button.is-selected {
+  border-color: rgba(118, 236, 221, 0.32);
+  background: linear-gradient(135deg, rgba(22, 121, 114, 0.95), rgba(66, 190, 177, 0.95));
+  color: #f4fffd;
+  box-shadow:
+    0 16px 30px rgba(17, 92, 100, 0.24),
+    inset 0 1px 0 rgba(226, 255, 250, 0.16);
+}
+
 .game-details-actions .game-button,
 .game-details-login-card .game-button,
 .game-details-review-form-footer .game-button {
@@ -866,9 +922,14 @@
   }
 
   .game-details-actions,
+  .game-details-profile-status-actions,
   .game-details-review-form-footer {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .game-details-profile-status-button {
+    width: 100%;
   }
 
   .game-review-comment-form {
