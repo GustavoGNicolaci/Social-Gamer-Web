@@ -2,13 +2,18 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import {
+  deleteGameStatus,
   getGameStatusEntry,
   saveGameStatus,
   type GameStatusEntry,
   type GameStatusError,
   type GameStatusValue,
 } from '../services/gameStatusService'
-import { addGameToWishlist, getWishlistEntry } from '../services/wishlistService'
+import {
+  addGameToWishlist,
+  deleteWishlistEntry,
+  getWishlistEntry,
+} from '../services/wishlistService'
 import { supabase } from '../supabase-client'
 import './GameDetailsPage.css'
 
@@ -60,7 +65,7 @@ interface FeedbackState {
   message: string
 }
 
-type QuickProfileStatusValue = Extract<GameStatusValue, 'jogando' | 'zerado'>
+type QuickProfileStatusValue = GameStatusValue
 
 const REVIEW_SCORE_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 const QUICK_PROFILE_STATUS_OPTIONS: Array<{
@@ -69,6 +74,7 @@ const QUICK_PROFILE_STATUS_OPTIONS: Array<{
 }> = [
   { value: 'jogando', label: 'Jogando' },
   { value: 'zerado', label: 'Zerei' },
+  { value: 'dropado', label: 'Dropei' },
 ]
 
 const REVIEWS_QUERY = `
@@ -113,9 +119,11 @@ function getWishlistErrorMessage(error: {
   message: string
   details?: string | null
   hint?: string | null
-} | null) {
+} | null, action: 'save' | 'delete' = 'save') {
   if (!error) {
-    return 'Nao foi possivel salvar este jogo na sua lista de desejos agora.'
+    return action === 'save'
+      ? 'Nao foi possivel salvar este jogo na sua lista de desejos agora.'
+      : 'Nao foi possivel remover este jogo da sua lista de desejos agora.'
   }
 
   const fullMessage = [error.message, error.details, error.hint].filter(Boolean).join(' ').toLowerCase()
@@ -126,7 +134,9 @@ function getWishlistErrorMessage(error: {
     fullMessage.includes('row-level security') ||
     fullMessage.includes('policy')
   ) {
-    return 'Nao foi possivel acessar sua lista de desejos por permissao. Verifique as policies da tabela lista_desejos no Supabase.'
+    return action === 'save'
+      ? 'Nao foi possivel acessar sua lista de desejos por permissao. Verifique as policies da tabela lista_desejos no Supabase.'
+      : 'Nao foi possivel remover este jogo da sua lista de desejos por permissao. Verifique as policies DELETE da tabela lista_desejos no Supabase.'
   }
 
   if (fullMessage.includes('duplicate') || fullMessage.includes('unique')) {
@@ -137,12 +147,16 @@ function getWishlistErrorMessage(error: {
     return 'A estrutura da tabela lista_desejos nao corresponde ao frontend.'
   }
 
-  return 'Nao foi possivel salvar este jogo na sua lista de desejos agora.'
+  return action === 'save'
+    ? 'Nao foi possivel salvar este jogo na sua lista de desejos agora.'
+    : 'Nao foi possivel remover este jogo da sua lista de desejos agora.'
 }
 
-function getGameStatusErrorMessage(error: GameStatusError | null) {
+function getGameStatusErrorMessage(error: GameStatusError | null, action: 'save' | 'delete' = 'save') {
   if (!error) {
-    return 'Nao foi possivel salvar este jogo no seu perfil agora.'
+    return action === 'save'
+      ? 'Nao foi possivel salvar este jogo no seu perfil agora.'
+      : 'Nao foi possivel remover este jogo do seu perfil agora.'
   }
 
   const fullMessage = [error.message, error.details, error.hint].filter(Boolean).join(' ').toLowerCase()
@@ -153,19 +167,23 @@ function getGameStatusErrorMessage(error: GameStatusError | null) {
     fullMessage.includes('row-level security') ||
     fullMessage.includes('policy')
   ) {
-    return 'Nao foi possivel salvar este jogo no perfil por permissao. Verifique as policies da tabela status_jogo no Supabase.'
+    return action === 'save'
+      ? 'Nao foi possivel salvar este jogo no perfil por permissao. Verifique as policies da tabela status_jogo no Supabase.'
+      : 'Nao foi possivel remover este jogo do perfil por permissao. Verifique as policies DELETE da tabela status_jogo no Supabase.'
   }
 
   if (fullMessage.includes('column')) {
     return 'A estrutura da tabela status_jogo nao corresponde ao frontend.'
   }
 
-  return 'Nao foi possivel salvar este jogo no seu perfil agora.'
+  return action === 'save'
+    ? 'Nao foi possivel salvar este jogo no seu perfil agora.'
+    : 'Nao foi possivel remover este jogo do seu perfil agora.'
 }
 
 function getGameStatusLabel(status: GameStatusValue | null | undefined) {
   if (status === 'zerado') return 'Zerei'
-  if (status === 'dropado') return 'Dropado'
+  if (status === 'dropado') return 'Dropei'
   return 'Jogando'
 }
 
@@ -217,6 +235,7 @@ function GameDetailsPage() {
   const [wishlistLoading, setWishlistLoading] = useState(false)
   const [wishlistSaving, setWishlistSaving] = useState(false)
   const [isInWishlist, setIsInWishlist] = useState(false)
+  const [wishlistEntryId, setWishlistEntryId] = useState<string | null>(null)
   const [wishlistFeedback, setWishlistFeedback] = useState<FeedbackState | null>(null)
   const [gameStatusLoading, setGameStatusLoading] = useState(false)
   const [gameStatusSaving, setGameStatusSaving] = useState(false)
@@ -273,6 +292,7 @@ function GameDetailsPage() {
         if (isMounted) {
           setWishlistLoading(false)
           setIsInWishlist(false)
+          setWishlistEntryId(null)
           setWishlistFeedback(null)
         }
         return
@@ -292,8 +312,10 @@ function GameDetailsPage() {
           message: 'Nao foi possivel verificar sua lista de desejos agora.',
         })
         setIsInWishlist(false)
+        setWishlistEntryId(null)
       } else {
         setIsInWishlist(Boolean(data))
+        setWishlistEntryId(data?.id || null)
       }
 
       setWishlistLoading(false)
@@ -396,35 +418,59 @@ function GameDetailsPage() {
     setSubmittingComentario(prevState => ({ ...prevState, [reviewId]: false }))
   }
 
-  const handleAddToWishlist = async () => {
-    if (!user || !game || wishlistLoading || wishlistSaving || isInWishlist) return
+  const handleWishlistToggle = async () => {
+    if (!user || !game || wishlistLoading || wishlistSaving) return
 
     setWishlistSaving(true)
     setWishlistFeedback(null)
 
-    const result = await addGameToWishlist({
-      userId: user.id,
-      gameId: game.id,
-    })
+    if (isInWishlist && wishlistEntryId) {
+      const { error } = await deleteWishlistEntry({
+        userId: user.id,
+        wishlistEntryId,
+      })
 
-    if (result.status === 'added') {
-      setIsInWishlist(true)
-      setWishlistFeedback({
-        tone: 'success',
-        message: 'Jogo salvo na sua lista de desejos.',
-      })
-    } else if (result.status === 'duplicate') {
-      setIsInWishlist(true)
-      setWishlistFeedback({
-        tone: 'info',
-        message: 'Esse jogo ja esta na sua lista de desejos.',
-      })
+      if (error) {
+        console.error('Erro ao remover jogo da wishlist:', error)
+        setWishlistFeedback({
+          tone: 'error',
+          message: getWishlistErrorMessage(error, 'delete'),
+        })
+      } else {
+        setIsInWishlist(false)
+        setWishlistEntryId(null)
+        setWishlistFeedback({
+          tone: 'info',
+          message: 'Jogo removido da sua lista de desejos.',
+        })
+      }
     } else {
-      console.error('Erro ao salvar jogo na wishlist:', result.error)
-      setWishlistFeedback({
-        tone: 'error',
-        message: getWishlistErrorMessage(result.error),
+      const result = await addGameToWishlist({
+        userId: user.id,
+        gameId: game.id,
       })
+
+      if (result.status === 'added') {
+        setIsInWishlist(true)
+        setWishlistEntryId(result.data?.id || null)
+        setWishlistFeedback({
+          tone: 'success',
+          message: 'Jogo salvo na sua lista de desejos.',
+        })
+      } else if (result.status === 'duplicate') {
+        setIsInWishlist(true)
+        setWishlistEntryId(result.data?.id || null)
+        setWishlistFeedback({
+          tone: 'info',
+          message: 'Esse jogo ja esta na sua lista de desejos.',
+        })
+      } else {
+        console.error('Erro ao salvar jogo na wishlist:', result.error)
+        setWishlistFeedback({
+          tone: 'error',
+          message: getWishlistErrorMessage(result.error, 'save'),
+        })
+      }
     }
 
     setWishlistSaving(false)
@@ -432,33 +478,56 @@ function GameDetailsPage() {
 
   const handleSaveGameStatus = async (nextStatus: QuickProfileStatusValue) => {
     if (!user || !game || gameStatusLoading || gameStatusSaving) return
-    if (gameStatusEntry?.status === nextStatus) return
 
     setGameStatusSaving(true)
     setPendingGameStatus(nextStatus)
     setGameStatusFeedback(null)
 
-    const { data, error } = await saveGameStatus({
-      userId: user.id,
-      gameId: game.id,
-      status: nextStatus,
-      favorito: gameStatusEntry?.favorito || false,
-    })
+    const isRemovingCurrentStatus =
+      gameStatusEntry?.status === nextStatus && Boolean(gameStatusEntry.id)
 
-    if (error) {
-      console.error('Erro ao salvar status do jogo pelo detalhe:', error)
-      setGameStatusFeedback({
-        tone: 'error',
-        message: getGameStatusErrorMessage(error),
+    if (isRemovingCurrentStatus && gameStatusEntry?.id) {
+      const { error } = await deleteGameStatus({
+        userId: user.id,
+        statusId: gameStatusEntry.id,
       })
+
+      if (error) {
+        console.error('Erro ao remover status do jogo pelo detalhe:', error)
+        setGameStatusFeedback({
+          tone: 'error',
+          message: getGameStatusErrorMessage(error, 'delete'),
+        })
+      } else {
+        setGameStatusEntry(null)
+        setGameStatusFeedback({
+          tone: 'info',
+          message: 'Jogo removido do seu perfil.',
+        })
+      }
     } else {
-      setGameStatusEntry(data)
-      setGameStatusFeedback({
-        tone: 'success',
-        message: gameStatusEntry
-          ? 'Status do jogo atualizado no seu perfil.'
-          : 'Jogo adicionado ao seu perfil.',
+      const { data, error } = await saveGameStatus({
+        userId: user.id,
+        gameId: game.id,
+        status: nextStatus,
+        favorito: gameStatusEntry?.favorito || false,
       })
+
+      if (error) {
+        console.error('Erro ao salvar status do jogo pelo detalhe:', error)
+        setGameStatusFeedback({
+          tone: 'error',
+          message: getGameStatusErrorMessage(error, 'save'),
+        })
+      } else {
+        setGameStatusEntry(data)
+        setGameStatusFeedback({
+          tone: 'success',
+          message: gameStatusEntry
+            ? 'Status do jogo atualizado no seu perfil.'
+            : 'Jogo adicionado ao seu perfil.',
+        })
+      }
     }
 
     setGameStatusSaving(false)
@@ -527,7 +596,9 @@ function GameDetailsPage() {
   const wishlistButtonLabel = wishlistLoading
     ? 'Verificando...'
     : wishlistSaving
-      ? 'Salvando...'
+      ? isInWishlist
+        ? 'Removendo...'
+        : 'Salvando...'
       : isInWishlist
         ? 'Na sua lista'
         : 'Salvar na lista'
@@ -537,7 +608,7 @@ function GameDetailsPage() {
   const profileStatusSubtitle = gameStatusLoading
     ? 'Verificando como esse jogo aparece no seu perfil...'
     : gameStatusEntry
-      ? `Status atual: ${getGameStatusLabel(gameStatusEntry.status)}`
+      ? `Status atual: ${getGameStatusLabel(gameStatusEntry.status)}. Toque novamente no botao ativo para remover.`
       : 'Escolha um status rapido sem sair da pagina.'
 
   return (
@@ -610,8 +681,8 @@ function GameDetailsPage() {
                   <button
                     type="button"
                     className={`game-button game-details-secondary-button game-details-wishlist-button${isInWishlist ? ' is-saved' : ''}`}
-                    onClick={handleAddToWishlist}
-                    disabled={wishlistLoading || wishlistSaving || isInWishlist}
+                    onClick={handleWishlistToggle}
+                    disabled={wishlistLoading || wishlistSaving}
                     aria-live="polite"
                   >
                     {wishlistButtonLabel}
@@ -641,18 +712,28 @@ function GameDetailsPage() {
                   <div className="game-details-profile-status-actions">
                     {QUICK_PROFILE_STATUS_OPTIONS.map(option => {
                       const isSelected = gameStatusEntry?.status === option.value
+                      const isPendingThisStatus = pendingGameStatus === option.value
+                      const isRemovingThisStatus =
+                        isPendingThisStatus && gameStatusEntry?.status === option.value
 
                       return (
                         <button
                           key={option.value}
                           type="button"
-                          className={`game-button game-details-profile-status-button${isSelected ? ' is-selected' : ''}`}
+                          className={`game-button game-details-profile-status-button is-${option.value}${isSelected ? ' is-selected' : ''}`}
                           onClick={() => void handleSaveGameStatus(option.value)}
-                          disabled={gameStatusLoading || gameStatusSaving || isSelected}
+                          disabled={gameStatusLoading || gameStatusSaving}
                         >
-                          {gameStatusSaving && pendingGameStatus === option.value
-                            ? 'Salvando...'
-                            : option.label}
+                          <span className="game-details-profile-status-button-label">
+                            {gameStatusSaving && isPendingThisStatus
+                              ? isRemovingThisStatus
+                                ? 'Removendo...'
+                                : 'Salvando...'
+                              : option.label}
+                          </span>
+                          <small className="game-details-profile-status-button-hint">
+                            {isSelected ? 'Toque para remover' : 'Salvar no perfil'}
+                          </small>
                         </button>
                       )
                     })}

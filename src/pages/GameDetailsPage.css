@@ -108,12 +108,13 @@
   display: grid;
   grid-template-columns: minmax(320px, 0.95fr) minmax(0, 1.15fr);
   gap: 1rem;
-  align-items: stretch;
+  align-items: start;
 }
 
 .game-details-cover-card {
   position: relative;
-  min-height: 430px;
+  aspect-ratio: 16 / 10;
+  min-height: 0;
   overflow: hidden;
   border-radius: 22px;
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -132,11 +133,12 @@
 .game-details-cover-image {
   display: block;
   object-fit: cover;
+  object-position: center 24%;
   transition: transform 0.45s ease;
 }
 
 .game-details-hero:hover .game-details-cover-image {
-  transform: scale(1.03);
+  transform: scale(1.015);
 }
 
 .game-details-cover-fallback {
@@ -305,16 +307,25 @@
 }
 
 .game-details-profile-status-actions {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.65rem;
 }
 
 .game-details-profile-status-button {
-  min-width: 150px;
+  min-height: 84px;
+  display: grid;
+  gap: 0.2rem;
+  align-content: center;
+  justify-items: start;
+  padding: 0.9rem 1rem;
   border: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.06);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.1), transparent 34%),
+    rgba(255, 255, 255, 0.06);
   color: #eef2ff;
+  text-align: left;
   box-shadow: none;
 }
 
@@ -324,13 +335,76 @@
   box-shadow: 0 14px 28px rgba(0, 0, 0, 0.16);
 }
 
+.game-details-profile-status-button.is-jogando {
+  border-color: rgba(122, 204, 255, 0.2);
+  background:
+    radial-gradient(circle at top left, rgba(120, 190, 255, 0.14), transparent 34%),
+    rgba(255, 255, 255, 0.05);
+}
+
+.game-details-profile-status-button.is-zerado {
+  border-color: rgba(118, 236, 221, 0.2);
+  background:
+    radial-gradient(circle at top left, rgba(118, 236, 221, 0.14), transparent 34%),
+    rgba(255, 255, 255, 0.05);
+}
+
+.game-details-profile-status-button.is-dropado {
+  border-color: rgba(255, 183, 129, 0.22);
+  background:
+    radial-gradient(circle at top left, rgba(255, 183, 129, 0.14), transparent 34%),
+    rgba(255, 255, 255, 0.05);
+}
+
+.game-details-profile-status-button-label {
+  font-size: 0.98rem;
+  font-weight: 800;
+}
+
+.game-details-profile-status-button-hint {
+  color: rgba(222, 232, 255, 0.72);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .game-details-profile-status-button.is-selected {
+  color: #f4fffd;
+  box-shadow:
+    0 16px 30px rgba(17, 92, 100, 0.24),
+    inset 0 1px 0 rgba(226, 255, 250, 0.16);
+}
+
+.game-details-profile-status-button.is-jogando.is-selected {
+  border-color: rgba(110, 201, 255, 0.4);
+  background: linear-gradient(135deg, rgba(36, 106, 184, 0.96), rgba(86, 175, 255, 0.96));
+  color: #f5fbff;
+  box-shadow:
+    0 16px 30px rgba(27, 89, 149, 0.24),
+    inset 0 1px 0 rgba(233, 245, 255, 0.18);
+}
+
+.game-details-profile-status-button.is-zerado.is-selected {
   border-color: rgba(118, 236, 221, 0.32);
   background: linear-gradient(135deg, rgba(22, 121, 114, 0.95), rgba(66, 190, 177, 0.95));
   color: #f4fffd;
   box-shadow:
     0 16px 30px rgba(17, 92, 100, 0.24),
     inset 0 1px 0 rgba(226, 255, 250, 0.16);
+}
+
+.game-details-profile-status-button.is-dropado.is-selected {
+  border-color: rgba(255, 174, 114, 0.4);
+  background: linear-gradient(135deg, rgba(155, 84, 41, 0.96), rgba(224, 138, 77, 0.96));
+  color: #fff9f4;
+  box-shadow:
+    0 16px 30px rgba(138, 82, 31, 0.24),
+    inset 0 1px 0 rgba(255, 241, 229, 0.16);
+}
+
+.game-details-profile-status-button.is-selected .game-details-profile-status-button-hint {
+  color: rgba(244, 255, 253, 0.82);
 }
 
 .game-details-actions .game-button,
@@ -880,7 +954,7 @@
   }
 
   .game-details-cover-card {
-    min-height: 360px;
+    aspect-ratio: 16 / 9;
   }
 
   .game-details-section-heading,
@@ -932,6 +1006,10 @@
     width: 100%;
   }
 
+  .game-details-profile-status-actions {
+    grid-template-columns: 1fr;
+  }
+
   .game-review-comment-form {
     grid-template-columns: 1fr;
   }
@@ -952,7 +1030,7 @@
   }
 
   .game-details-cover-card {
-    min-height: 280px;
+    aspect-ratio: 5 / 4;
   }
 
   .game-details-cover-top,
