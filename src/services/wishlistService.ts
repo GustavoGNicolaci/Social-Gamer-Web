@@ -45,6 +45,11 @@ interface AddWishlistParams {
   gameId: number
 }
 
+interface DeleteWishlistEntryParams {
+  userId: string
+  wishlistEntryId: string
+}
+
 interface AddWishlistResult extends ServiceResult<WishlistEntry | null> {
   status: 'added' | 'duplicate' | 'error'
 }
@@ -361,6 +366,48 @@ export async function updateWishlistPriorities(
         error,
         'Erro inesperado ao salvar a nova ordem da lista de desejos.'
       ),
+    }
+  }
+}
+
+export async function deleteWishlistEntry({
+  userId,
+  wishlistEntryId,
+}: DeleteWishlistEntryParams): Promise<ServiceResult<null>> {
+  try {
+    const { data, error } = await supabase
+      .from('lista_desejos')
+      .delete()
+      .eq('id', wishlistEntryId)
+      .eq('usuario_id', userId)
+      .select('id')
+      .maybeSingle()
+
+    if (error) {
+      return {
+        data: null,
+        error: normalizeWishlistError(error, 'Nao foi possivel remover o jogo da wishlist.'),
+      }
+    }
+
+    if (!data) {
+      return {
+        data: null,
+        error: {
+          message:
+            'Nenhum item foi removido. Verifique as policies DELETE da tabela lista_desejos no Supabase.',
+        },
+      }
+    }
+
+    return {
+      data: null,
+      error: null,
+    }
+  } catch (error) {
+    return {
+      data: null,
+      error: normalizeWishlistError(error, 'Erro inesperado ao remover o jogo da wishlist.'),
     }
   }
 }

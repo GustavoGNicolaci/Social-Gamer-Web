@@ -16,15 +16,14 @@ import {
 } from '../../services/gameStatusService'
 import './ProfileGameStatusSection.css'
 
-type FeedbackTone = 'success' | 'error'
 type StatusSortValue = 'recent' | 'oldest' | 'favorites' | 'title'
 
-interface FeedbackState {
-  tone: FeedbackTone
-  message: string
+interface SaveStatusResult {
+  ok: boolean
+  message?: string
 }
 
-interface SaveStatusResult {
+interface DeleteStatusResult {
   ok: boolean
   message?: string
 }
@@ -41,6 +40,7 @@ interface ProfileGameStatusSectionProps {
     status: GameStatusValue
     favorito: boolean
   }) => Promise<SaveStatusResult>
+  onDeleteStatus: (itemId: string) => Promise<DeleteStatusResult>
   onRefresh: () => Promise<void>
 }
 
@@ -207,6 +207,7 @@ export function ProfileGameStatusSection({
   countLabel,
   isOwnerView,
   onSaveStatus,
+  onDeleteStatus,
   onRefresh,
 }: ProfileGameStatusSectionProps) {
   const [searchQuery, setSearchQuery] = useState('')
@@ -224,7 +225,8 @@ export function ProfileGameStatusSection({
   const [currentPage, setCurrentPage] = useState(0)
   const [isCreatingStatus, setIsCreatingStatus] = useState(false)
   const [savingItemIds, setSavingItemIds] = useState<string[]>([])
-  const [feedback, setFeedback] = useState<FeedbackState | null>(null)
+  const [removingItemIds, setRemovingItemIds] = useState<string[]>([])
+  const [actionError, setActionError] = useState<string | null>(null)
 
   const sortMenuRef = useRef<HTMLDivElement | null>(null)
   const searchTimeoutRef = useRef<number | null>(null)
@@ -319,7 +321,7 @@ export function ProfileGameStatusSection({
     searchRequestIdRef.current += 1
     setSearchQuery(value)
     setSearchError(null)
-    setFeedback(null)
+    setActionError(null)
 
     if (visibleSelectedGame) {
       resetComposer()
@@ -363,7 +365,7 @@ export function ProfileGameStatusSection({
     setSearchResults([])
     setSearchLoading(false)
     setSearchError(null)
-    setFeedback(null)
+    setActionError(null)
   }
 
   const handleCancelSelectedGame = () => {
@@ -372,6 +374,7 @@ export function ProfileGameStatusSection({
     setSearchResults([])
     setSearchLoading(false)
     setSearchError(null)
+    setActionError(null)
     resetComposer()
   }
 
@@ -380,7 +383,7 @@ export function ProfileGameStatusSection({
     if (!visibleSelectedGame) return
 
     setIsCreatingStatus(true)
-    setFeedback(null)
+    setActionError(null)
 
     const result = await onSaveStatus({
       gameId: visibleSelectedGame.id,
@@ -389,15 +392,10 @@ export function ProfileGameStatusSection({
     })
 
     if (!result.ok) {
-      setFeedback({
-        tone: 'error',
-        message: result.message || 'Nao foi possivel salvar o status deste jogo.',
-      })
+      setActionError(result.message || 'Nao foi possivel salvar o status deste jogo.')
       setIsCreatingStatus(false)
       return
     }
-
-    const selectedTitle = visibleSelectedGame.titulo
 
     clearScheduledSearch()
     setCurrentPage(0)
@@ -406,10 +404,6 @@ export function ProfileGameStatusSection({
     setSearchLoading(false)
     setSearchError(null)
     resetComposer()
-    setFeedback({
-      tone: 'success',
-      message: `${selectedTitle} foi adicionado ao seu perfil.`,
-    })
     setIsCreatingStatus(false)
   }
 
@@ -425,7 +419,7 @@ export function ProfileGameStatusSection({
     setSavingItemIds(currentIds =>
       currentIds.includes(item.id) ? currentIds : [...currentIds, item.id]
     )
-    setFeedback(null)
+    setActionError(null)
 
     const result = await onSaveStatus({
       gameId: item.jogo_id,
@@ -436,17 +430,24 @@ export function ProfileGameStatusSection({
     setSavingItemIds(currentIds => currentIds.filter(currentId => currentId !== item.id))
 
     if (!result.ok) {
-      setFeedback({
-        tone: 'error',
-        message: result.message || 'Nao foi possivel atualizar o status deste jogo.',
-      })
+      setActionError(result.message || 'Nao foi possivel atualizar o status deste jogo.')
       return
     }
+  }
 
-    setFeedback({
-      tone: 'success',
-      message: `${item.jogo?.titulo || 'O jogo'} foi atualizado com sucesso.`,
-    })
+  const handleDeleteItem = async (item: GameStatusItem) => {
+    setRemovingItemIds(currentIds =>
+      currentIds.includes(item.id) ? currentIds : [...currentIds, item.id]
+    )
+    setActionError(null)
+
+    const result = await onDeleteStatus(item.id)
+
+    setRemovingItemIds(currentIds => currentIds.filter(currentId => currentId !== item.id))
+
+    if (!result.ok) {
+      setActionError(result.message || 'Nao foi possivel remover este jogo do perfil.')
+    }
   }
 
   const handleSelectSort = (nextSortValue: StatusSortValue) => {
@@ -476,7 +477,7 @@ export function ProfileGameStatusSection({
 
         <div className="profile-status-toolbar">
           {isOwnerView ? (
-            <div className="profile-status-search-shell">
+            <div className="profile-status-toolbar-control profile-status-search-shell">
               <label className="profile-status-search-field" htmlFor="profile-status-search-input">
                 <span>Buscar jogo no catalogo</span>
                 <input
@@ -538,37 +539,43 @@ export function ProfileGameStatusSection({
               ) : null}
             </div>
           ) : (
-            <div className="profile-status-toolbar-placeholder"></div>
+            <div className="profile-status-toolbar-control profile-status-toolbar-placeholder"></div>
           )}
 
-          <div className="profile-status-sort" ref={sortMenuRef}>
-            <button
-              type="button"
-              className={`profile-status-sort-trigger${showSortMenu ? ' is-open' : ''}`}
-              onClick={() => setShowSortMenu(currentValue => !currentValue)}
-              aria-haspopup="menu"
-              aria-expanded={showSortMenu}
-            >
-              <span>Ordenar</span>
-              <strong>{sortLabel}</strong>
-            </button>
+          <div className="profile-status-toolbar-control">
+            <div className="profile-status-sort-field">
+              <span className="profile-status-toolbar-label">Ordenacao</span>
 
-            {showSortMenu ? (
-              <div className="profile-status-sort-menu" role="menu" aria-label="Ordenar jogos do perfil">
-                {STATUS_SORT_OPTIONS.map(option => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    className={`profile-status-sort-option${sortValue === option.value ? ' is-active' : ''}`}
-                    onClick={() => handleSelectSort(option.value)}
-                    role="menuitemradio"
-                    aria-checked={sortValue === option.value}
-                  >
-                    {option.label}
-                  </button>
-                ))}
+              <div className="profile-status-sort" ref={sortMenuRef}>
+                <button
+                  type="button"
+                  className={`profile-status-sort-trigger${showSortMenu ? ' is-open' : ''}`}
+                  onClick={() => setShowSortMenu(currentValue => !currentValue)}
+                  aria-haspopup="menu"
+                  aria-expanded={showSortMenu}
+                  aria-label={`Ordenar jogos do perfil. Ordem atual: ${sortLabel}`}
+                >
+                  <strong>{sortLabel}</strong>
+                </button>
+
+                {showSortMenu ? (
+                  <div className="profile-status-sort-menu" role="menu" aria-label="Ordenar jogos do perfil">
+                    {STATUS_SORT_OPTIONS.map(option => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        className={`profile-status-sort-option${sortValue === option.value ? ' is-active' : ''}`}
+                        onClick={() => handleSelectSort(option.value)}
+                        role="menuitemradio"
+                        aria-checked={sortValue === option.value}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
               </div>
-            ) : null}
+            </div>
           </div>
         </div>
 
@@ -640,7 +647,7 @@ export function ProfileGameStatusSection({
           </form>
         ) : null}
 
-        {feedback ? <p className={`profile-feedback is-${feedback.tone}`}>{feedback.message}</p> : null}
+        {actionError ? <p className="profile-feedback is-error">{actionError}</p> : null}
 
         {isLoading ? (
           <div className="profile-status-empty">
@@ -685,11 +692,13 @@ export function ProfileGameStatusSection({
               {visibleItems.map(item => {
                 const visibleTitle = item.jogo?.titulo || 'Jogo indisponivel'
                 const isSavingItem = savingItemIds.includes(item.id)
+                const isRemovingItem = removingItemIds.includes(item.id)
+                const isBusyItem = isSavingItem || isRemovingItem
 
                 return (
                   <article
                     key={item.id}
-                    className={`profile-status-card${item.favorito ? ' is-favorite' : ''}${isSavingItem ? ' is-saving' : ''}`}
+                    className={`profile-status-card${item.favorito ? ' is-favorite' : ''}${isBusyItem ? ' is-saving' : ''}`}
                   >
                     <Link to={`/games/${item.jogo_id}`} className="profile-status-card-link">
                       <div className="profile-status-card-meta">
@@ -732,7 +741,7 @@ export function ProfileGameStatusSection({
                                 item.favorito
                               )
                             }
-                            disabled={isSavingItem}
+                            disabled={isBusyItem}
                           >
                             {STATUS_OPTIONS.map(option => (
                               <option key={`${item.id}-${option.value}`} value={option.value}>
@@ -750,13 +759,24 @@ export function ProfileGameStatusSection({
                             onClick={() =>
                               void handleUpdateExistingItem(item, item.status, !item.favorito)
                             }
-                            disabled={isSavingItem}
+                            disabled={isBusyItem}
                           >
                             {item.favorito ? 'Favorito ativo' : 'Marcar favorito'}
                           </button>
 
-                          {isSavingItem ? (
-                            <span className="profile-status-saving-label">Salvando...</span>
+                          <button
+                            type="button"
+                            className="profile-secondary-button profile-item-remove-button"
+                            onClick={() => void handleDeleteItem(item)}
+                            disabled={isBusyItem}
+                          >
+                            Remover
+                          </button>
+
+                          {isBusyItem ? (
+                            <span className="profile-status-saving-label">
+                              {isRemovingItem ? 'Removendo...' : 'Salvando...'}
+                            </span>
                           ) : null}
                         </div>
                       </div>

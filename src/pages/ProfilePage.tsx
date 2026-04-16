@@ -4,6 +4,7 @@ import { ProfileGameStatusSection } from '../components/profile/ProfileGameStatu
 import { ProfileWishlistSection } from '../components/profile/ProfileWishlistSection'
 import { useAuth } from '../contexts/AuthContext'
 import {
+  deleteGameStatus,
   getGameStatusesByUserId,
   saveGameStatus,
   type GameStatusError,
@@ -11,7 +12,11 @@ import {
   type GameStatusValue,
 } from '../services/gameStatusService'
 import { uploadImage } from '../services/storageService'
-import { getWishlistGamesByUserId, type WishlistGameItem } from '../services/wishlistService'
+import {
+  deleteWishlistEntry,
+  getWishlistGamesByUserId,
+  type WishlistGameItem,
+} from '../services/wishlistService'
 import './ProfilePage.css'
 
 type FeedbackTone = 'success' | 'error'
@@ -80,9 +85,11 @@ const getWishlistErrorMessage = (error: {
   message: string
   details?: string | null
   hint?: string | null
-} | null) => {
+} | null, action: 'load' | 'delete' = 'load') => {
   if (!error) {
-    return 'Nao foi possivel carregar sua lista de desejos agora.'
+    return action === 'load'
+      ? 'Nao foi possivel carregar sua lista de desejos agora.'
+      : 'Nao foi possivel remover este jogo da wishlist agora.'
   }
 
   const fullMessage = [error.message, error.details, error.hint].filter(Boolean).join(' ').toLowerCase()
@@ -93,20 +100,26 @@ const getWishlistErrorMessage = (error: {
     fullMessage.includes('row-level security') ||
     fullMessage.includes('policy')
   ) {
-    return 'Nao foi possivel carregar a lista de desejos por permissao. Verifique as policies da tabela lista_desejos no Supabase.'
+    return action === 'load'
+      ? 'Nao foi possivel carregar a lista de desejos por permissao. Verifique as policies da tabela lista_desejos no Supabase.'
+      : 'Nao foi possivel remover este jogo da wishlist por permissao. Verifique as policies DELETE da tabela lista_desejos no Supabase.'
   }
 
-  return 'Nao foi possivel carregar sua lista de desejos agora.'
+  return action === 'load'
+    ? 'Nao foi possivel carregar sua lista de desejos agora.'
+    : 'Nao foi possivel remover este jogo da wishlist agora.'
 }
 
 const getGameStatusErrorMessage = (
   error: GameStatusError | null,
-  action: 'load' | 'save'
+  action: 'load' | 'save' | 'delete'
 ) => {
   if (!error) {
     return action === 'load'
       ? 'Nao foi possivel carregar os status dos jogos agora.'
-      : 'Nao foi possivel salvar o status deste jogo agora.'
+      : action === 'save'
+        ? 'Nao foi possivel salvar o status deste jogo agora.'
+        : 'Nao foi possivel remover este jogo do perfil agora.'
   }
 
   const fullMessage = [error.message, error.details, error.hint].filter(Boolean).join(' ').toLowerCase()
@@ -119,7 +132,9 @@ const getGameStatusErrorMessage = (
   ) {
     return action === 'load'
       ? 'Nao foi possivel carregar os status por permissao. Verifique as policies da tabela status_jogo no Supabase.'
-      : 'Nao foi possivel salvar o status por permissao. Verifique as policies da tabela status_jogo no Supabase.'
+      : action === 'save'
+        ? 'Nao foi possivel salvar o status por permissao. Verifique as policies da tabela status_jogo no Supabase.'
+        : 'Nao foi possivel remover este jogo do perfil por permissao. Verifique as policies DELETE da tabela status_jogo no Supabase.'
   }
 
   if (fullMessage.includes('column')) {
@@ -128,7 +143,9 @@ const getGameStatusErrorMessage = (
 
   return action === 'load'
     ? 'Nao foi possivel carregar os status dos jogos agora.'
-    : 'Nao foi possivel salvar o status deste jogo agora.'
+    : action === 'save'
+      ? 'Nao foi possivel salvar o status deste jogo agora.'
+      : 'Nao foi possivel remover este jogo do perfil agora.'
 }
 
 export function ProfilePage() {
@@ -210,7 +227,7 @@ export function ProfilePage() {
       if (wishlistResult.error) {
         console.error('Erro ao carregar wishlist do perfil:', wishlistResult.error)
         setWishlistGames([])
-        setWishlistError(getWishlistErrorMessage(wishlistResult.error))
+        setWishlistError(getWishlistErrorMessage(wishlistResult.error, 'load'))
       } else {
         setWishlistGames(wishlistResult.data)
       }
@@ -490,6 +507,62 @@ export function ProfilePage() {
     }
   }
 
+  const handleDeleteStatus = async (itemId: string) => {
+    if (!profile) {
+      return {
+        ok: false,
+        message: 'Nao foi possivel identificar o perfil para remover este jogo.',
+      }
+    }
+
+    const { error } = await deleteGameStatus({
+      userId: profile.id,
+      statusId: itemId,
+    })
+
+    if (error) {
+      return {
+        ok: false,
+        message: getGameStatusErrorMessage(error, 'delete'),
+      }
+    }
+
+    setStatusGames(currentItems => currentItems.filter(item => item.id !== itemId))
+    setStatusError(null)
+
+    return {
+      ok: true,
+    }
+  }
+
+  const handleDeleteWishlistItem = async (itemId: string) => {
+    if (!profile) {
+      return {
+        ok: false,
+        message: 'Nao foi possivel identificar o perfil para remover este jogo.',
+      }
+    }
+
+    const { error } = await deleteWishlistEntry({
+      userId: profile.id,
+      wishlistEntryId: itemId,
+    })
+
+    if (error) {
+      return {
+        ok: false,
+        message: getWishlistErrorMessage(error, 'delete'),
+      }
+    }
+
+    setWishlistGames(currentItems => currentItems.filter(item => item.id !== itemId))
+    setWishlistError(null)
+
+    return {
+      ok: true,
+    }
+  }
+
   const avatarContent = profile.avatar_url ? (
     <img
       src={profile.avatar_url}
@@ -722,6 +795,7 @@ export function ProfilePage() {
                   countLabel={statusCountLabel}
                   isOwnerView={isOwnerView}
                   onSaveStatus={handleSaveGameStatus}
+                  onDeleteStatus={handleDeleteStatus}
                   onRefresh={handleRefreshStatusGames}
                 />
               ) : null}
@@ -742,6 +816,7 @@ export function ProfilePage() {
                   errorMessage={wishlistError}
                   countLabel={wishlistCountLabel}
                   isOwnerView={isOwnerView}
+                  onDeleteWishlistItem={handleDeleteWishlistItem}
                 />
               ) : null}
             </div>

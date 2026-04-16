@@ -543,6 +543,21 @@
   background: rgba(255, 255, 255, 0.08);
 }
 
+.profile-item-remove-button {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding-inline: 0.95rem;
+  border-color: rgba(255, 180, 180, 0.16);
+  color: #ffe3e3;
+}
+
+.profile-item-remove-button:hover:not(:disabled) {
+  border-color: rgba(255, 154, 154, 0.34);
+  background: rgba(255, 113, 113, 0.08);
+}
+
 .profile-feedback {
   margin: 0;
   color: #dbe7ff;

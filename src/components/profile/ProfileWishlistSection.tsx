@@ -1,6 +1,7 @@
 import {
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type CSSProperties,
@@ -30,6 +31,7 @@ interface ProfileWishlistSectionProps {
   errorMessage: string | null
   countLabel: string
   isOwnerView: boolean
+  onDeleteWishlistItem: (itemId: string) => Promise<{ ok: boolean; message?: string }>
 }
 
 const HORIZONTAL_LAYOUT_THRESHOLD = 6
@@ -130,13 +132,15 @@ export function ProfileWishlistSection({
   errorMessage,
   countLabel,
   isOwnerView,
+  onDeleteWishlistItem,
 }: ProfileWishlistSectionProps) {
-  const [orderedItems, setOrderedItems] = useState<WishlistGameItem[]>(items)
+  const [orderedItemIds, setOrderedItemIds] = useState<string[] | null>(null)
   const [draggedItemId, setDraggedItemId] = useState<string | null>(null)
   const [dropTargetId, setDropTargetId] = useState<string | null>(null)
   const [isSavingOrder, setIsSavingOrder] = useState(false)
   const [orderStatus, setOrderStatus] = useState<OrderStatusState | null>(null)
   const [hasFinePointer, setHasFinePointer] = useState(false)
+  const [removingItemIds, setRemovingItemIds] = useState<string[]>([])
   const [itemsPerPage, setItemsPerPage] = useState(() =>
     typeof window === 'undefined' ? 6 : getItemsPerPage(window.innerWidth)
   )
@@ -148,31 +152,40 @@ export function ProfileWishlistSection({
   const dragAutoPageTimeoutRef = useRef<number | null>(null)
   const dragAutoPageDirectionRef = useRef<'previous' | 'next' | null>(null)
 
+  const orderedItems = useMemo(() => {
+    if (!orderedItemIds) return items
+
+    const itemsById = new Map(items.map(item => [item.id, item]))
+    const orderedFromState = orderedItemIds.flatMap(itemId => {
+      const item = itemsById.get(itemId)
+      return item ? [item] : []
+    })
+    const orderedIdSet = new Set(orderedItemIds)
+    const missingItems = items.filter(item => !orderedIdSet.has(item.id))
+
+    return [...orderedFromState, ...missingItems]
+  }, [items, orderedItemIds])
+
   const hasWishlistItems = orderedItems.length > 0
   const isPaginatedLayout = orderedItems.length > HORIZONTAL_LAYOUT_THRESHOLD
-  const canReorder = isOwnerView && orderedItems.length > 1 && hasFinePointer && !isSavingOrder
+  const hasPendingRemoval = removingItemIds.length > 0
+  const canReorder =
+    isOwnerView && orderedItems.length > 1 && hasFinePointer && !isSavingOrder && !hasPendingRemoval
   const pagedItems = isPaginatedLayout ? chunkWishlistItems(orderedItems, itemsPerPage) : []
   const totalPages = isPaginatedLayout ? pagedItems.length : 1
-  const visiblePageItems = isPaginatedLayout ? pagedItems[currentPage] || [] : orderedItems
+  const safeCurrentPage = Math.min(currentPage, Math.max(totalPages - 1, 0))
+  const visiblePageItems = isPaginatedLayout ? pagedItems[safeCurrentPage] || [] : orderedItems
   const visibleItemIds = new Set(visiblePageItems.map(item => item.id))
-  const canGoPrevPage = isPaginatedLayout && currentPage > 0
-  const canGoNextPage = isPaginatedLayout && currentPage < totalPages - 1
+  const canGoPrevPage = isPaginatedLayout && safeCurrentPage > 0
+  const canGoNextPage = isPaginatedLayout && safeCurrentPage < totalPages - 1
 
   const wishlistColumnsStyle = {
     '--wishlist-columns': String(itemsPerPage),
   } as CSSProperties
 
   const paginatedTrackStyle = {
-    transform: `translateX(-${currentPage * 100}%)`,
+    transform: `translateX(-${safeCurrentPage * 100}%)`,
   }
-
-  useEffect(() => {
-    setOrderedItems(items)
-    setDraggedItemId(null)
-    setDropTargetId(null)
-    setIsSavingOrder(false)
-    setOrderStatus(null)
-  }, [items])
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return
@@ -204,15 +217,6 @@ export function ProfileWishlistSection({
       window.removeEventListener('resize', syncItemsPerPage)
     }
   }, [])
-
-  useEffect(() => {
-    if (!isPaginatedLayout) {
-      setCurrentPage(0)
-      return
-    }
-
-    setCurrentPage(previousPage => Math.min(previousPage, Math.max(totalPages - 1, 0)))
-  }, [isPaginatedLayout, totalPages])
 
   useEffect(() => {
     return () => {
@@ -410,7 +414,7 @@ export function ProfileWishlistSection({
     )
 
     snapshotItemRects()
-    setOrderedItems(reorderedItems)
+    setOrderedItemIds(reorderedItems.map(item => item.id))
     clearAutoPageSchedule()
     setDraggedItemId(null)
     setDropTargetId(null)
@@ -424,7 +428,7 @@ export function ProfileWishlistSection({
 
     if (error) {
       snapshotItemRects()
-      setOrderedItems(previousItems)
+      setOrderedItemIds(previousItems.map(item => item.id))
       setOrderStatus({
         tone: 'error',
         message: getWishlistOrderErrorMessage(error),
@@ -434,6 +438,27 @@ export function ProfileWishlistSection({
     }
 
     setIsSavingOrder(false)
+  }
+
+  const handleDeleteItem = async (itemId: string) => {
+    setOrderStatus(null)
+    setDraggedItemId(null)
+    setDropTargetId(null)
+    clearAutoPageSchedule()
+    setRemovingItemIds(currentIds =>
+      currentIds.includes(itemId) ? currentIds : [...currentIds, itemId]
+    )
+
+    const result = await onDeleteWishlistItem(itemId)
+
+    setRemovingItemIds(currentIds => currentIds.filter(currentId => currentId !== itemId))
+
+    if (!result.ok) {
+      setOrderStatus({
+        tone: 'error',
+        message: result.message || 'Nao foi possivel remover este jogo da wishlist.',
+      })
+    }
   }
 
   return (
@@ -504,6 +529,7 @@ export function ProfileWishlistSection({
                           const visibleTitle = game?.titulo || 'Jogo indisponivel'
                           const isDraggedItem = draggedItemId === item.id
                           const isDropTarget = dropTargetId === item.id && draggedItemId !== item.id
+                          const isRemovingItem = removingItemIds.includes(item.id)
                           const canShowDragHandle = canReorder && visibleItemIds.has(item.id)
 
                           return (
@@ -512,7 +538,7 @@ export function ProfileWishlistSection({
                               ref={node => {
                                 registerItemRef(itemRefs, item.id, node)
                               }}
-                              className={`profile-wishlist-card${isDraggedItem ? ' is-dragging' : ''}${isDropTarget ? ' is-drop-target' : ''}${isSavingOrder ? ' is-saving-order' : ''}`}
+                              className={`profile-wishlist-card${isDraggedItem ? ' is-dragging' : ''}${isDropTarget ? ' is-drop-target' : ''}${isSavingOrder ? ' is-saving-order' : ''}${isRemovingItem ? ' is-removing' : ''}`}
                               onDragOver={event => handleDragOver(item.id, event)}
                               onDrop={event => {
                                 void handleDrop(item.id, event)
@@ -541,6 +567,19 @@ export function ProfileWishlistSection({
                                 </div>
                               </Link>
 
+                              {isOwnerView ? (
+                                <div className="profile-wishlist-card-actions">
+                                  <button
+                                    type="button"
+                                    className="profile-secondary-button profile-item-remove-button"
+                                    onClick={() => void handleDeleteItem(item.id)}
+                                    disabled={isSavingOrder || isRemovingItem}
+                                  >
+                                    Remover
+                                  </button>
+                                </div>
+                              ) : null}
+
                               {canShowDragHandle ? (
                                 <button
                                   type="button"
@@ -552,7 +591,7 @@ export function ProfileWishlistSection({
                                   onDragEnd={handleDragEnd}
                                   aria-label={`Reordenar ${visibleTitle}`}
                                   title="Arraste para reorganizar"
-                                  disabled={isSavingOrder}
+                                  disabled={isSavingOrder || isRemovingItem}
                                 >
                                   <svg viewBox="0 0 16 16" aria-hidden="true">
                                     <circle cx="5" cy="4" r="1.1"></circle>
@@ -578,6 +617,7 @@ export function ProfileWishlistSection({
                     const visibleTitle = game?.titulo || 'Jogo indisponivel'
                     const isDraggedItem = draggedItemId === item.id
                     const isDropTarget = dropTargetId === item.id && draggedItemId !== item.id
+                    const isRemovingItem = removingItemIds.includes(item.id)
 
                     return (
                       <article
@@ -585,7 +625,7 @@ export function ProfileWishlistSection({
                         ref={node => {
                           registerItemRef(itemRefs, item.id, node)
                         }}
-                        className={`profile-wishlist-card${isDraggedItem ? ' is-dragging' : ''}${isDropTarget ? ' is-drop-target' : ''}${isSavingOrder ? ' is-saving-order' : ''}`}
+                        className={`profile-wishlist-card${isDraggedItem ? ' is-dragging' : ''}${isDropTarget ? ' is-drop-target' : ''}${isSavingOrder ? ' is-saving-order' : ''}${isRemovingItem ? ' is-removing' : ''}`}
                         onDragOver={event => handleDragOver(item.id, event)}
                         onDrop={event => {
                           void handleDrop(item.id, event)
@@ -608,23 +648,36 @@ export function ProfileWishlistSection({
 
                           <div className="profile-wishlist-body">
                             <h3>{visibleTitle}</h3>
-                            <span className="profile-wishlist-cta">Ver detalhes</span>
-                          </div>
-                        </Link>
+                          <span className="profile-wishlist-cta">Ver detalhes</span>
+                        </div>
+                      </Link>
 
-                        {canReorder ? (
+                      {isOwnerView ? (
+                        <div className="profile-wishlist-card-actions">
                           <button
                             type="button"
-                            className="profile-wishlist-drag-handle"
+                            className="profile-secondary-button profile-item-remove-button"
+                            onClick={() => void handleDeleteItem(item.id)}
+                            disabled={isSavingOrder || isRemovingItem}
+                          >
+                            Remover
+                          </button>
+                        </div>
+                      ) : null}
+
+                      {canReorder ? (
+                        <button
+                          type="button"
+                          className="profile-wishlist-drag-handle"
                             draggable
                             onMouseDown={handleDragHandlePointerDown}
-                            onClick={handleDragHandleClick}
-                            onDragStart={event => handleDragStart(item.id, event)}
-                            onDragEnd={handleDragEnd}
-                            aria-label={`Reordenar ${visibleTitle}`}
-                            title="Arraste para reorganizar"
-                            disabled={isSavingOrder}
-                          >
+                          onClick={handleDragHandleClick}
+                          onDragStart={event => handleDragStart(item.id, event)}
+                          onDragEnd={handleDragEnd}
+                          aria-label={`Reordenar ${visibleTitle}`}
+                          title="Arraste para reorganizar"
+                          disabled={isSavingOrder || isRemovingItem}
+                        >
                             <svg viewBox="0 0 16 16" aria-hidden="true">
                               <circle cx="5" cy="4" r="1.1"></circle>
                               <circle cx="11" cy="4" r="1.1"></circle>

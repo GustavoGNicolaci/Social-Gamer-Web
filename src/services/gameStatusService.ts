@@ -44,6 +44,11 @@ interface SaveGameStatusParams {
   favorito: boolean
 }
 
+interface DeleteGameStatusParams {
+  userId: string
+  statusId: string
+}
+
 const STATUS_VALUES: GameStatusValue[] = ['jogando', 'zerado', 'dropado']
 
 function normalizeGameStatusError(error: unknown, fallbackMessage: string): GameStatusError {
@@ -299,6 +304,48 @@ export async function saveGameStatus({
     return {
       data: null,
       error: normalizeGameStatusError(error, 'Erro inesperado ao salvar o status deste jogo.'),
+    }
+  }
+}
+
+export async function deleteGameStatus({
+  userId,
+  statusId,
+}: DeleteGameStatusParams): Promise<ServiceResult<null>> {
+  try {
+    const { data, error } = await supabase
+      .from('status_jogo')
+      .delete()
+      .eq('id', statusId)
+      .eq('usuario_id', userId)
+      .select('id')
+      .maybeSingle()
+
+    if (error) {
+      return {
+        data: null,
+        error: normalizeGameStatusError(error, 'Nao foi possivel remover este jogo do perfil.'),
+      }
+    }
+
+    if (!data) {
+      return {
+        data: null,
+        error: {
+          message:
+            'Nenhum status foi removido. Verifique as policies DELETE da tabela status_jogo no Supabase.',
+        },
+      }
+    }
+
+    return {
+      data: null,
+      error: null,
+    }
+  } catch (error) {
+    return {
+      data: null,
+      error: normalizeGameStatusError(error, 'Erro inesperado ao remover este jogo do perfil.'),
     }
   }
 }
