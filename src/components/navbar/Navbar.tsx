@@ -30,7 +30,7 @@ function getGameMetaLine(game: CatalogGamePreview) {
   const primaryPlatform = normalizeList(game.plataformas)[0]
   const year = getCompactYear(game.data_lancamento)
 
-  return [studio || primaryPlatform || 'Ver detalhes do jogo', year].filter(Boolean).join(' • ')
+  return [studio || primaryPlatform || 'Ver detalhes do jogo', year].filter(Boolean).join(' - ')
 }
 
 function getCatalogSearchErrorMessage(error: {
@@ -252,9 +252,24 @@ function Navbar() {
 
   useEffect(() => {
     if (activeResultIndex >= searchResults.length) {
-      setActiveResultIndex(searchResults.length > 0 ? 0 : -1)
+      setActiveResultIndex(-1)
     }
   }, [activeResultIndex, searchResults])
+
+  useEffect(() => {
+    if (location.pathname !== '/games') return
+
+    const queryFromUrl = new URLSearchParams(location.search).get('q')?.trim() || ''
+
+    setSearchQuery(currentValue => (currentValue === queryFromUrl ? currentValue : queryFromUrl))
+    setActiveResultIndex(-1)
+
+    if (!queryFromUrl) {
+      setCompletedSearchQuery('')
+      setSearchResults([])
+      setSearchError(null)
+    }
+  }, [location.pathname, location.search])
 
   const toggleTheme = () => {
     setTheme(prev => (prev === 'dark' ? 'light' : 'dark'))
@@ -319,7 +334,7 @@ function Navbar() {
       setCompletedSearchQuery(trimmedValue)
       setSearchError(error ? getCatalogSearchErrorMessage(error) : null)
       setSearchLoading(false)
-      setActiveResultIndex(data.length > 0 ? 0 : -1)
+      setActiveResultIndex(-1)
       setShowSearchDropdown(true)
       searchTimeoutRef.current = null
     }, SEARCH_DEBOUNCE_DELAY)
@@ -330,6 +345,14 @@ function Navbar() {
     navigate(`/games/${game.id}`)
   }
 
+  const handleSubmitSearchQuery = () => {
+    const trimmedValue = searchQuery.trim()
+    if (!trimmedValue) return
+
+    closeSearch({ collapseCompact: true })
+    navigate(`/games?q=${encodeURIComponent(trimmedValue)}`)
+  }
+
   const handleSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'Escape') {
       event.preventDefault()
@@ -337,11 +360,7 @@ function Navbar() {
       return
     }
 
-    if (!shouldShowSearchDropdown || searchResults.length === 0) {
-      return
-    }
-
-    if (event.key === 'ArrowDown') {
+    if (event.key === 'ArrowDown' && shouldShowSearchDropdown && searchResults.length > 0) {
       event.preventDefault()
       setShowSearchDropdown(true)
       setActiveResultIndex(currentIndex =>
@@ -350,7 +369,7 @@ function Navbar() {
       return
     }
 
-    if (event.key === 'ArrowUp') {
+    if (event.key === 'ArrowUp' && shouldShowSearchDropdown && searchResults.length > 0) {
       event.preventDefault()
       setShowSearchDropdown(true)
       setActiveResultIndex(currentIndex =>
@@ -359,9 +378,15 @@ function Navbar() {
       return
     }
 
-    if (event.key === 'Enter' && activeResultIndex >= 0 && searchResults[activeResultIndex]) {
+    if (event.key === 'Enter') {
       event.preventDefault()
-      handleSelectGame(searchResults[activeResultIndex])
+
+      if (activeResultIndex >= 0 && searchResults[activeResultIndex]) {
+        handleSelectGame(searchResults[activeResultIndex])
+        return
+      }
+
+      handleSubmitSearchQuery()
     }
   }
 

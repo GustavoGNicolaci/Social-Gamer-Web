@@ -1,29 +1,22 @@
-import { useEffect, useMemo, useState, type CSSProperties, type Dispatch, type SetStateAction } from 'react'
-import { Link } from 'react-router-dom'
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+} from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { supabase } from '../supabase-client'
 import './GamesPage.css'
 
 interface Game {
   id: number
   titulo: string
-  capa_url: string
+  capa_url: string | null
   desenvolvedora: string[] | string
   generos: string[] | string
   data_lancamento: string
   descricao: string
   plataformas: string[] | string
-}
-
-interface FilterGroupProps {
-  title: string
-  description: string
-  options: string[]
-  selectedValues: string[]
-  customValue: string
-  placeholder: string
-  onCustomValueChange: (value: string) => void
-  onToggleValue: (value: string, checked: boolean) => void
-  onAddCustomValue: () => void
 }
 
 interface ActiveChipProps {
@@ -42,6 +35,17 @@ interface PaginationProps {
   onChangePage: (page: number) => void
 }
 
+type CatalogFilterCategory = 'title' | 'game' | 'genre' | 'platform' | 'developer'
+type FacetCategory = Extract<CatalogFilterCategory, 'genre' | 'platform' | 'developer'>
+
+interface CatalogFilterToken {
+  key: string
+  category: CatalogFilterCategory
+  value: string
+  label: string
+  gameId?: number
+}
+
 function normalizeList(value: string[] | string | null | undefined) {
   if (!value) return []
   return (Array.isArray(value) ? value : [value]).map(item => item.trim()).filter(Boolean)
@@ -54,8 +58,10 @@ function formatList(value: string[] | string | null | undefined, fallback: strin
 
 function formatDate(value: string | null | undefined, fallback = 'Nao informada') {
   if (!value) return fallback
+
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return fallback
+
   return date.toLocaleDateString('pt-BR')
 }
 
@@ -69,93 +75,36 @@ function getGamesGridColumns(viewportWidth: number) {
   if (viewportWidth <= 768) return 2
   if (viewportWidth <= 992) return 3
   if (viewportWidth <= 1200) return 4
-  return 6
+  return 5
 }
 
-function toggleSelection(
-  value: string,
-  checked: boolean,
-  setSelection: Dispatch<SetStateAction<string[]>>
-) {
-  if (checked) {
-    setSelection(current => (current.includes(value) ? current : [...current, value]))
-    return
+function getFacetLabelPrefix(category: FacetCategory) {
+  if (category === 'genre') return 'Genero'
+  if (category === 'platform') return 'Plataforma'
+  return 'Studio'
+}
+
+function sortAlphabetically(values: string[]) {
+  return values.sort((left, right) => left.localeCompare(right, 'pt-BR'))
+}
+
+function buildFacetToken(category: FacetCategory, value: string): CatalogFilterToken {
+  return {
+    key: `${category}-${value.toLowerCase()}`,
+    category,
+    value,
+    label: `${getFacetLabelPrefix(category)}: ${value}`,
   }
-
-  setSelection(current => current.filter(item => item !== value))
 }
 
-function addCustomValue(
-  inputValue: string,
-  selectedValues: string[],
-  setInputValue: Dispatch<SetStateAction<string>>,
-  setSelection: Dispatch<SetStateAction<string[]>>
-) {
-  const trimmedValue = inputValue.trim()
-  if (trimmedValue && !selectedValues.includes(trimmedValue)) {
-    setSelection(current => [...current, trimmedValue])
-  }
-  setInputValue('')
-}
+function buildVisibleFacetOptions(options: string[], inputValue: string, limit?: number) {
+  const normalizedInputValue = inputValue.trim().toLowerCase()
+  const filteredOptions =
+    normalizedInputValue.length === 0
+      ? options
+      : options.filter(option => option.toLowerCase().includes(normalizedInputValue))
 
-function FilterGroup({
-  title,
-  description,
-  options,
-  selectedValues,
-  customValue,
-  placeholder,
-  onCustomValueChange,
-  onToggleValue,
-  onAddCustomValue,
-}: FilterGroupProps) {
-  return (
-    <section className="gp-filter">
-      <div className="gp-filter-top">
-        <div className="gp-filter-copy">
-          <h3>{title}</h3>
-          <p>{description}</p>
-        </div>
-        {selectedValues.length > 0 && <span className="gp-count">{selectedValues.length}</span>}
-      </div>
-
-      <div className="gp-options">
-        {options.length === 0 ? (
-          <p className="gp-muted">Nenhuma opcao disponivel ainda.</p>
-        ) : (
-          options.map(option => (
-            <label key={option} className="gp-option">
-              <input
-                type="checkbox"
-                checked={selectedValues.includes(option)}
-                onChange={event => onToggleValue(option, event.target.checked)}
-              />
-              <span>{option}</span>
-            </label>
-          ))
-        )}
-      </div>
-
-      <div className="gp-custom">
-        <input
-          type="text"
-          value={customValue}
-          className="gp-filter-input"
-          placeholder={placeholder}
-          onChange={event => onCustomValueChange(event.target.value)}
-          onKeyDown={event => {
-            if (event.key === 'Enter') {
-              event.preventDefault()
-              onAddCustomValue()
-            }
-          }}
-        />
-        <button type="button" className="game-button gp-btn--primary" onClick={onAddCustomValue}>
-          Adicionar
-        </button>
-      </div>
-    </section>
-  )
+  return typeof limit === 'number' ? filteredOptions.slice(0, limit) : filteredOptions
 }
 
 function ActiveChip({ label, onRemove }: ActiveChipProps) {
@@ -167,6 +116,10 @@ function ActiveChip({ label, onRemove }: ActiveChipProps) {
       </button>
     </span>
   )
+}
+
+function StaticChip({ label }: { label: string }) {
+  return <span className="gp-chip gp-chip--static">{label}</span>
 }
 
 function GameCard({ game, onShowGenres }: GameCardProps) {
@@ -204,11 +157,11 @@ function GameCard({ game, onShowGenres }: GameCardProps) {
             <span className="gp-muted">Generos nao informados.</span>
           )}
 
-          {hasMoreGenres && (
+          {hasMoreGenres ? (
             <button type="button" className="gp-more" onClick={() => onShowGenres(genres)}>
               +{genres.length - displayedGenres.length}
             </button>
-          )}
+          ) : null}
         </div>
 
         <div className="gp-meta">
@@ -271,22 +224,23 @@ function PaginationControls({ currentPage, totalPages, onChangePage }: Paginatio
 }
 
 function GamesPage() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [games, setGames] = useState<Game[]>([])
   const [loading, setLoading] = useState(true)
-  const [selectedGenres, setSelectedGenres] = useState<string[]>([])
-  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([])
-  const [selectedDevelopers, setSelectedDevelopers] = useState<string[]>([])
-  const [customGenre, setCustomGenre] = useState('')
-  const [customPlatform, setCustomPlatform] = useState('')
-  const [customDeveloper, setCustomDeveloper] = useState('')
+  const [facetFilters, setFacetFilters] = useState<CatalogFilterToken[]>([])
   const [currentPage, setCurrentPage] = useState(1)
   const [gridColumns, setGridColumns] = useState(() =>
-    typeof window === 'undefined' ? 6 : getGamesGridColumns(window.innerWidth)
+    typeof window === 'undefined' ? 5 : getGamesGridColumns(window.innerWidth)
   )
-  const [isDesktopFiltersExpanded, setIsDesktopFiltersExpanded] = useState(false)
-  const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false)
   const [showGenresModal, setShowGenresModal] = useState(false)
   const [selectedGameGenres, setSelectedGameGenres] = useState<string[]>([])
+  const [showFiltersModal, setShowFiltersModal] = useState(false)
+  const [filtersModalSearch, setFiltersModalSearch] = useState('')
+
+  const navbarQuery = searchParams.get('q')?.trim() || ''
+  const trimmedModalSearch = filtersModalSearch.trim()
+  const normalizedNavbarQuery = navbarQuery.toLowerCase()
+  const itemsPerPage = gridColumns * 4
 
   useEffect(() => {
     let isMounted = true
@@ -329,27 +283,14 @@ function GamesPage() {
   }, [])
 
   useEffect(() => {
-    setCurrentPage(1)
-  }, [selectedGenres, selectedPlatforms, selectedDevelopers])
-
-  useEffect(() => {
-    if (gridColumns === 6) {
-      setIsFilterDrawerOpen(false)
-      return
-    }
-
-    setIsDesktopFiltersExpanded(false)
-  }, [gridColumns])
-
-  useEffect(() => {
     const handleKeyDown = (event: globalThis.KeyboardEvent) => {
       if (event.key === 'Escape') {
-        setIsFilterDrawerOpen(false)
         setShowGenresModal(false)
+        setShowFiltersModal(false)
       }
     }
 
-    if (!isFilterDrawerOpen && !showGenresModal) {
+    if (!showGenresModal && !showFiltersModal) {
       return
     }
 
@@ -358,61 +299,174 @@ function GamesPage() {
     return () => {
       document.removeEventListener('keydown', handleKeyDown)
     }
-  }, [isFilterDrawerOpen, showGenresModal])
+  }, [showFiltersModal, showGenresModal])
 
-  const usesFilterDrawer = gridColumns < 6
-  const itemsPerPage = gridColumns * 4
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [facetFilters, navbarQuery])
+
+  useEffect(() => {
+    if (!showFiltersModal) {
+      setFiltersModalSearch('')
+    }
+  }, [showFiltersModal])
+
+  const updateNavbarQuery = (value: string) => {
+    const trimmedValue = value.trim()
+
+    setSearchParams(
+      currentParams => {
+        const nextParams = new URLSearchParams(currentParams)
+
+        if (trimmedValue) {
+          nextParams.set('q', trimmedValue)
+        } else {
+          nextParams.delete('q')
+        }
+
+        return nextParams
+      },
+      { replace: true }
+    )
+  }
+
+  const toggleFacetFilter = (category: FacetCategory, value: string) => {
+    setFacetFilters(currentFilters => {
+      const normalizedValue = value.trim().toLowerCase()
+      const alreadyExists = currentFilters.some(
+        token => token.category === category && token.value.toLowerCase() === normalizedValue
+      )
+
+      if (alreadyExists) {
+        return currentFilters.filter(
+          token => !(token.category === category && token.value.toLowerCase() === normalizedValue)
+        )
+      }
+
+      return [...currentFilters, buildFacetToken(category, value)]
+    })
+  }
+
+  const isFacetFilterActive = (category: FacetCategory, value: string) =>
+    facetFilters.some(
+      token => token.category === category && token.value.toLowerCase() === value.toLowerCase()
+    )
+
+  const navbarScopedGames = useMemo(
+    () =>
+      games.filter(
+        game =>
+          normalizedNavbarQuery.length === 0 ||
+          game.titulo.toLowerCase().includes(normalizedNavbarQuery)
+      ),
+    [games, normalizedNavbarQuery]
+  )
 
   const allGenres = useMemo(
     () =>
-      Array.from(new Set(games.flatMap(game => normalizeList(game.generos)))).sort((left, right) =>
-        left.localeCompare(right, 'pt-BR')
+      sortAlphabetically(
+        Array.from(new Set(navbarScopedGames.flatMap(game => normalizeList(game.generos))))
       ),
-    [games]
+    [navbarScopedGames]
   )
+
   const allPlatforms = useMemo(
     () =>
-      Array.from(new Set(games.flatMap(game => normalizeList(game.plataformas)))).sort(
-        (left, right) => left.localeCompare(right, 'pt-BR')
+      sortAlphabetically(
+        Array.from(new Set(navbarScopedGames.flatMap(game => normalizeList(game.plataformas))))
       ),
-    [games]
+    [navbarScopedGames]
   )
+
   const allDevelopers = useMemo(
     () =>
-      Array.from(new Set(games.flatMap(game => normalizeList(game.desenvolvedora)))).sort(
-        (left, right) => left.localeCompare(right, 'pt-BR')
+      sortAlphabetically(
+        Array.from(new Set(navbarScopedGames.flatMap(game => normalizeList(game.desenvolvedora))))
       ),
-    [games]
+    [navbarScopedGames]
   )
+
+  const clearAllFilters = () => {
+    setFacetFilters([])
+    setCurrentPage(1)
+    setFiltersModalSearch('')
+
+    if (navbarQuery) {
+      updateNavbarQuery('')
+    }
+  }
+
+  const activeFilters = [
+    ...(navbarQuery
+      ? [
+          {
+            key: `navbar-query-${navbarQuery.toLowerCase()}`,
+            label: `Busca na navbar: ${navbarQuery}`,
+            onRemove: () => updateNavbarQuery(''),
+          },
+        ]
+      : []),
+    ...facetFilters.map(filter => ({
+      key: filter.key,
+      label: filter.label,
+      onRemove: () =>
+        setFacetFilters(currentFilters =>
+          currentFilters.filter(currentFilter => currentFilter.key !== filter.key)
+        ),
+    })),
+  ]
+
+  const genreFilterTokens = facetFilters.filter(filter => filter.category === 'genre')
+  const platformFilterTokens = facetFilters.filter(filter => filter.category === 'platform')
+  const developerFilterTokens = facetFilters.filter(filter => filter.category === 'developer')
 
   const filteredGames = useMemo(
     () =>
-      games.filter(game => {
+      navbarScopedGames.filter(game => {
         const genres = normalizeList(game.generos)
         const platforms = normalizeList(game.plataformas)
         const developers = normalizeList(game.desenvolvedora)
 
         const genreMatch =
-          selectedGenres.length === 0 ||
-          selectedGenres.every(value =>
-            genres.some(genre => genre.toLowerCase().includes(value.toLowerCase()))
+          genreFilterTokens.length === 0 ||
+          genreFilterTokens.every(filterToken =>
+            genres.some(genre => genre.toLowerCase().includes(filterToken.value.toLowerCase()))
           )
 
         const platformMatch =
-          selectedPlatforms.length === 0 ||
-          selectedPlatforms.every(value =>
-            platforms.some(platform => platform.toLowerCase().includes(value.toLowerCase()))
+          platformFilterTokens.length === 0 ||
+          platformFilterTokens.every(filterToken =>
+            platforms.some(platform =>
+              platform.toLowerCase().includes(filterToken.value.toLowerCase())
+            )
           )
 
         const developerMatch =
-          selectedDevelopers.length === 0 ||
-          selectedDevelopers.every(value =>
-            developers.some(developer => developer.toLowerCase().includes(value.toLowerCase()))
+          developerFilterTokens.length === 0 ||
+          developerFilterTokens.every(filterToken =>
+            developers.some(developer =>
+              developer.toLowerCase().includes(filterToken.value.toLowerCase())
+            )
           )
 
         return genreMatch && platformMatch && developerMatch
       }),
-    [games, selectedDevelopers, selectedGenres, selectedPlatforms]
+    [developerFilterTokens, genreFilterTokens, navbarScopedGames, platformFilterTokens]
+  )
+
+  const modalGenreOptions = useMemo(
+    () => buildVisibleFacetOptions(allGenres, trimmedModalSearch),
+    [allGenres, trimmedModalSearch]
+  )
+
+  const modalPlatformOptions = useMemo(
+    () => buildVisibleFacetOptions(allPlatforms, trimmedModalSearch),
+    [allPlatforms, trimmedModalSearch]
+  )
+
+  const modalDeveloperOptions = useMemo(
+    () => buildVisibleFacetOptions(allDevelopers, trimmedModalSearch),
+    [allDevelopers, trimmedModalSearch]
   )
 
   const totalPages = Math.ceil(filteredGames.length / itemsPerPage)
@@ -422,8 +476,6 @@ function GamesPage() {
   const gamesToDisplay = filteredGames.slice(startIndex, endIndex)
   const visibleStart = filteredGames.length === 0 ? 0 : startIndex + 1
   const visibleEnd = Math.min(endIndex, filteredGames.length)
-  const resultsLabel =
-    filteredGames.length === 1 ? '1 jogo encontrado' : `${filteredGames.length} jogos encontrados`
   const rangeLabel =
     filteredGames.length === 0
       ? 'Nenhum item para exibir'
@@ -435,119 +487,30 @@ function GamesPage() {
     }
   }, [currentPage, safeCurrentPage])
 
-  const activeFilters = [
-    ...selectedGenres.map(value => ({
-      key: `genre-${value}`,
-      label: `Genero: ${value}`,
-      onRemove: () => setSelectedGenres(current => current.filter(item => item !== value)),
-    })),
-    ...selectedPlatforms.map(value => ({
-      key: `platform-${value}`,
-      label: `Plataforma: ${value}`,
-      onRemove: () => setSelectedPlatforms(current => current.filter(item => item !== value)),
-    })),
-    ...selectedDevelopers.map(value => ({
-      key: `developer-${value}`,
-      label: `Studio: ${value}`,
-      onRemove: () => setSelectedDevelopers(current => current.filter(item => item !== value)),
-    })),
-  ]
-
-  const activeFilterCount = activeFilters.length
-
-  const clearAllFilters = () => {
-    setSelectedGenres([])
-    setSelectedPlatforms([])
-    setSelectedDevelopers([])
-    setCustomGenre('')
-    setCustomPlatform('')
-    setCustomDeveloper('')
-    setCurrentPage(1)
-    setIsFilterDrawerOpen(false)
-  }
-
   const gridStyle = {
     '--gp-grid-columns': String(gridColumns),
-    '--gp-filter-column': usesFilterDrawer ? '0px' : isDesktopFiltersExpanded ? '320px' : '148px',
   } as CSSProperties
 
-  const filterPanel = (
-    <div className="gp-box gp-box--filters">
-      <div className="gp-head">
-        <div className="gp-head-row">
-          <div>
-            <span className="gp-badge">Filtros</span>
-            <h2>Refine o catalogo</h2>
-          </div>
-
-          {activeFilterCount > 0 ? <span className="gp-count">{activeFilterCount}</span> : null}
-        </div>
-
-        <p className="gp-muted">
-          Combine genero, plataforma e studio para reduzir a lista sem tirar o foco da grade.
-        </p>
-      </div>
-
-      {activeFilterCount > 0 ? (
-        <div className="gp-filter-actions">
-          <button type="button" className="game-button gp-btn--secondary" onClick={clearAllFilters}>
-            Limpar filtros
-          </button>
-        </div>
-      ) : null}
-
-      <div className="gp-filters">
-        <FilterGroup
-          title="Generos"
-          description="Selecione estilos que devem aparecer na grade."
-          options={allGenres}
-          selectedValues={selectedGenres}
-          customValue={customGenre}
-          placeholder="Adicionar genero..."
-          onCustomValueChange={setCustomGenre}
-          onToggleValue={(value, checked) => toggleSelection(value, checked, setSelectedGenres)}
-          onAddCustomValue={() =>
-            addCustomValue(customGenre, selectedGenres, setCustomGenre, setSelectedGenres)
-          }
-        />
-
-        <FilterGroup
-          title="Plataformas"
-          description="Marque onde voce prefere jogar."
-          options={allPlatforms}
-          selectedValues={selectedPlatforms}
-          customValue={customPlatform}
-          placeholder="Adicionar plataforma..."
-          onCustomValueChange={setCustomPlatform}
-          onToggleValue={(value, checked) => toggleSelection(value, checked, setSelectedPlatforms)}
-          onAddCustomValue={() =>
-            addCustomValue(customPlatform, selectedPlatforms, setCustomPlatform, setSelectedPlatforms)
-          }
-        />
-
-        <FilterGroup
-          title="Studios"
-          description="Filtre pelas desenvolvedoras que voce acompanha."
-          options={allDevelopers}
-          selectedValues={selectedDevelopers}
-          customValue={customDeveloper}
-          placeholder="Adicionar studio..."
-          onCustomValueChange={setCustomDeveloper}
-          onToggleValue={(value, checked) =>
-            toggleSelection(value, checked, setSelectedDevelopers)
-          }
-          onAddCustomValue={() =>
-            addCustomValue(
-              customDeveloper,
-              selectedDevelopers,
-              setCustomDeveloper,
-              setSelectedDevelopers
-            )
-          }
-        />
-      </div>
-    </div>
-  )
+  const modalGroups = [
+    {
+      key: 'genre-modal',
+      category: 'genre' as const,
+      title: 'Generos',
+      options: modalGenreOptions,
+    },
+    {
+      key: 'platform-modal',
+      category: 'platform' as const,
+      title: 'Plataformas',
+      options: modalPlatformOptions,
+    },
+    {
+      key: 'developer-modal',
+      category: 'developer' as const,
+      title: 'Studios',
+      options: modalDeveloperOptions,
+    },
+  ]
 
   if (loading) {
     return (
@@ -557,8 +520,8 @@ function GamesPage() {
             <span className="gp-badge">Catalogo</span>
             <h1>Carregando jogos</h1>
             <p className="gp-muted">
-              Estamos preparando o catalogo com capas maiores, filtros reorganizados e uma grade
-              mais limpa para voce navegar.
+              Estamos preparando o catalogo com a busca global sincronizada e um painel dedicado
+              para filtros.
             </p>
           </section>
         </div>
@@ -569,206 +532,208 @@ function GamesPage() {
   return (
     <div className="page-container">
       <div className="page-content games-page">
-        <section className="gp-hero">
-          <div className="gp-glow gp-glow--left"></div>
-          <div className="gp-glow gp-glow--right"></div>
-
-          <div className="gp-hero-inner">
-            <div className="gp-copy">
+        <section className="gp-panel">
+          <div className="gp-panel-head">
+            <div className="gp-panel-copy">
               <span className="gp-badge">Catalogo</span>
-              <h1 className="gp-title">Explore o catalogo com foco total nos jogos</h1>
+              <h1>Jogos</h1>
               <p className="gp-muted">
-                A busca agora fica na navbar com sugestoes imediatas. Aqui, o destaque fica na
-                grade com cards maiores, filtros mais discretos e leitura mais fluida.
+                A busca da navbar continua global, e os filtros desta pagina ficam concentrados no
+                modal para deixar o catalogo mais limpo.
               </p>
             </div>
 
-            <div className="gp-metrics">
-              <article className="gp-metric">
-                <span>Total</span>
-                <strong>{games.length}</strong>
-                <small>Jogos no catalogo</small>
-              </article>
-              <article className="gp-metric">
-                <span>Filtrados</span>
-                <strong>{filteredGames.length}</strong>
-                <small>Resultados apos aplicar filtros</small>
-              </article>
-              <article className="gp-metric">
-                <span>Layout</span>
-                <strong>
-                  {gridColumns} x 4
-                </strong>
-                <small>{itemsPerPage} jogos por pagina nesta tela</small>
-              </article>
+            <div className="gp-panel-summary">
+              <button
+                type="button"
+                className="game-button gp-btn--secondary"
+                onClick={() => setShowFiltersModal(true)}
+              >
+                Ver todos os filtros
+              </button>
             </div>
           </div>
-        </section>
 
-        <div className="gp-layout" style={gridStyle}>
-          {!usesFilterDrawer ? (
-            <aside className="gp-filters-rail" aria-label="Filtros do catalogo">
-              <div className="gp-filters-sticky">
-                <div className="gp-filter-rail-card">
-                  <span className="gp-badge">Filtros</span>
-                  <strong>{activeFilterCount}</strong>
-                  <small>{activeFilterCount === 1 ? '1 filtro ativo' : `${activeFilterCount} ativos`}</small>
-
-                  <button
-                    type="button"
-                    className="game-button gp-btn--secondary"
-                    onClick={() => setIsDesktopFiltersExpanded(currentValue => !currentValue)}
-                  >
-                    {isDesktopFiltersExpanded ? 'Recolher' : 'Expandir'}
-                  </button>
-
-                  {activeFilterCount > 0 ? (
-                    <button
-                      type="button"
-                      className="gp-clear-link"
-                      onClick={clearAllFilters}
-                    >
-                      Limpar tudo
-                    </button>
-                  ) : null}
-                </div>
-
-                {isDesktopFiltersExpanded ? filterPanel : null}
-              </div>
-            </aside>
-          ) : null}
-
-          <section className="gp-box gp-results-box">
-            <div className="gp-result-head">
-              <div className="gp-result-copy">
-                <span className="gp-badge">Resultados</span>
-                <h2>Jogos para explorar</h2>
-                <p className="gp-muted">{rangeLabel}</p>
-              </div>
-
-              <div className="gp-result-actions">
-                <div className="gp-summary">
-                  <span>Resumo</span>
-                  <strong>{resultsLabel}</strong>
-                  <small>
-                    {activeFilterCount > 0
-                      ? `${activeFilterCount} filtros ativos`
-                      : 'Use a navbar para buscar por titulo'}
-                  </small>
-                </div>
-
-                <div className="gp-toolbar-buttons">
-                  {usesFilterDrawer ? (
-                    <button
-                      type="button"
-                      className="game-button gp-btn--secondary"
-                      onClick={() => setIsFilterDrawerOpen(true)}
-                    >
-                      {activeFilterCount > 0
-                        ? `Filtros (${activeFilterCount})`
-                        : 'Abrir filtros'}
-                    </button>
-                  ) : null}
-
-                  {activeFilterCount > 0 ? (
-                    <button
-                      type="button"
-                      className="game-button gp-btn--secondary"
-                      onClick={clearAllFilters}
-                    >
-                      Limpar filtros
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-            </div>
-
+          <div className="gp-panel-footer">
             {activeFilters.length > 0 ? (
               <div className="gp-chips">
                 {activeFilters.map(filter => (
-                  <ActiveChip key={filter.key} label={filter.label} onRemove={filter.onRemove} />
+                  <StaticChip key={`summary-${filter.key}`} label={filter.label} />
                 ))}
               </div>
-            ) : (
-              <p className="gp-muted">
-                Use os filtros para afunilar o catalogo e a busca da navbar para ir direto a um
-                jogo especifico.
-              </p>
-            )}
+            ) : null}
 
-            {gamesToDisplay.length === 0 ? (
-              <article className="gp-empty">
-                <span className="gp-badge">Sem resultados</span>
-                <h3>Nenhum jogo combinou com os filtros atuais</h3>
-                <p className="gp-muted">
-                  Tente remover alguns filtros ou abrir mais opcoes para voltar a ver o catalogo
-                  completo.
-                </p>
-                <button
-                  type="button"
-                  className="game-button gp-btn--secondary"
-                  onClick={clearAllFilters}
-                >
-                  Limpar filtros
-                </button>
-              </article>
-            ) : (
-              <>
-                <div className="gp-grid" style={gridStyle}>
-                  {gamesToDisplay.map(game => (
-                    <GameCard
-                      key={game.id}
-                      game={game}
-                      onShowGenres={genres => {
-                        setSelectedGameGenres(genres)
-                        setShowGenresModal(true)
-                      }}
-                    />
-                  ))}
-                </div>
+            <p className="gp-panel-footnote">
+              {navbarQuery
+                ? `Busca global ativa: "${navbarQuery}". ${rangeLabel}`
+                : rangeLabel}
+            </p>
+          </div>
+        </section>
 
-                <PaginationControls
-                  currentPage={safeCurrentPage}
-                  totalPages={totalPages}
-                  onChangePage={setCurrentPage}
+        {gamesToDisplay.length === 0 ? (
+          <article className="gp-empty">
+            <span className="gp-badge">Sem resultados</span>
+            <h3>Nenhum jogo combinou com a busca e os filtros atuais</h3>
+            <p className="gp-muted">
+              Ajuste a busca global da navbar ou use o modal de filtros para voltar ao catalogo
+              completo.
+            </p>
+            <button
+              type="button"
+              className="game-button gp-btn--secondary"
+              onClick={() => setShowFiltersModal(true)}
+            >
+              Ver todos os filtros
+            </button>
+          </article>
+        ) : (
+          <>
+            <div className="gp-grid" style={gridStyle}>
+              {gamesToDisplay.map(game => (
+                <GameCard
+                  key={game.id}
+                  game={game}
+                  onShowGenres={genres => {
+                    setSelectedGameGenres(genres)
+                    setShowGenresModal(true)
+                  }}
                 />
-              </>
-            )}
-          </section>
-        </div>
+              ))}
+            </div>
 
-        {usesFilterDrawer && isFilterDrawerOpen ? (
-          <div className="gp-drawer-backdrop" onClick={() => setIsFilterDrawerOpen(false)}>
-            <div className="gp-drawer" onClick={event => event.stopPropagation()}>
-              <div className="gp-drawer-head">
+            <div className="gp-results-footer">
+              <p className="gp-panel-footnote">{rangeLabel}</p>
+              <PaginationControls
+                currentPage={safeCurrentPage}
+                totalPages={totalPages}
+                onChangePage={setCurrentPage}
+              />
+            </div>
+          </>
+        )}
+
+        {showFiltersModal ? (
+          <div className="gp-modal" onClick={() => setShowFiltersModal(false)}>
+            <div
+              className="gp-modal-card gp-filters-modal"
+              onClick={event => event.stopPropagation()}
+            >
+              <div className="gp-modal-head">
                 <div>
-                  <span className="gp-badge">Filtros</span>
-                  <h3>Refine a grade</h3>
+                  <span className="gp-badge">Todos os filtros</span>
+                  <h3>Explore todas as opcoes disponiveis</h3>
+                  <p className="gp-muted">
+                    Filtre por genero, plataforma ou studio dentro do contexto atual da busca.
+                  </p>
                 </div>
 
                 <button
                   type="button"
-                  className="game-button gp-btn--secondary"
-                  onClick={() => setIsFilterDrawerOpen(false)}
+                  className="gp-modal-close"
+                  aria-label="Fechar modal de filtros"
+                  onClick={() => setShowFiltersModal(false)}
                 >
-                  Fechar
+                  x
                 </button>
               </div>
 
-              {filterPanel}
+              <label className="gp-modal-search">
+                <span className="gp-search-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path
+                      d="M21 21L16.65 16.65M18 11C18 14.866 14.866 18 11 18C7.13401 18 4 14.866 4 11C4 7.13401 7.13401 4 11 4C14.866 4 18 7.13401 18 11Z"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </span>
+
+                <input
+                  type="text"
+                  value={filtersModalSearch}
+                  placeholder="Pesquisar entre todos os filtros..."
+                  onChange={event => setFiltersModalSearch(event.target.value)}
+                />
+              </label>
+
+              {activeFilters.length > 0 ? (
+                <div className="gp-chips">
+                  {activeFilters.map(filter => (
+                    <ActiveChip key={`modal-${filter.key}`} label={filter.label} onRemove={filter.onRemove} />
+                  ))}
+                </div>
+              ) : null}
+
+              <div className="gp-modal-section-grid">
+                {modalGroups.map(group => (
+                  <section key={group.key} className="gp-modal-section">
+                    <div className="gp-modal-section-head">
+                      <h4>{group.title}</h4>
+                      <span>{group.options.length} opcoes</span>
+                    </div>
+
+                    {group.options.length > 0 ? (
+                      <div className="gp-filter-pill-cloud is-modal">
+                        {group.options.map(option => (
+                          <button
+                            key={`${group.category}-${option}-modal`}
+                            type="button"
+                            className={`gp-filter-pill${isFacetFilterActive(group.category, option) ? ' is-active' : ''}`}
+                            onClick={() => toggleFacetFilter(group.category, option)}
+                          >
+                            {option}
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="gp-filter-empty">
+                        Nenhuma opcao encontrada para este termo.
+                      </p>
+                    )}
+                  </section>
+                ))}
+              </div>
+
+              <div className="gp-modal-actions">
+                <button type="button" className="game-button gp-btn--secondary" onClick={clearAllFilters}>
+                  Limpar tudo
+                </button>
+
+                <button
+                  type="button"
+                  className="game-button gp-btn--primary"
+                  onClick={() => setShowFiltersModal(false)}
+                >
+                  Aplicar filtros
+                </button>
+              </div>
             </div>
           </div>
         ) : null}
 
-        {showGenresModal && (
+        {showGenresModal ? (
           <div className="gp-modal" onClick={() => setShowGenresModal(false)}>
             <div className="gp-modal-card" onClick={event => event.stopPropagation()}>
-              <div className="gp-head">
-                <span className="gp-badge">Categorias</span>
-                <h3>Todos os generos deste jogo</h3>
-                <p className="gp-muted">
-                  Veja a lista completa de tags relacionadas ao titulo selecionado.
-                </p>
+              <div className="gp-modal-head">
+                <div>
+                  <span className="gp-badge">Categorias</span>
+                  <h3>Todos os generos deste jogo</h3>
+                  <p className="gp-muted">
+                    Veja a lista completa de tags relacionadas ao titulo selecionado.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  className="gp-modal-close"
+                  aria-label="Fechar modal de generos"
+                  onClick={() => setShowGenresModal(false)}
+                >
+                  x
+                </button>
               </div>
 
               <div className="gp-modal-list">
@@ -790,7 +755,7 @@ function GamesPage() {
               </div>
             </div>
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   )
