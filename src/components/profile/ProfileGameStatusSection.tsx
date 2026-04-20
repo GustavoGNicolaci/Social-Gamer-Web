@@ -46,6 +46,14 @@ interface ProfileGameStatusSectionProps {
   onRefresh: () => Promise<void>
 }
 
+interface StatusSearchResultItem {
+  game: CatalogGamePreview
+  existingItem: GameStatusItem | null
+  isTracked: boolean
+  statusLabel: string | null
+  isFavorite: boolean
+}
+
 const SEARCH_DEBOUNCE_DELAY = 220
 const STATUS_SORT_OPTIONS: Array<{ value: StatusSortValue; label: string }> = [
   { value: 'recent', label: 'Mais recentes' },
@@ -234,10 +242,29 @@ export function ProfileGameStatusSection({
   const searchTimeoutRef = useRef<number | null>(null)
   const searchRequestIdRef = useRef(0)
 
-  const trackedGameIds = useMemo(() => new Set(items.map(item => item.jogo_id)), [items])
-  const availableSearchResults = useMemo(
-    () => searchResults.filter(game => !trackedGameIds.has(game.id)),
-    [searchResults, trackedGameIds]
+  const trackedItemsByGameId = useMemo(() => {
+    const nextMap = new Map<number, GameStatusItem>()
+
+    items.forEach(item => {
+      nextMap.set(item.jogo_id, item)
+    })
+
+    return nextMap
+  }, [items])
+  const searchResultItems = useMemo<StatusSearchResultItem[]>(
+    () =>
+      searchResults.map(game => {
+        const existingItem = trackedItemsByGameId.get(game.id) || null
+
+        return {
+          game,
+          existingItem,
+          isTracked: Boolean(existingItem),
+          statusLabel: existingItem ? getStatusLabel(existingItem.status) : null,
+          isFavorite: Boolean(existingItem?.favorito),
+        }
+      }),
+    [searchResults, trackedItemsByGameId]
   )
   const sortedItems = useMemo(() => sortStatusItems(items, sortValue), [items, sortValue])
   const hasStatusItems = sortedItems.length > 0
@@ -249,20 +276,21 @@ export function ProfileGameStatusSection({
     safeCurrentPage * itemsPerPage + itemsPerPage
   )
   const searchResultsId = `profile-status-search-results-${userId}`
+  const trimmedSearchQuery = searchQuery.trim()
   const visibleSelectedGame =
-    selectedGame && !trackedGameIds.has(selectedGame.id) ? selectedGame : null
+    selectedGame && !trackedItemsByGameId.has(selectedGame.id) ? selectedGame : null
   const shouldShowAutosuggest =
     isOwnerView &&
     !visibleSelectedGame &&
-    searchQuery.trim().length >= 2 &&
-    (searchLoading || Boolean(searchError) || availableSearchResults.length > 0)
+    trimmedSearchQuery.length >= 2 &&
+    (searchLoading || Boolean(searchError) || searchResultItems.length > 0)
   const shouldShowEmptyAutosuggest =
     isOwnerView &&
     !visibleSelectedGame &&
-    searchQuery.trim().length >= 2 &&
+    trimmedSearchQuery.length >= 2 &&
     !searchLoading &&
     !searchError &&
-    availableSearchResults.length === 0
+    searchResultItems.length === 0
   const statusGridStyle = {
     '--status-columns': String(gridColumns),
   } as CSSProperties
@@ -496,7 +524,7 @@ export function ProfileGameStatusSection({
                 />
               </label>
 
-              {searchQuery.trim().length === 1 && !searchLoading ? (
+              {trimmedSearchQuery.length === 1 && !searchLoading ? (
                 <p className="profile-status-search-helper">
                   Continue digitando para mostrar sugestoes do catalogo.
                 </p>
@@ -510,32 +538,76 @@ export function ProfileGameStatusSection({
                     <p className="profile-status-autosuggest-state is-error">{searchError}</p>
                   ) : shouldShowEmptyAutosuggest ? (
                     <p className="profile-status-autosuggest-state">
-                      Nenhum jogo novo encontrado para esse termo.
+                      Nenhum jogo encontrado para esse termo.
                     </p>
                   ) : (
-                    availableSearchResults.map(game => (
-                      <button
-                        key={game.id}
-                        type="button"
-                        className="profile-status-autosuggest-item"
-                        onClick={() => handleSelectGame(game)}
-                      >
-                        <div className="profile-status-autosuggest-cover">
-                          {game.capa_url ? (
-                            <img src={game.capa_url} alt={`Capa do jogo ${game.titulo}`} />
-                          ) : (
-                            <div className="profile-status-autosuggest-fallback">
-                              {getInitial(game.titulo)}
-                            </div>
-                          )}
-                        </div>
+                    searchResultItems.map(result => {
+                      const { game, existingItem, isTracked, statusLabel, isFavorite } = result
+                      const autosuggestContent = (
+                        <>
+                          <div className="profile-status-autosuggest-cover">
+                            {game.capa_url ? (
+                              <img src={game.capa_url} alt={`Capa do jogo ${game.titulo}`} />
+                            ) : (
+                              <div className="profile-status-autosuggest-fallback">
+                                {getInitial(game.titulo)}
+                              </div>
+                            )}
+                          </div>
 
-                        <div className="profile-status-autosuggest-copy">
-                          <strong>{game.titulo}</strong>
-                          <span>Adicionar ao perfil</span>
-                        </div>
-                      </button>
-                    ))
+                          <div className="profile-status-autosuggest-copy">
+                            <div className="profile-status-autosuggest-heading">
+                              <strong>{game.titulo}</strong>
+                            </div>
+
+                            <div className="profile-status-autosuggest-meta">
+                              <span
+                                className={`profile-status-autosuggest-hint${isTracked ? ' is-tracked' : ''}`}
+                              >
+                                {isTracked ? 'Ja adicionado ao perfil' : 'Adicionar ao perfil'}
+                              </span>
+
+                              {isTracked && existingItem ? (
+                                <span
+                                  className={`profile-status-search-badge is-${existingItem.status}`}
+                                >
+                                  {statusLabel}
+                                </span>
+                              ) : null}
+
+                              {isFavorite ? (
+                                <span className="profile-status-search-badge is-favorite">
+                                  Favorito
+                                </span>
+                              ) : null}
+                            </div>
+                          </div>
+                        </>
+                      )
+
+                      if (isTracked) {
+                        return (
+                          <div
+                            key={game.id}
+                            className="profile-status-autosuggest-item is-tracked"
+                            aria-label={`${game.titulo} ja adicionado ao perfil em ${statusLabel || 'Status'}${isFavorite ? ', favorito' : ''}.`}
+                          >
+                            {autosuggestContent}
+                          </div>
+                        )
+                      }
+
+                      return (
+                        <button
+                          key={game.id}
+                          type="button"
+                          className="profile-status-autosuggest-item is-actionable"
+                          onClick={() => handleSelectGame(game)}
+                        >
+                          {autosuggestContent}
+                        </button>
+                      )
+                    })
                   )}
                 </div>
               ) : null}
