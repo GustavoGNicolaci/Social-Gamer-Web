@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type ChangeEvent } from 'react'
 import type { ProfileUpdateError, UserProfile } from '../contexts/AuthContext'
 import { ProfileGameStatusSection } from '../components/profile/ProfileGameStatusSection'
+import { ProfileTopFiveSection } from '../components/profile/ProfileTopFiveSection'
 import { ProfileWishlistSection } from '../components/profile/ProfileWishlistSection'
 import { useAuth } from '../contexts/AuthContext'
 import {
@@ -17,6 +18,10 @@ import {
   getWishlistGamesByUserId,
   type WishlistGameItem,
 } from '../services/wishlistService'
+import {
+  mergeTopFiveEntriesIntoPrivacySettings,
+  type TopFiveStoredEntry,
+} from '../utils/profileTopFive'
 import './ProfilePage.css'
 
 type FeedbackTone = 'success' | 'error'
@@ -563,6 +568,35 @@ export function ProfilePage() {
     }
   }
 
+  const handleSaveTopFive = async (entries: TopFiveStoredEntry[]) => {
+    if (!profile) {
+      return {
+        ok: false,
+        message: 'Nao foi possivel identificar o perfil para atualizar o Top 5.',
+      }
+    }
+
+    const nextPrivacySettings = mergeTopFiveEntriesIntoPrivacySettings(
+      profile.configuracoes_privacidade,
+      entries
+    )
+
+    const { data, error } = await updateOwnProfile({
+      configuracoes_privacidade: nextPrivacySettings,
+    })
+
+    if (error || !data) {
+      return {
+        ok: false,
+        message: getProfileErrorMessage(error),
+      }
+    }
+
+    return {
+      ok: true,
+    }
+  }
+
   const avatarContent = profile.avatar_url ? (
     <img
       src={profile.avatar_url}
@@ -748,6 +782,12 @@ export function ProfilePage() {
                 )}
               </div>
             </div>
+
+            <ProfileTopFiveSection
+              isOwnerView={isOwnerView}
+              privacySettings={profile.configuracoes_privacidade}
+              onSaveTopFive={handleSaveTopFive}
+            />
           </section>
 
           <section className="profile-tabs-shell" aria-label="Conteudo do perfil">

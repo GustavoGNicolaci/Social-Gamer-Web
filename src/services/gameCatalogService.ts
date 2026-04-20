@@ -82,3 +82,42 @@ export async function searchCatalogGamesByTitle(
     }
   }
 }
+
+export async function getCatalogGamesByIds(
+  gameIds: number[]
+): Promise<CatalogResult<CatalogGamePreview[]>> {
+  const normalizedIds = Array.from(
+    new Set(gameIds.filter(gameId => Number.isInteger(gameId) && gameId > 0))
+  )
+
+  if (normalizedIds.length === 0) {
+    return {
+      data: [],
+      error: null,
+    }
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('jogos')
+      .select('id, titulo, capa_url, desenvolvedora, generos, data_lancamento, plataformas')
+      .in('id', normalizedIds)
+
+    if (error) {
+      return {
+        data: [],
+        error: normalizeCatalogError(error, 'Nao foi possivel carregar os jogos selecionados.'),
+      }
+    }
+
+    return {
+      data: (data || []) as CatalogGamePreview[],
+      error: null,
+    }
+  } catch (error) {
+    return {
+      data: [],
+      error: normalizeCatalogError(error, 'Erro inesperado ao carregar os jogos selecionados.'),
+    }
+  }
+}

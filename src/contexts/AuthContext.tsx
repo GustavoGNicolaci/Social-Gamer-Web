@@ -13,7 +13,7 @@ export interface UserProfile {
 }
 
 export type UserProfileUpdates = Partial<
-  Pick<UserProfile, 'nome_completo' | 'username' | 'bio' | 'avatar_url'>
+  Pick<UserProfile, 'nome_completo' | 'username' | 'bio' | 'avatar_url' | 'configuracoes_privacidade'>
 >
 
 export interface ProfileUpdateError {
