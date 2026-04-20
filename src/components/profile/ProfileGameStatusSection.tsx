@@ -65,7 +65,7 @@ const STATUS_SORT_OPTIONS: Array<{ value: StatusSortValue; label: string }> = [
 const STATUS_OPTIONS: Array<{ value: GameStatusValue; label: string }> = [
   { value: 'jogando', label: 'Jogando' },
   { value: 'zerado', label: 'Zerei' },
-  { value: 'dropado', label: 'Dropado' },
+  { value: 'dropado', label: 'Dropei' },
 ]
 
 function formatCompactDate(value: string | null | undefined, fallback = 'Data nao informada') {
@@ -227,6 +227,7 @@ export function ProfileGameStatusSection({
   const [selectedGame, setSelectedGame] = useState<CatalogGamePreview | null>(null)
   const [composerStatus, setComposerStatus] = useState<GameStatusValue>('jogando')
   const [composerFavorito, setComposerFavorito] = useState(false)
+  const [activeStatusFilters, setActiveStatusFilters] = useState<GameStatusValue[]>([])
   const [sortValue, setSortValue] = useState<StatusSortValue>('recent')
   const [showSortMenu, setShowSortMenu] = useState(false)
   const [gridColumns, setGridColumns] = useState(() =>
@@ -242,6 +243,7 @@ export function ProfileGameStatusSection({
   const searchTimeoutRef = useRef<number | null>(null)
   const searchRequestIdRef = useRef(0)
 
+  const activeStatusFilterSet = useMemo(() => new Set(activeStatusFilters), [activeStatusFilters])
   const trackedItemsByGameId = useMemo(() => {
     const nextMap = new Map<number, GameStatusItem>()
 
@@ -266,8 +268,19 @@ export function ProfileGameStatusSection({
       }),
     [searchResults, trackedItemsByGameId]
   )
-  const sortedItems = useMemo(() => sortStatusItems(items, sortValue), [items, sortValue])
-  const hasStatusItems = sortedItems.length > 0
+  const filteredItems = useMemo(() => {
+    if (activeStatusFilters.length === 0) return items
+
+    return items.filter(item => activeStatusFilterSet.has(item.status))
+  }, [activeStatusFilterSet, activeStatusFilters.length, items])
+  const activeStatusFilterOptions = useMemo(
+    () => STATUS_OPTIONS.filter(option => activeStatusFilterSet.has(option.value)),
+    [activeStatusFilterSet]
+  )
+  const sortedItems = useMemo(() => sortStatusItems(filteredItems, sortValue), [filteredItems, sortValue])
+  const hasSavedStatusItems = items.length > 0
+  const hasVisibleStatusItems = sortedItems.length > 0
+  const hasActiveStatusFilters = activeStatusFilters.length > 0
   const itemsPerPage = gridColumns * 4
   const totalPages = Math.max(Math.ceil(sortedItems.length / itemsPerPage), 1)
   const safeCurrentPage = Math.min(currentPage, totalPages - 1)
@@ -295,6 +308,30 @@ export function ProfileGameStatusSection({
     '--status-columns': String(gridColumns),
   } as CSSProperties
   const sortLabel = STATUS_SORT_OPTIONS.find(option => option.value === sortValue)?.label || 'Mais recentes'
+  const statusFilterSummary = useMemo(() => {
+    if (activeStatusFilterOptions.length === 0) return 'Todos os status'
+    if (activeStatusFilterOptions.length <= 2) {
+      return activeStatusFilterOptions.map(option => option.label).join(', ')
+    }
+
+    return `${activeStatusFilterOptions.length} status ativos`
+  }, [activeStatusFilterOptions])
+
+  const handleToggleStatusFilter = (status: GameStatusValue) => {
+    setActiveStatusFilters(currentFilters => {
+      if (currentFilters.includes(status)) {
+        return currentFilters.filter(currentStatus => currentStatus !== status)
+      }
+
+      return [...currentFilters, status]
+    })
+    setCurrentPage(0)
+  }
+
+  const handleClearStatusFilters = () => {
+    setActiveStatusFilters([])
+    setCurrentPage(0)
+  }
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -618,7 +655,7 @@ export function ProfileGameStatusSection({
 
           <div className="profile-status-toolbar-control">
             <div className="profile-status-sort-field">
-              <span className="profile-status-toolbar-label">Ordenacao</span>
+              <span className="profile-status-toolbar-label">Ordenacao e status</span>
 
               <div className="profile-status-sort" ref={sortMenuRef}>
                 <button
@@ -627,25 +664,67 @@ export function ProfileGameStatusSection({
                   onClick={() => setShowSortMenu(currentValue => !currentValue)}
                   aria-haspopup="menu"
                   aria-expanded={showSortMenu}
-                  aria-label={`Ordenar jogos do perfil. Ordem atual: ${sortLabel}`}
+                  aria-label={`Ordenar e filtrar jogos do perfil. Ordem atual: ${sortLabel}. Status ativos: ${statusFilterSummary}.`}
                 >
-                  <strong>{sortLabel}</strong>
+                  <span className="profile-status-sort-trigger-copy">
+                    <strong>{sortLabel}</strong>
+                    <span className="profile-status-sort-trigger-meta">{statusFilterSummary}</span>
+                  </span>
                 </button>
 
                 {showSortMenu ? (
-                  <div className="profile-status-sort-menu" role="menu" aria-label="Ordenar jogos do perfil">
-                    {STATUS_SORT_OPTIONS.map(option => (
-                      <button
-                        key={option.value}
-                        type="button"
-                        className={`profile-status-sort-option${sortValue === option.value ? ' is-active' : ''}`}
-                        onClick={() => handleSelectSort(option.value)}
-                        role="menuitemradio"
-                        aria-checked={sortValue === option.value}
-                      >
-                        {option.label}
-                      </button>
-                    ))}
+                  <div className="profile-status-sort-menu" role="menu" aria-label="Ordenar e filtrar jogos do perfil">
+                    <div className="profile-status-sort-section">
+                      <span className="profile-status-sort-section-label">Ordenacao</span>
+
+                      {STATUS_SORT_OPTIONS.map(option => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          className={`profile-status-sort-option${sortValue === option.value ? ' is-active' : ''}`}
+                          onClick={() => handleSelectSort(option.value)}
+                          role="menuitemradio"
+                          aria-checked={sortValue === option.value}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="profile-status-sort-section">
+                      <div className="profile-status-sort-section-head">
+                        <span className="profile-status-sort-section-label">Status</span>
+
+                        {hasActiveStatusFilters ? (
+                          <button
+                            type="button"
+                            className="profile-status-sort-clear"
+                            onClick={handleClearStatusFilters}
+                          >
+                            Limpar
+                          </button>
+                        ) : null}
+                      </div>
+
+                      <div className="profile-status-sort-filter-list">
+                        {STATUS_OPTIONS.map(option => {
+                          const isActive = activeStatusFilterSet.has(option.value)
+
+                          return (
+                            <button
+                              key={`sort-filter-${option.value}`}
+                              type="button"
+                              className={`profile-status-sort-filter-option is-${option.value}${isActive ? ' is-active' : ''}`}
+                              onClick={() => handleToggleStatusFilter(option.value)}
+                              role="menuitemcheckbox"
+                              aria-checked={isActive}
+                            >
+                              {option.label}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
                   </div>
                 ) : null}
               </div>
@@ -740,7 +819,7 @@ export function ProfileGameStatusSection({
               Tentar novamente
             </button>
           </div>
-        ) : !hasStatusItems ? (
+        ) : !hasSavedStatusItems ? (
           <div className="profile-status-empty">
             <h3>{isOwnerView ? 'Seu perfil ainda nao tem jogos salvos' : 'Este perfil ainda nao tem jogos salvos'}</h3>
             <p>
@@ -749,13 +828,25 @@ export function ProfileGameStatusSection({
                 : 'Quando este usuario adicionar jogos ao perfil, eles vao aparecer aqui.'}
             </p>
           </div>
+        ) : !hasVisibleStatusItems ? (
+          <div className="profile-status-empty">
+            <h3>Nenhum jogo corresponde aos filtros atuais</h3>
+            <p>Selecione outros status ou limpe os filtros para voltar a visualizar toda a lista.</p>
+            <button
+              type="button"
+              className="profile-secondary-button"
+              onClick={handleClearStatusFilters}
+            >
+              Limpar filtros
+            </button>
+          </div>
         ) : (
           <>
             <div className="profile-status-list-head">
               <p>
                 {sortedItems.length === 1
-                  ? '1 jogo encontrado nesta visualizacao.'
-                  : `${sortedItems.length} jogos encontrados nesta visualizacao.`}
+                  ? `1 jogo encontrado${hasActiveStatusFilters ? ' com os filtros atuais.' : ' nesta visualizacao.'}`
+                  : `${sortedItems.length} jogos encontrados${hasActiveStatusFilters ? ' com os filtros atuais.' : ' nesta visualizacao.'}`}
               </p>
               <span>
                 Pagina {safeCurrentPage + 1} de {totalPages}
