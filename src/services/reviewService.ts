@@ -13,7 +13,7 @@ export interface ReviewAuthor {
   avatar_url: string | null
 }
 
-export interface ReviewGamePreview extends Pick<CatalogGamePreview, 'id' | 'titulo' | 'capa_url'> {}
+export type ReviewGamePreview = Pick<CatalogGamePreview, 'id' | 'titulo' | 'capa_url'>
 
 export interface ReviewComment {
   id: string
@@ -61,6 +61,7 @@ interface ToggleReviewLikeParams {
   userId: string
   reviewAuthorId: string
   likedByCurrentUser: boolean
+  currentLikeCount: number
 }
 
 interface CreateReviewCommentParams {
@@ -111,14 +112,25 @@ interface SaveReviewResult {
   error: ReviewError | null
 }
 
+interface ReviewLikeState {
+  curtidas: number
+  likedByCurrentUser: boolean
+}
+
 interface ToggleReviewLikeResult {
   status: 'liked' | 'unliked' | 'error'
+  data: ReviewLikeState | null
   error: ReviewError | null
 }
 
 interface DeleteReviewResult {
   ok: boolean
   error: ReviewError | null
+}
+
+interface ReviewLikeRow {
+  avaliacao_id: string
+  usuario_id: string
 }
 
 const GAME_REVIEW_SELECT = `
@@ -229,30 +241,75 @@ function normalizeProfileReviewItem(row: ReviewRow): ProfileReviewItem {
   }
 }
 
-async function getLikedReviewIds(reviewIds: string[], userId: string): Promise<ServiceResult<Set<string>>> {
+async function getReviewLikeStates(
+  reviewIds: string[],
+  currentUserId?: string | null
+): Promise<ServiceResult<Map<string, ReviewLikeState>>> {
+  const reviewLikeStates = new Map<string, ReviewLikeState>()
+
+  reviewIds.forEach(reviewId => {
+    reviewLikeStates.set(reviewId, {
+      curtidas: 0,
+      likedByCurrentUser: false,
+    })
+  })
+
+  if (reviewIds.length === 0) {
+    return {
+      data: reviewLikeStates,
+      error: null,
+    }
+  }
+
   try {
     const { data, error } = await supabase
       .from('avaliacao_curtidas')
-      .select('avaliacao_id')
-      .eq('usuario_id', userId)
+      .select('avaliacao_id, usuario_id')
       .in('avaliacao_id', reviewIds)
 
     if (error) {
       return {
-        data: new Set<string>(),
-        error: normalizeReviewError(error, 'Nao foi possivel carregar o estado das curtidas.'),
+        data: reviewLikeStates,
+        error: normalizeReviewError(error, 'Nao foi possivel carregar as curtidas das reviews.'),
       }
     }
 
+    const likeRows = (data || []) as ReviewLikeRow[]
+
+    likeRows.forEach(like => {
+      const currentState = reviewLikeStates.get(like.avaliacao_id) || {
+        curtidas: 0,
+        likedByCurrentUser: false,
+      }
+
+      reviewLikeStates.set(like.avaliacao_id, {
+        curtidas: currentState.curtidas + 1,
+        likedByCurrentUser:
+          currentState.likedByCurrentUser || Boolean(currentUserId && like.usuario_id === currentUserId),
+      })
+    })
+
     return {
-      data: new Set((data || []).map(item => item.avaliacao_id as string)),
+      data: reviewLikeStates,
       error: null,
     }
   } catch (error) {
     return {
-      data: new Set<string>(),
-      error: normalizeReviewError(error, 'Erro inesperado ao carregar o estado das curtidas.'),
+      data: reviewLikeStates,
+      error: normalizeReviewError(error, 'Erro inesperado ao carregar as curtidas das reviews.'),
     }
+  }
+}
+
+async function getSingleReviewLikeState(
+  reviewId: string,
+  currentUserId?: string | null
+): Promise<ServiceResult<ReviewLikeState | null>> {
+  const likeStatesResult = await getReviewLikeStates([reviewId], currentUserId)
+
+  return {
+    data: likeStatesResult.data.get(reviewId) || null,
+    error: likeStatesResult.error,
   }
 }
 
@@ -278,26 +335,35 @@ export async function getReviewsByGameId(
       normalizeReviewItem(row, currentUserId)
     )
 
-    if (!currentUserId || normalizedReviews.length === 0) {
+    if (normalizedReviews.length === 0) {
       return {
         data: normalizedReviews,
         error: null,
       }
     }
 
-    const likedIdsResult = await getLikedReviewIds(
+    const likeStatesResult = await getReviewLikeStates(
       normalizedReviews.map(review => review.id),
       currentUserId
     )
 
-    const reviewsWithLikeState = normalizedReviews.map(review => ({
-      ...review,
-      likedByCurrentUser: likedIdsResult.data.has(review.id),
-    }))
+    const reviewsWithLikeState = normalizedReviews.map(review => {
+      const likeState = likeStatesResult.data.get(review.id)
+
+      if (!likeState) {
+        return review
+      }
+
+      return {
+        ...review,
+        curtidas: likeState.curtidas,
+        likedByCurrentUser: likeState.likedByCurrentUser,
+      }
+    })
 
     return {
       data: reviewsWithLikeState,
-      error: likedIdsResult.error,
+      error: likeStatesResult.error,
     }
   } catch (error) {
     return {
@@ -416,10 +482,12 @@ export async function toggleReviewLike({
   userId,
   reviewAuthorId,
   likedByCurrentUser,
+  currentLikeCount,
 }: ToggleReviewLikeParams): Promise<ToggleReviewLikeResult> {
   if (userId === reviewAuthorId) {
     return {
       status: 'error',
+      data: null,
       error: {
         message: 'Voce nao pode curtir a propria review.',
       },
@@ -437,12 +505,50 @@ export async function toggleReviewLike({
       if (error) {
         return {
           status: 'error',
+          data: null,
           error: normalizeReviewError(error, 'Nao foi possivel remover a curtida desta review.'),
         }
       }
 
+      const likeStateResult = await getSingleReviewLikeState(reviewId, userId)
+
       return {
         status: 'unliked',
+        data: likeStateResult.data || {
+          curtidas: Math.max(currentLikeCount - 1, 0),
+          likedByCurrentUser: false,
+        },
+        error: null,
+      }
+    }
+
+    const { data: existingLikes, error: existingLikesError } = await supabase
+      .from('avaliacao_curtidas')
+      .select('avaliacao_id')
+      .eq('avaliacao_id', reviewId)
+      .eq('usuario_id', userId)
+      .limit(1)
+
+    if (existingLikesError) {
+      return {
+        status: 'error',
+        data: null,
+        error: normalizeReviewError(
+          existingLikesError,
+          'Nao foi possivel verificar a curtida atual desta review.'
+        ),
+      }
+    }
+
+    if ((existingLikes || []).length > 0) {
+      const likeStateResult = await getSingleReviewLikeState(reviewId, userId)
+
+      return {
+        status: 'liked',
+        data: likeStateResult.data || {
+          curtidas: Math.max(currentLikeCount, 1),
+          likedByCurrentUser: true,
+        },
         error: null,
       }
     }
@@ -452,20 +558,28 @@ export async function toggleReviewLike({
       usuario_id: userId,
     })
 
-    if (error) {
+    if (error && error.code !== '23505') {
       return {
         status: 'error',
+        data: null,
         error: normalizeReviewError(error, 'Nao foi possivel curtir esta review.'),
       }
     }
 
+    const likeStateResult = await getSingleReviewLikeState(reviewId, userId)
+
     return {
       status: 'liked',
+      data: likeStateResult.data || {
+        curtidas: currentLikeCount + 1,
+        likedByCurrentUser: true,
+      },
       error: null,
     }
   } catch (error) {
     return {
       status: 'error',
+      data: null,
       error: normalizeReviewError(error, 'Erro inesperado ao atualizar a curtida desta review.'),
     }
   }

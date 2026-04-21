@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { UserAvatar } from '../components/UserAvatar'
 import { supabase } from '../supabase-client'
 import './HomePage.css'
 
@@ -24,7 +25,6 @@ interface Activity {
 interface SiteStats {
   games: number
   reviews: number
-  comments: number
 }
 
 interface UserSummary {
@@ -126,7 +126,6 @@ function HomePage() {
   const [siteStats, setSiteStats] = useState<SiteStats>({
     games: 0,
     reviews: 0,
-    comments: 0,
   })
   const [loading, setLoading] = useState(true)
 
@@ -140,7 +139,6 @@ function HomePage() {
           featuredGamesResponse,
           gameCountResponse,
           reviewCountResponse,
-          commentCountResponse,
         ] = await Promise.all([
           supabase
             .from('avaliacoes')
@@ -160,7 +158,6 @@ function HomePage() {
             .limit(3),
           supabase.from('jogos').select('id', { count: 'exact', head: true }),
           supabase.from('avaliacoes').select('id', { count: 'exact', head: true }),
-          supabase.from('comentarios').select('id', { count: 'exact', head: true }),
         ])
 
         if (!isMounted) return
@@ -201,7 +198,6 @@ function HomePage() {
         setSiteStats({
           games: gameCountResponse.count || 0,
           reviews: reviewCountResponse.count || 0,
-          comments: commentCountResponse.count || 0,
         })
       } catch (error) {
         console.error('Erro ao montar a Home:', error)
@@ -243,7 +239,6 @@ function HomePage() {
   const heroStats = [
     { value: formatCount(siteStats.games), label: 'jogos' },
     { value: formatCount(siteStats.reviews), label: 'reviews' },
-    { value: formatCount(siteStats.comments), label: 'comentarios' },
   ]
 
   const featureCards: Array<{
@@ -403,17 +398,12 @@ function HomePage() {
                     <article key={activity.id} className="home-activity-card">
                       <div className="home-activity-top">
                         <div className="home-user-chip">
-                          {activity.authorAvatar ? (
-                            <img
-                              src={activity.authorAvatar}
-                              alt={`Avatar de ${activity.authorName}`}
-                              className="home-user-avatar"
-                            />
-                          ) : (
-                            <span className="home-user-avatar home-user-avatar-fallback">
-                              {getInitial(activity.authorName)}
-                            </span>
-                          )}
+                          <UserAvatar
+                            name={activity.authorName}
+                            src={activity.authorAvatar}
+                            imageClassName="home-user-avatar"
+                            fallbackClassName="home-user-avatar-fallback"
+                          />
 
                           <div>
                             <strong>{activity.authorName}</strong>

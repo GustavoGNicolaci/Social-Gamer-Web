@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { UserAvatar } from '../components/UserAvatar'
 import { useAuth } from '../contexts/AuthContext'
 import {
   createReviewComment,
@@ -220,10 +221,6 @@ function getUserName(usuario: { username?: string | null } | null | undefined) {
   return username || 'Usuario'
 }
 
-function getUserAvatar(usuario: { avatar_url?: string | null } | null | undefined) {
-  return usuario?.avatar_url || null
-}
-
 function getInitial(name: string) {
   const firstCharacter = name.trim().charAt(0)
   return firstCharacter ? firstCharacter.toUpperCase() : 'U'
@@ -279,14 +276,23 @@ function GameDetailsPage() {
           return currentReviews
         }
 
-        if (result.error && result.data.length > 0 && user?.id) {
-          const likedStateByReviewId = new Map(
-            currentReviews.map(review => [review.id, review.likedByCurrentUser])
+        if (result.error && result.data.length > 0) {
+          const currentLikeStateByReviewId = new Map(
+            currentReviews.map(review => [
+              review.id,
+              {
+                curtidas: review.curtidas,
+                likedByCurrentUser: review.likedByCurrentUser,
+              },
+            ])
           )
 
           return result.data.map(review => ({
             ...review,
-            likedByCurrentUser: likedStateByReviewId.get(review.id) ?? review.likedByCurrentUser,
+            curtidas: currentLikeStateByReviewId.get(review.id)?.curtidas ?? review.curtidas,
+            likedByCurrentUser:
+              currentLikeStateByReviewId.get(review.id)?.likedByCurrentUser ??
+              review.likedByCurrentUser,
           }))
         }
 
@@ -302,6 +308,23 @@ function GameDetailsPage() {
       return result
     },
     [user?.id]
+  )
+
+  const applyReviewLikeState = useCallback(
+    (reviewId: string, nextLikeState: { curtidas: number; likedByCurrentUser: boolean }) => {
+      setReviews(currentReviews =>
+        currentReviews.map(currentReview =>
+          currentReview.id === reviewId
+            ? {
+                ...currentReview,
+                curtidas: nextLikeState.curtidas,
+                likedByCurrentUser: nextLikeState.likedByCurrentUser,
+              }
+            : currentReview
+        )
+      )
+    },
+    []
   )
 
   useEffect(() => {
@@ -549,38 +572,46 @@ function GameDetailsPage() {
     if (!user || !game || !review.canLike || likingReviewIds.includes(review.id)) return
 
     const wasLiked = review.likedByCurrentUser
+    const previousLikeState = {
+      curtidas: review.curtidas,
+      likedByCurrentUser: review.likedByCurrentUser,
+    }
+    const optimisticLikeState = {
+      curtidas: Math.max(review.curtidas + (wasLiked ? -1 : 1), 0),
+      likedByCurrentUser: !wasLiked,
+    }
 
     setLikingReviewIds(currentIds =>
       currentIds.includes(review.id) ? currentIds : [...currentIds, review.id]
     )
     setReviewFeedback(null)
-    setReviews(currentReviews =>
-      currentReviews.map(currentReview =>
-        currentReview.id === review.id
-          ? {
-              ...currentReview,
-              likedByCurrentUser: !wasLiked,
-              curtidas: Math.max(currentReview.curtidas + (wasLiked ? -1 : 1), 0),
-            }
-          : currentReview
-      )
-    )
+    applyReviewLikeState(review.id, optimisticLikeState)
 
     const likeResult = await toggleReviewLike({
       reviewId: review.id,
       userId: user.id,
       reviewAuthorId: review.usuario_id,
       likedByCurrentUser: wasLiked,
+      currentLikeCount: review.curtidas,
     })
 
-    const refreshResult = await refreshReviews(game.id)
-
     if (likeResult.error) {
+      applyReviewLikeState(review.id, previousLikeState)
       setReviewFeedback({
         tone: 'error',
         message: getReviewErrorMessage(likeResult.error, 'like'),
       })
-    } else if (refreshResult.error && refreshResult.data.length === 0) {
+      setLikingReviewIds(currentIds => currentIds.filter(currentId => currentId !== review.id))
+      return
+    }
+
+    if (likeResult.data) {
+      applyReviewLikeState(review.id, likeResult.data)
+    }
+
+    const refreshResult = await refreshReviews(game.id)
+
+    if (refreshResult.error && refreshResult.data.length === 0) {
       setReviewFeedback({
         tone: 'info',
         message: 'A curtida foi atualizada, mas nao foi possivel recarregar a lista agora.',
@@ -1122,7 +1153,6 @@ function GameDetailsPage() {
             ) : (
               reviews.map(review => {
                 const avaliadorNome = getUserName(review.usuario)
-                const avaliadorAvatar = getUserAvatar(review.usuario)
                 const isLikePending = likingReviewIds.includes(review.id)
                 const isDeletePending = deletingReviewIds.includes(review.id)
                 const isOwnerReview = Boolean(user && review.usuario_id === user.id)
@@ -1138,17 +1168,12 @@ function GameDetailsPage() {
                   <article key={review.id} className="game-review-card">
                     <div className="game-review-card-header">
                       <div className="game-review-user">
-                        {avaliadorAvatar ? (
-                          <img
-                            src={avaliadorAvatar}
-                            alt={`Avatar de ${avaliadorNome}`}
-                            className="game-review-avatar"
-                          />
-                        ) : (
-                          <span className="game-review-avatar-fallback">
-                            {getInitial(avaliadorNome)}
-                          </span>
-                        )}
+                        <UserAvatar
+                          name={avaliadorNome}
+                          src={review.usuario?.avatar_url}
+                          imageClassName="game-review-avatar"
+                          fallbackClassName="game-review-avatar-fallback"
+                        />
 
                         <div className="game-review-user-copy">
                           <strong>{avaliadorNome}</strong>
@@ -1224,23 +1249,17 @@ function GameDetailsPage() {
                         <div className="game-review-comments-list">
                           {review.comentarios.map(comentario => {
                             const autorComentario = getUserName(comentario.usuario)
-                            const avatarComentario = getUserAvatar(comentario.usuario)
 
                             return (
                               <div key={comentario.id} className="game-review-comment-card">
                                 <div className="game-review-comment-header">
                                   <div className="game-review-comment-author">
-                                    {avatarComentario ? (
-                                      <img
-                                        src={avatarComentario}
-                                        alt={`Avatar de ${autorComentario}`}
-                                        className="game-review-comment-avatar"
-                                      />
-                                    ) : (
-                                      <span className="game-review-comment-avatar-fallback">
-                                        {getInitial(autorComentario)}
-                                      </span>
-                                    )}
+                                    <UserAvatar
+                                      name={autorComentario}
+                                      src={comentario.usuario?.avatar_url}
+                                      imageClassName="game-review-comment-avatar"
+                                      fallbackClassName="game-review-comment-avatar-fallback"
+                                    />
 
                                     <strong>{autorComentario}</strong>
                                   </div>
