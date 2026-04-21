@@ -1,25 +1,17 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { supabase } from '../supabase-client'
-import { testDatabaseOperations } from '../utils/databaseTest'
+import { useAuth, type RegisterFieldErrors } from '../contexts/AuthContext'
 
 function RegisterPage() {
   const navigate = useNavigate()
+  const { register, user } = useAuth()
 
-  const testDatabaseConnection = async () => {
-    try {
-      console.log('Testando conexão com a tabela usuarios...')
-      await testDatabaseOperations()
-    } catch (err) {
-      console.error('Erro no teste de conexão:', err)
-    }
-  }
-
-  // Testar conexão ao montar o componente
   useEffect(() => {
-    testDatabaseConnection()
-  }, [])
+    if (user) {
+      navigate('/')
+    }
+  }, [user, navigate])
 
   const [formData, setFormData] = useState({
     username: '',
@@ -28,140 +20,105 @@ function RegisterPage() {
     password: '',
     confirmPassword: '',
   })
-  const [errors, setErrors] = useState<Record<string, string>>({})
-  const [successMessage, setSuccessMessage] = useState('')
+  const [errors, setErrors] = useState<RegisterFieldErrors>({})
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [showEmailConfirmation, setShowEmailConfirmation] = useState(false)
 
   const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
+
     setFormData((prev) => ({
       ...prev,
       [name]: value,
     }))
-    if (errors[name]) {
-      setErrors((prev) => ({
+
+    setErrors((prev) => {
+      if (!prev[name as keyof RegisterFieldErrors] && !prev.submit) {
+        return prev
+      }
+
+      return {
         ...prev,
         [name]: '',
-      }))
-    }
+        submit: '',
+      }
+    })
   }
 
-  const validateForm = (): boolean => {
-    const newErrors: Record<string, string> = {}
+  const validateForm = (): RegisterFieldErrors => {
+    const nextErrors: RegisterFieldErrors = {}
 
     if (!formData.username.trim()) {
-      newErrors.username = 'Nome de usuário é obrigatório'
-    }
-    if (!formData.name.trim()) {
-      newErrors.name = 'Nome completo é obrigatório'
-    }
-    if (!formData.email.trim()) {
-      newErrors.email = 'Email é obrigatório'
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      newErrors.email = 'Email inválido'
-    }
-    if (!formData.password) {
-      newErrors.password = 'Senha é obrigatória'
-    } else if (formData.password.length < 6) {
-      newErrors.password = 'Senha deve ter pelo menos 6 caracteres'
-    }
-    if (!formData.confirmPassword) {
-      newErrors.confirmPassword = 'Confirme sua senha'
-    } else if (formData.password !== formData.confirmPassword) {
-      newErrors.confirmPassword = 'As senhas não coincidem'
+      nextErrors.username = 'Nome de usuario e obrigatorio.'
     }
 
-    setErrors(newErrors)
-    return Object.keys(newErrors).length === 0
+    if (!formData.name.trim()) {
+      nextErrors.name = 'Nome completo e obrigatorio.'
+    }
+
+    if (!formData.email.trim()) {
+      nextErrors.email = 'Email e obrigatorio.'
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      nextErrors.email = 'Digite um email valido.'
+    }
+
+    if (!formData.password) {
+      nextErrors.password = 'Senha e obrigatoria.'
+    } else if (formData.password.length < 6) {
+      nextErrors.password = 'A senha deve ter pelo menos 6 caracteres.'
+    }
+
+    if (!formData.confirmPassword) {
+      nextErrors.confirmPassword = 'Confirme sua senha.'
+    } else if (formData.password !== formData.confirmPassword) {
+      nextErrors.confirmPassword = 'As senhas nao coincidem.'
+    }
+
+    return nextErrors
   }
 
   const handleRegister = async (e: FormEvent) => {
     e.preventDefault()
 
-    if (!validateForm()) {
+    const validationErrors = validateForm()
+
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors)
       return
     }
 
-    try {
-      console.log('Iniciando registro com dados:', formData)
+    setIsSubmitting(true)
+    setErrors({})
 
-      // 1. criar conta no auth do Supabase e armazenar dados básicos em user_metadata
-      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+    try {
+      const result = await register({
+        username: formData.username,
+        name: formData.name,
         email: formData.email,
         password: formData.password,
-        options: {
-          data: {
-            username: formData.username,
-            nome_completo: formData.name,
-          },
-        },
       })
 
-      if (signUpError) {
-        console.error('Error signing up:', signUpError.message)
-        setErrors((prev) => ({ ...prev, submit: signUpError.message }))
+      if (result.status === 'validation_error') {
+        setErrors(result.fieldErrors)
         return
       }
 
-      const user = signUpData.user
-      if (!user) {
-        console.error('Usuário não foi criado')
-        setErrors((prev) => ({ ...prev, submit: 'Falha ao criar usuário' }))
+      if (result.status === 'system_error') {
+        setErrors({
+          submit: result.message,
+        })
         return
       }
 
-      console.log('Usuário criado no auth:', user.id)
-
-      // 2. inserir perfil na tabela usuarios
-      const profileData = {
-        id: user.id,
-        username: formData.username,
-        nome_completo: formData.name,
-        avatar_url: null,
-        bio: '',
-        data_cadastro: new Date().toISOString(),
-        configuracoes_privacidade: {},
-      }
-
-      console.log('Tentando inserir perfil:', profileData)
-
-      // Verificar se temos uma sessão ativa
-      const { data: sessionData } = await supabase.auth.getSession()
-      console.log('Sessão atual:', sessionData.session ? 'Ativa' : 'Inativa')
-
-      const { data: insertedData, error: insertError } = await supabase.from('usuarios').insert(profileData).select()
-
-      if (insertError) {
-        console.error('Error inserting profile:', insertError)
-        console.error('Detalhes do erro:', insertError.details, insertError.hint, insertError.code)
-        // handle duplicate username constraint
-        if (insertError.details?.includes('Key (username)')) {
-          setErrors((prev) => ({ ...prev, username: 'Nome de usuário já existe' }))
-        } else {
-          setErrors((prev) => ({ ...prev, submit: insertError.message }))
-        }
-        return
-      }
-
-      console.log('Perfil inserido com sucesso:', insertedData)
-
-      if (signUpData.session) {
-        console.log('Sessão ativa, redirecionando para home')
+      if (result.status === 'authenticated') {
         navigate('/')
-      } else {
-        console.log('Sessão não ativa, aguardando confirmação por email')
-        setSuccessMessage(
-          `Quase lá! Um e-mail de confirmação foi enviado para ${formData.email}. ` +
-          'Abra sua caixa de entrada e clique no link para ativar sua conta. ' +
-          'Depois disso, retorne aqui e faça login.'
-        )
-        setErrors({})
+        return
       }
-    } catch (error) {
-      console.error('Erro ao registrar:', error)
-      setErrors((prev) => ({
-        ...prev,
-        submit: 'Erro ao registrar. Tente novamente.',
-      }))
+
+      setShowEmailConfirmation(true)
+      setErrors({})
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -170,51 +127,48 @@ function RegisterPage() {
       <div className="register-container">
         <div className="register-box">
           <h1>Criar Conta</h1>
-          <p>Junte-se à comunidade!</p>
+          <p>Junte-se a comunidade!</p>
 
-          {successMessage ? (
-            <div className="success-banner">
-              <h2>Confirmação enviada!</h2>
-              <p>{successMessage}</p>
-              <div className="success-actions">
-                <Link to="/login" className="register-link">
-                  Ir para login
-                </Link>
-              </div>
+          {showEmailConfirmation ? (
+            <div className="success-banner" role="status" aria-live="polite">
+              <p>Confirme no email</p>
             </div>
           ) : (
             <form onSubmit={handleRegister}>
-              {/* Username */}
               <div className="form-group">
-                <label htmlFor="username">Nome de usuário</label>
+                <label htmlFor="username">Nome de usuario</label>
                 <input
                   type="text"
                   id="username"
                   name="username"
-                  placeholder="Seu username (único)"
+                  placeholder="Seu username"
+                  autoComplete="username"
                   value={formData.username}
                   onChange={handleInputChange}
+                  disabled={isSubmitting}
+                  aria-invalid={Boolean(errors.username)}
                   className={errors.username ? 'input-error' : ''}
                 />
                 {errors.username && <span className="error-message">{errors.username}</span>}
               </div>
 
-              {/* Nome */}
               <div className="form-group">
                 <label htmlFor="name">Nome Completo</label>
                 <input
                   type="text"
                   id="name"
                   name="name"
-                  placeholder="Seu Nome Completo"
+                  placeholder="Seu nome completo"
+                  autoComplete="name"
                   value={formData.name}
                   onChange={handleInputChange}
+                  disabled={isSubmitting}
+                  aria-invalid={Boolean(errors.name)}
                   className={errors.name ? 'input-error' : ''}
                 />
                 {errors.name && <span className="error-message">{errors.name}</span>}
               </div>
 
-              {/* Email */}
               <div className="form-group">
                 <label htmlFor="email">Email</label>
                 <input
@@ -222,14 +176,16 @@ function RegisterPage() {
                   id="email"
                   name="email"
                   placeholder="seu@email.com"
+                  autoComplete="email"
                   value={formData.email}
                   onChange={handleInputChange}
+                  disabled={isSubmitting}
+                  aria-invalid={Boolean(errors.email)}
                   className={errors.email ? 'input-error' : ''}
                 />
                 {errors.email && <span className="error-message">{errors.email}</span>}
               </div>
 
-              {/* Senha */}
               <div className="form-group">
                 <label htmlFor="password">Senha</label>
                 <input
@@ -237,14 +193,16 @@ function RegisterPage() {
                   id="password"
                   name="password"
                   placeholder="Sua senha"
+                  autoComplete="new-password"
                   value={formData.password}
                   onChange={handleInputChange}
+                  disabled={isSubmitting}
+                  aria-invalid={Boolean(errors.password)}
                   className={errors.password ? 'input-error' : ''}
                 />
                 {errors.password && <span className="error-message">{errors.password}</span>}
               </div>
 
-              {/* Confirmar Senha */}
               <div className="form-group">
                 <label htmlFor="confirmPassword">Confirmar Senha</label>
                 <input
@@ -252,8 +210,11 @@ function RegisterPage() {
                   id="confirmPassword"
                   name="confirmPassword"
                   placeholder="Confirme sua senha"
+                  autoComplete="new-password"
                   value={formData.confirmPassword}
                   onChange={handleInputChange}
+                  disabled={isSubmitting}
+                  aria-invalid={Boolean(errors.confirmPassword)}
                   className={errors.confirmPassword ? 'input-error' : ''}
                 />
                 {errors.confirmPassword && (
@@ -261,19 +222,23 @@ function RegisterPage() {
                 )}
               </div>
 
-              {errors.submit && <div className="error-banner">{errors.submit}</div>}
+              {errors.submit && (
+                <div className="error-banner" role="alert">
+                  {errors.submit}
+                </div>
+              )}
 
-              <button type="submit" className="register-submit-btn">
-                Criar Conta
+              <button type="submit" className="register-submit-btn" disabled={isSubmitting}>
+                {isSubmitting ? 'Criando conta...' : 'Criar Conta'}
               </button>
             </form>
           )}
 
           <div className="register-footer">
             <p>
-              Já tem conta?{' '}
+              Ja tem conta?{' '}
               <Link to="/login" className="register-link">
-                Faça login aqui
+                Faca login aqui
               </Link>
             </p>
           </div>
