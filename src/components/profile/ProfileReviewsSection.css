@@ -20,7 +20,9 @@
 .profile-reviews-grid {
   display: grid;
   gap: 0.8rem;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-auto-rows: 1fr;
+  align-items: start;
 }
 
 .profile-reviews-card,
@@ -34,16 +36,24 @@
 
 .profile-reviews-card {
   overflow: hidden;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  min-height: 100%;
   transition:
     transform 0.2s ease,
     border-color 0.2s ease,
-    box-shadow 0.2s ease;
+    box-shadow 0.2s ease,
+    opacity 0.2s ease;
 }
 
 .profile-reviews-card:hover {
   transform: translateY(-2px);
   border-color: rgba(160, 177, 255, 0.2);
   box-shadow: 0 16px 32px rgba(0, 0, 0, 0.2);
+}
+
+.profile-reviews-card.is-removing {
+  opacity: 0.65;
 }
 
 .profile-reviews-card-link {
@@ -85,6 +95,12 @@
   align-content: start;
   gap: 0.55rem;
   padding: 0.95rem;
+}
+
+.profile-reviews-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 0.95rem 0.95rem;
 }
 
 .profile-reviews-card-meta {
@@ -156,6 +172,12 @@
   text-transform: uppercase;
 }
 
+.profile-reviews-delete-button {
+  min-height: 40px;
+  padding: 0.65rem 0.9rem;
+  font-size: 0.84rem;
+}
+
 .profile-reviews-empty {
   display: grid;
   gap: 0.85rem;
@@ -171,6 +193,10 @@
 }
 
 @media (max-width: 768px) {
+  .profile-reviews-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .profile-reviews-summary {
     min-width: 0;
     width: 100%;
@@ -182,7 +208,15 @@
     padding: 1.1rem;
   }
 
+  .profile-reviews-grid {
+    grid-template-columns: 1fr;
+  }
+
   .profile-reviews-card-body {
     padding: 0.8rem;
+  }
+
+  .profile-reviews-card-actions {
+    padding: 0 0.8rem 0.8rem;
   }
 }

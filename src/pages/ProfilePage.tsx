@@ -6,6 +6,7 @@ import { ProfileTopFiveSection } from '../components/profile/ProfileTopFiveSecti
 import { ProfileWishlistSection } from '../components/profile/ProfileWishlistSection'
 import { useAuth } from '../contexts/AuthContext'
 import {
+  deleteReview,
   getReviewsByUserId,
   type ProfileReviewItem,
   type ReviewError,
@@ -159,9 +160,11 @@ const getGameStatusErrorMessage = (
       : 'Nao foi possivel remover este jogo do perfil agora.'
 }
 
-const getReviewErrorMessage = (error: ReviewError | null) => {
+const getReviewErrorMessage = (error: ReviewError | null, action: 'load' | 'delete' = 'load') => {
   if (!error) {
-    return 'Nao foi possivel carregar suas reviews agora.'
+    return action === 'delete'
+      ? 'Nao foi possivel apagar esta review agora.'
+      : 'Nao foi possivel carregar suas reviews agora.'
   }
 
   const fullMessage = [error.message, error.details, error.hint].filter(Boolean).join(' ').toLowerCase()
@@ -172,14 +175,20 @@ const getReviewErrorMessage = (error: ReviewError | null) => {
     fullMessage.includes('row-level security') ||
     fullMessage.includes('policy')
   ) {
-    return 'Nao foi possivel carregar suas reviews por permissao. Verifique as policies das tabelas avaliacoes e jogos no Supabase.'
+    return action === 'delete'
+      ? 'Nao foi possivel apagar sua review por permissao. Verifique as policies DELETE da tabela avaliacoes no Supabase.'
+      : 'Nao foi possivel carregar suas reviews por permissao. Verifique as policies das tabelas avaliacoes e jogos no Supabase.'
   }
 
   if (fullMessage.includes('column')) {
-    return 'Nao foi possivel carregar suas reviews porque a estrutura das tabelas nao corresponde ao frontend.'
+    return action === 'delete'
+      ? 'Nao foi possivel apagar a review porque a estrutura da tabela avaliacoes nao corresponde ao frontend.'
+      : 'Nao foi possivel carregar suas reviews porque a estrutura das tabelas nao corresponde ao frontend.'
   }
 
-  return 'Nao foi possivel carregar suas reviews agora.'
+  return action === 'delete'
+    ? error.message || 'Nao foi possivel apagar esta review agora.'
+    : 'Nao foi possivel carregar suas reviews agora.'
 }
 
 export function ProfilePage() {
@@ -646,6 +655,36 @@ export function ProfilePage() {
     }
   }
 
+  const handleDeleteReview = async (reviewId: string) => {
+    if (!profile) {
+      return {
+        ok: false,
+        message: 'Nao foi possivel identificar o perfil para apagar esta review.',
+      }
+    }
+
+    const result = await deleteReview({
+      userId: profile.id,
+      reviewId,
+    })
+
+    if (!result.ok) {
+      return {
+        ok: false,
+        message: getReviewErrorMessage(result.error, 'delete'),
+      }
+    }
+
+    setUserReviews(currentReviews =>
+      currentReviews.filter(currentReview => currentReview.id !== reviewId)
+    )
+    setReviewsError(null)
+
+    return {
+      ok: true,
+    }
+  }
+
   const avatarContent = profile.avatar_url ? (
     <img
       src={profile.avatar_url}
@@ -937,6 +976,7 @@ export function ProfilePage() {
                   errorMessage={reviewsError}
                   countLabel={reviewsCountLabel}
                   isOwnerView={isOwnerView}
+                  onDeleteReview={isOwnerView ? handleDeleteReview : undefined}
                 />
               ) : null}
             </div>

@@ -961,6 +961,37 @@
   transform: none;
 }
 
+.game-review-delete-button {
+  min-height: 40px;
+  margin-left: auto;
+  padding: 0.55rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 188, 188, 0.18);
+  background: rgba(255, 120, 120, 0.08);
+  color: #ffd6d6;
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease,
+    background 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.game-review-delete-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: rgba(255, 188, 188, 0.34);
+  background: rgba(255, 120, 120, 0.14);
+}
+
+.game-review-delete-button:disabled {
+  opacity: 0.72;
+  cursor: not-allowed;
+  transform: none;
+}
+
 .game-review-like-icon {
   width: 18px;
   height: 18px;
@@ -1126,6 +1157,10 @@
   .game-review-comment-header {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .game-review-delete-button {
+    margin-left: 0;
   }
 }
 

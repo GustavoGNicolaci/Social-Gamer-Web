@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { ProfileReviewItem } from '../../services/reviewService'
 import './ProfileReviewsSection.css'
@@ -8,6 +9,7 @@ interface ProfileReviewsSectionProps {
   errorMessage: string | null
   countLabel: string
   isOwnerView: boolean
+  onDeleteReview?: (reviewId: string) => Promise<{ ok: boolean; message?: string }>
 }
 
 function formatCompactDate(value: string | null | undefined, fallback = 'Data nao informada') {
@@ -41,8 +43,28 @@ export function ProfileReviewsSection({
   errorMessage,
   countLabel,
   isOwnerView,
+  onDeleteReview,
 }: ProfileReviewsSectionProps) {
+  const [removingReviewIds, setRemovingReviewIds] = useState<string[]>([])
+  const [actionError, setActionError] = useState<string | null>(null)
   const hasReviews = items.length > 0
+
+  const handleDeleteReview = async (reviewId: string) => {
+    if (!onDeleteReview) return
+
+    setActionError(null)
+    setRemovingReviewIds(currentIds =>
+      currentIds.includes(reviewId) ? currentIds : [...currentIds, reviewId]
+    )
+
+    const result = await onDeleteReview(reviewId)
+
+    setRemovingReviewIds(currentIds => currentIds.filter(currentId => currentId !== reviewId))
+
+    if (!result.ok) {
+      setActionError(result.message || 'Nao foi possivel apagar esta review.')
+    }
+  }
 
   return (
     <section className="profile-card profile-reviews-section">
@@ -97,9 +119,13 @@ export function ProfileReviewsSection({
           <div className="profile-reviews-grid">
             {items.map(review => {
               const visibleTitle = review.jogo?.titulo || 'Jogo indisponivel'
+              const isRemovingReview = removingReviewIds.includes(review.id)
 
               return (
-                <article key={review.id} className="profile-reviews-card">
+                <article
+                  key={review.id}
+                  className={`profile-reviews-card${isRemovingReview ? ' is-removing' : ''}`}
+                >
                   <Link to={`/games/${review.jogo_id}`} className="profile-reviews-card-link">
                     <div className="profile-reviews-card-cover">
                       {review.jogo?.capa_url ? (
@@ -135,11 +161,26 @@ export function ProfileReviewsSection({
                       <span className="profile-reviews-cta">Ver detalhes do jogo</span>
                     </div>
                   </Link>
+
+                  {isOwnerView && onDeleteReview ? (
+                    <div className="profile-reviews-card-actions">
+                      <button
+                        type="button"
+                        className="profile-secondary-button profile-reviews-delete-button"
+                        onClick={() => void handleDeleteReview(review.id)}
+                        disabled={isRemovingReview}
+                      >
+                        {isRemovingReview ? 'Apagando...' : 'Apagar review'}
+                      </button>
+                    </div>
+                  ) : null}
                 </article>
               )
             })}
           </div>
         )}
+
+        {actionError ? <p className="profile-feedback is-error">{actionError}</p> : null}
       </div>
     </section>
   )

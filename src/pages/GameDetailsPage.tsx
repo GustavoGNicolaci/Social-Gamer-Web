@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import {
   createReviewComment,
+  deleteReview,
   getReviewsByGameId,
   saveReview,
   toggleReviewLike,
@@ -156,12 +157,13 @@ function getGameStatusErrorMessage(
 
 function getReviewErrorMessage(
   error: ReviewError | null,
-  action: 'load' | 'save' | 'comment' | 'like'
+  action: 'load' | 'save' | 'comment' | 'like' | 'delete'
 ) {
   if (!error) {
     if (action === 'save') return 'Nao foi possivel salvar sua review agora.'
     if (action === 'comment') return 'Nao foi possivel publicar seu comentario agora.'
     if (action === 'like') return 'Nao foi possivel atualizar a curtida desta review agora.'
+    if (action === 'delete') return 'Nao foi possivel apagar esta review agora.'
     return 'Nao foi possivel carregar as reviews deste jogo agora.'
   }
 
@@ -183,6 +185,10 @@ function getReviewErrorMessage(
 
     if (action === 'like') {
       return 'Nao foi possivel atualizar esta curtida por permissao. Verifique as policies da tabela avaliacao_curtidas no Supabase.'
+    }
+
+    if (action === 'delete') {
+      return 'Nao foi possivel apagar esta review por permissao. Verifique as policies DELETE da tabela avaliacoes no Supabase.'
     }
 
     return 'Nao foi possivel carregar as reviews por permissao. Verifique as policies das tabelas avaliacoes, comentarios e avaliacao_curtidas no Supabase.'
@@ -252,6 +258,7 @@ function GameDetailsPage() {
   const [comentarioTexto, setComentarioTexto] = useState<Record<string, string>>({})
   const [submittingComentario, setSubmittingComentario] = useState<Record<string, boolean>>({})
   const [likingReviewIds, setLikingReviewIds] = useState<string[]>([])
+  const [deletingReviewIds, setDeletingReviewIds] = useState<string[]>([])
   const [wishlistLoading, setWishlistLoading] = useState(false)
   const [wishlistSaving, setWishlistSaving] = useState(false)
   const [isInWishlist, setIsInWishlist] = useState(false)
@@ -268,6 +275,10 @@ function GameDetailsPage() {
       const result = await getReviewsByGameId(gameId, user?.id)
 
       setReviews(currentReviews => {
+        if (result.error && result.data.length === 0) {
+          return currentReviews
+        }
+
         if (result.error && result.data.length > 0 && user?.id) {
           const likedStateByReviewId = new Map(
             currentReviews.map(review => [review.id, review.likedByCurrentUser])
@@ -577,6 +588,59 @@ function GameDetailsPage() {
     }
 
     setLikingReviewIds(currentIds => currentIds.filter(currentId => currentId !== review.id))
+  }
+
+  const handleDeleteReview = async (review: ReviewItem) => {
+    if (!user || !game || review.usuario_id !== user.id || deletingReviewIds.includes(review.id)) {
+      return
+    }
+
+    setDeletingReviewIds(currentIds =>
+      currentIds.includes(review.id) ? currentIds : [...currentIds, review.id]
+    )
+    setReviewFeedback(null)
+
+    const deleteResult = await deleteReview({
+      userId: user.id,
+      reviewId: review.id,
+    })
+
+    if (!deleteResult.ok) {
+      setReviewFeedback({
+        tone: 'error',
+        message: getReviewErrorMessage(deleteResult.error, 'delete'),
+      })
+      setDeletingReviewIds(currentIds => currentIds.filter(currentId => currentId !== review.id))
+      return
+    }
+
+    setReviews(currentReviews => currentReviews.filter(currentReview => currentReview.id !== review.id))
+    setComentarioTexto(currentComments => {
+      const nextComments = { ...currentComments }
+      delete nextComments[review.id]
+      return nextComments
+    })
+    setSubmittingComentario(currentStates => {
+      const nextStates = { ...currentStates }
+      delete nextStates[review.id]
+      return nextStates
+    })
+
+    const refreshResult = await refreshReviews(game.id)
+
+    if (refreshResult.error && refreshResult.data.length === 0) {
+      setReviewFeedback({
+        tone: 'info',
+        message: 'Sua review foi apagada, mas nao foi possivel atualizar a lista completa agora.',
+      })
+    } else {
+      setReviewFeedback({
+        tone: 'success',
+        message: 'Sua review foi apagada com sucesso.',
+      })
+    }
+
+    setDeletingReviewIds(currentIds => currentIds.filter(currentId => currentId !== review.id))
   }
 
   const handleWishlistToggle = async () => {
@@ -1060,6 +1124,8 @@ function GameDetailsPage() {
                 const avaliadorNome = getUserName(review.usuario)
                 const avaliadorAvatar = getUserAvatar(review.usuario)
                 const isLikePending = likingReviewIds.includes(review.id)
+                const isDeletePending = deletingReviewIds.includes(review.id)
+                const isOwnerReview = Boolean(user && review.usuario_id === user.id)
                 const likeButtonLabel = !user
                   ? 'Faca login para curtir'
                   : review.canLike
@@ -1141,6 +1207,16 @@ function GameDetailsPage() {
                           ? '1 comentario'
                           : `${review.comentarios.length} comentarios`}
                       </span>
+                      {isOwnerReview ? (
+                        <button
+                          type="button"
+                          className="game-review-delete-button"
+                          onClick={() => void handleDeleteReview(review)}
+                          disabled={isDeletePending}
+                        >
+                          {isDeletePending ? 'Apagando...' : 'Apagar review'}
+                        </button>
+                      ) : null}
                     </div>
 
                     <div className="game-review-comments">

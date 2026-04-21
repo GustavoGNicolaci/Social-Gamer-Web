@@ -13,11 +13,10 @@ interface Game {
 
 interface Activity {
   id: string
-  type: 'review' | 'comment'
   authorName: string
   authorAvatar: string | null
   gameTitle: string
-  text: string
+  summary: string
   score: number | null
   publishedAt: string
 }
@@ -39,23 +38,10 @@ interface GameTitleRelation {
 
 interface ReviewRow {
   id: string
-  texto_review: string | null
   nota: number | null
   data_publicacao: string
   jogos: GameTitleRelation | GameTitleRelation[] | null
   usuarios: UserSummary | UserSummary[] | null
-}
-
-interface CommentReviewRelation {
-  jogos: GameTitleRelation | GameTitleRelation[] | null
-}
-
-interface CommentRow {
-  id: string
-  texto: string
-  data_comentario: string
-  usuarios: UserSummary | UserSummary[] | null
-  avaliacoes: CommentReviewRelation | CommentReviewRelation[] | null
 }
 
 function resolveRelation<T>(value: T | T[] | null | undefined) {
@@ -87,15 +73,6 @@ function formatCount(value: number) {
 function getInitial(value: string) {
   const firstCharacter = value.trim().charAt(0)
   return firstCharacter ? firstCharacter.toUpperCase() : 'U'
-}
-
-function truncateText(value: string | null | undefined, maxLength = 96) {
-  const normalizedValue = value?.trim() || ''
-
-  if (!normalizedValue) return 'Nova atividade publicada na comunidade.'
-  if (normalizedValue.length <= maxLength) return normalizedValue
-
-  return `${normalizedValue.slice(0, maxLength - 3).trim()}...`
 }
 
 function iconCatalog() {
@@ -160,7 +137,6 @@ function HomePage() {
       try {
         const [
           reviewsResponse,
-          commentsResponse,
           featuredGamesResponse,
           gameCountResponse,
           reviewCountResponse,
@@ -170,26 +146,12 @@ function HomePage() {
             .from('avaliacoes')
             .select(`
               id,
-              texto_review,
               nota,
               data_publicacao,
               jogos!inner(titulo),
               usuarios!inner(username, avatar_url)
             `)
             .order('data_publicacao', { ascending: false })
-            .limit(6),
-          supabase
-            .from('comentarios')
-            .select(`
-              id,
-              texto,
-              data_comentario,
-              usuarios!inner(username, avatar_url),
-              avaliacoes!inner(
-                jogos!inner(titulo)
-              )
-            `)
-            .order('data_comentario', { ascending: false })
             .limit(6),
           supabase
             .from('jogos')
@@ -207,10 +169,6 @@ function HomePage() {
           console.error('Erro ao buscar avaliacoes recentes:', reviewsResponse.error)
         }
 
-        if (commentsResponse.error) {
-          console.error('Erro ao buscar comentarios recentes:', commentsResponse.error)
-        }
-
         if (featuredGamesResponse.error) {
           console.error('Erro ao buscar jogos em destaque:', featuredGamesResponse.error)
         }
@@ -221,34 +179,16 @@ function HomePage() {
 
           return {
             id: review.id,
-            type: 'review' as const,
             authorName: reviewUser?.username || 'Usuario',
             authorAvatar: reviewUser?.avatar_url || null,
             gameTitle: reviewGame?.titulo || 'Jogo desconhecido',
-            text: truncateText(review.texto_review || 'Nova avaliacao publicada.'),
+            summary: 'Publicou uma review na comunidade.',
             score: review.nota ?? null,
             publishedAt: review.data_publicacao,
           }
         })
 
-        const commentActivities = ((commentsResponse.data || []) as CommentRow[]).map(comment => {
-          const commentUser = resolveRelation(comment.usuarios)
-          const relatedReview = resolveRelation(comment.avaliacoes)
-          const relatedGame = resolveRelation(relatedReview?.jogos)
-
-          return {
-            id: comment.id,
-            type: 'comment' as const,
-            authorName: commentUser?.username || 'Usuario',
-            authorAvatar: commentUser?.avatar_url || null,
-            gameTitle: relatedGame?.titulo || 'uma avaliacao',
-            text: truncateText(comment.texto, 88),
-            score: null,
-            publishedAt: comment.data_comentario,
-          }
-        })
-
-        const mergedActivities = [...reviewActivities, ...commentActivities]
+        const mergedActivities = reviewActivities
           .sort(
             (leftActivity, rightActivity) =>
               new Date(rightActivity.publishedAt).getTime() -
@@ -455,12 +395,12 @@ function HomePage() {
 
               {recentActivities.length === 0 ? (
                 <div className="home-empty-state">
-                  <p>As novas reviews e comentarios vao aparecer aqui.</p>
+                  <p>As novas reviews vao aparecer aqui.</p>
                 </div>
               ) : (
                 <div className="home-activity-list">
                   {recentActivities.map(activity => (
-                    <article key={`${activity.type}-${activity.id}`} className="home-activity-card">
+                    <article key={activity.id} className="home-activity-card">
                       <div className="home-activity-top">
                         <div className="home-user-chip">
                           {activity.authorAvatar ? (
@@ -484,12 +424,12 @@ function HomePage() {
                         {activity.score !== null ? (
                           <span className="home-score-pill">{activity.score}/10</span>
                         ) : (
-                          <span className="home-tag">Comentario</span>
+                          <span className="home-tag">Review</span>
                         )}
                       </div>
 
                       <h4>{activity.gameTitle}</h4>
-                      <p>{activity.text}</p>
+                      <p>{activity.summary}</p>
                     </article>
                   ))}
                 </div>
