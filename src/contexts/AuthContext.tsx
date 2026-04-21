@@ -6,6 +6,8 @@ const GENERIC_REGISTER_ERROR_MESSAGE = 'Nao foi possivel concluir o cadastro ago
 const GENERIC_REGISTER_IDENTITY_MESSAGE =
   'Nao foi possivel concluir o cadastro com os dados informados.'
 const USERNAME_TAKEN_MESSAGE = 'Esse nome de usuario ja esta em uso.'
+const USER_PROFILE_SELECT =
+  'id, username, nome_completo, avatar_path, avatar_url, bio, data_cadastro, configuracoes_privacidade'
 
 export interface UserProfile {
   id: string
@@ -190,7 +192,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const fetchProfile = useCallback(async (userId: string) => {
     try {
-      const { data, error } = await supabase.from('usuarios').select('*').eq('id', userId).single()
+      const { data, error } = await supabase
+        .from('usuarios')
+        .select(USER_PROFILE_SELECT)
+        .eq('id', userId)
+        .single()
 
       if (error) {
         return null
@@ -223,7 +229,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
 
         // The auth listener and the register flow can race to create the same profile.
-        const { data, error } = await supabase.from('usuarios').insert(profileData).select().single()
+        const { data, error } = await supabase
+          .from('usuarios')
+          .insert(profileData)
+          .select(USER_PROFILE_SELECT)
+          .single()
 
         if (error) {
           if (error.code === '23505') {
@@ -280,7 +290,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         .from('usuarios')
         .update(updates)
         .eq('id', nextUser.id)
-        .select('*')
+        .select(USER_PROFILE_SELECT)
         .single()
 
       if (error || !data) {
@@ -477,7 +487,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           .from('usuarios')
           .update(updates)
           .eq('id', user.id)
-          .select('*')
+          .select(USER_PROFILE_SELECT)
           .single()
 
         if (error) {

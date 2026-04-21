@@ -76,7 +76,7 @@ function chunkWishlistItems(items: WishlistGameItem[], chunkSize: number) {
 
 function getWishlistOrderErrorMessage(error: WishlistError | null) {
   if (!error) {
-    return 'Nao foi possivel salvar a nova ordem da sua lista agora.'
+    return 'Nao foi possivel salvar a nova ordem dos jogos que voce quer jogar agora.'
   }
 
   const fullMessage = [error.message, error.details, error.hint].filter(Boolean).join(' ').toLowerCase()
@@ -94,7 +94,7 @@ function getWishlistOrderErrorMessage(error: WishlistError | null) {
     return 'Nao foi possivel salvar a ordem porque a estrutura da tabela lista_desejos nao corresponde ao frontend.'
   }
 
-  return 'Nao foi possivel salvar a nova ordem da sua lista agora.'
+  return 'Nao foi possivel salvar a nova ordem dos jogos que voce quer jogar agora.'
 }
 
 function moveWishlistItem(items: WishlistGameItem[], sourceIndex: number, targetIndex: number) {
@@ -456,7 +456,7 @@ export function ProfileWishlistSection({
     if (!result.ok) {
       setOrderStatus({
         tone: 'error',
-        message: result.message || 'Nao foi possivel remover este jogo da wishlist.',
+        message: result.message || 'Nao foi possivel remover este jogo da lista agora.',
       })
     }
   }
@@ -469,9 +469,13 @@ export function ProfileWishlistSection({
       <div className="profile-wishlist-content">
         <div className="profile-section-head">
           <div className="profile-section-copy">
-            <span className="profile-section-label">Wishlist</span>
-            <h2>Jogos que quero jogar futuramente</h2>
-            <p>Guarde aqui os titulos que voce quer explorar nas proximas jogatinas.</p>
+            <span className="profile-section-label">Jogos que quero jogar</span>
+            <h2>Jogos que quero jogar</h2>
+            <p>
+              {isOwnerView
+                ? 'Guarde aqui os titulos que voce quer explorar nas proximas jogatinas.'
+                : 'Veja quais titulos este perfil salvou para jogar em outro momento.'}
+            </p>
           </div>
 
           <div className="profile-meta-item profile-wishlist-summary">
@@ -482,18 +486,36 @@ export function ProfileWishlistSection({
 
         {isLoading ? (
           <div className="profile-wishlist-empty">
-            <h3>Carregando sua lista</h3>
-            <p>Estamos buscando os jogos que voce marcou para jogar futuramente.</p>
+            <h3>
+              {isOwnerView
+                ? 'Carregando seus jogos para jogar'
+                : 'Carregando jogos para jogar deste perfil'}
+            </h3>
+            <p>
+              {isOwnerView
+                ? 'Estamos buscando os jogos que voce salvou para jogar depois.'
+                : 'Estamos buscando os jogos que este perfil salvou para jogar depois.'}
+            </p>
           </div>
         ) : errorMessage ? (
           <p className="profile-feedback is-error">{errorMessage}</p>
         ) : !hasWishlistItems ? (
           <div className="profile-wishlist-empty">
-            <h3>Sua lista de desejos ainda esta vazia</h3>
-            <p>Quando voce salvar um jogo, ele vai aparecer aqui com acesso rapido ao catalogo.</p>
-            <Link to="/games" className="profile-secondary-button profile-wishlist-link">
-              Explorar jogos
-            </Link>
+            <h3>
+              {isOwnerView
+                ? 'Voce ainda nao salvou jogos para jogar'
+                : 'Este perfil ainda nao salvou jogos para jogar'}
+            </h3>
+            <p>
+              {isOwnerView
+                ? 'Quando voce salvar um jogo, ele vai aparecer aqui com acesso rapido ao catalogo.'
+                : 'Quando este usuario salvar jogos para jogar, eles vao aparecer aqui.'}
+            </p>
+            {isOwnerView ? (
+              <Link to="/games" className="profile-secondary-button profile-wishlist-link">
+                Explorar jogos
+              </Link>
+            ) : null}
           </div>
         ) : (
           <>
@@ -506,7 +528,7 @@ export function ProfileWishlistSection({
                   type="button"
                   className="profile-wishlist-arrow profile-wishlist-arrow--prev"
                   onClick={() => setCurrentPage(previousPage => Math.max(previousPage - 1, 0))}
-                  aria-label="Mostrar grupo anterior da wishlist"
+                  aria-label="Mostrar grupo anterior da lista de jogos para jogar"
                 >
                   <span aria-hidden="true">&lsaquo;</span>
                 </button>
@@ -701,7 +723,7 @@ export function ProfileWishlistSection({
                   onClick={() =>
                     setCurrentPage(previousPage => Math.min(previousPage + 1, totalPages - 1))
                   }
-                  aria-label="Mostrar proximo grupo da wishlist"
+                  aria-label="Mostrar proximo grupo da lista de jogos para jogar"
                 >
                   <span aria-hidden="true">&rsaquo;</span>
                 </button>

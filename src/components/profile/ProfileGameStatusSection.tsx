@@ -532,8 +532,16 @@ export function ProfileGameStatusSection({
         <div className="profile-section-head">
           <div className="profile-section-copy">
             <span className="profile-section-label">Status dos jogos</span>
-            <h2>Uma lista so para tudo o que ja entrou no seu perfil</h2>
-            <p>Busque rapido, organize por filtro e navegue pela sua colecao no mesmo ritmo da wishlist.</p>
+            <h2>
+              {isOwnerView
+                ? 'Uma lista so para tudo o que ja entrou no seu perfil'
+                : 'Os jogos que este perfil ja adicionou e organizou'}
+            </h2>
+            <p>
+              {isOwnerView
+                ? 'Busque rapido, organize por filtro e navegue pela sua colecao no mesmo ritmo da lista de jogos que voce quer jogar.'
+                : 'Explore os jogos deste perfil por status, favoritos e ordem de visualizacao.'}
+            </p>
           </div>
 
           <div className="profile-meta-item profile-status-summary">
@@ -804,12 +812,16 @@ export function ProfileGameStatusSection({
 
         {isLoading ? (
           <div className="profile-status-empty">
-            <h3>Carregando seus jogos</h3>
-            <p>Estamos montando a grade com tudo o que voce adicionou ao seu perfil.</p>
+            <h3>{isOwnerView ? 'Carregando seus jogos' : 'Carregando jogos deste perfil'}</h3>
+            <p>
+              {isOwnerView
+                ? 'Estamos montando a grade com tudo o que voce adicionou ao seu perfil.'
+                : 'Estamos montando a grade com tudo o que este perfil adicionou.'}
+            </p>
           </div>
         ) : errorMessage ? (
           <div className="profile-status-empty">
-            <h3>Ocorreu um problema ao carregar os jogos do perfil</h3>
+            <h3>Ocorreu um problema ao carregar os jogos deste perfil</h3>
             <p>{errorMessage}</p>
             <button
               type="button"

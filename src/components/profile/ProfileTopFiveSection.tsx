@@ -63,10 +63,22 @@ function getSearchErrorMessage(error: GameCatalogError | null) {
   return 'Nao foi possivel buscar jogos agora.'
 }
 
-function getTopFiveHeadingCopy(filledSlotsCount: number) {
-  if (filledSlotsCount === 5) return 'Seu ranking pessoal esta completo.'
-  if (filledSlotsCount === 0) return 'Escolha os cinco jogos que melhor representam voce.'
-  return `${filledSlotsCount}/5 posicoes definidas no seu ranking pessoal.`
+function getTopFiveHeadingCopy(filledSlotsCount: number, isOwnerView: boolean) {
+  if (filledSlotsCount === 5) {
+    return isOwnerView
+      ? 'Seu ranking pessoal esta completo.'
+      : 'O ranking pessoal deste perfil esta completo.'
+  }
+
+  if (filledSlotsCount === 0) {
+    return isOwnerView
+      ? 'Escolha os cinco jogos que melhor representam voce.'
+      : 'Este perfil ainda nao definiu nenhum jogo no ranking pessoal.'
+  }
+
+  return isOwnerView
+    ? `${filledSlotsCount}/5 posicoes definidas no seu ranking pessoal.`
+    : `${filledSlotsCount}/5 posicoes definidas no ranking pessoal deste perfil.`
 }
 
 export function ProfileTopFiveSection({
@@ -463,8 +475,12 @@ export function ProfileTopFiveSection({
       <div className="profile-top-five-header">
         <div className="profile-top-five-copy">
           <span className="profile-section-label">Top 5 pessoal</span>
-          <h2>Os jogos que definem o seu ranking pessoal</h2>
-          <p>{getTopFiveHeadingCopy(filledSlotsCount)}</p>
+          <h2>
+            {isOwnerView
+              ? 'Os jogos que definem o seu ranking pessoal'
+              : 'Os jogos que definem o ranking pessoal deste perfil'}
+          </h2>
+          <p>{getTopFiveHeadingCopy(filledSlotsCount, isOwnerView)}</p>
         </div>
       </div>
 
@@ -474,7 +490,11 @@ export function ProfileTopFiveSection({
       <div className="profile-top-five-grid">{topFiveSlots.map(renderSlotBody)}</div>
 
       {selectedGamesLoading ? (
-        <p className="profile-top-five-status">Carregando os jogos ja escolhidos para o seu Top 5...</p>
+        <p className="profile-top-five-status">
+          {isOwnerView
+            ? 'Carregando os jogos ja escolhidos para o seu Top 5...'
+            : 'Carregando os jogos ja escolhidos para o Top 5 deste perfil...'}
+        </p>
       ) : null}
 
       {activeSlotPosition ? (

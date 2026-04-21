@@ -75,9 +75,15 @@ export function ProfileReviewsSection({
         <div className="profile-section-head">
           <div className="profile-section-copy">
             <span className="profile-section-label">Reviews</span>
-            <h2>Seu historico de avaliacoes do catalogo</h2>
+            <h2>
+              {isOwnerView
+                ? 'Seu historico de avaliacoes do catalogo'
+                : 'As avaliacoes publicadas por este perfil'}
+            </h2>
             <p>
-              Consulte rapidamente as notas que voce ja publicou e volte para qualquer jogo com um clique.
+              {isOwnerView
+                ? 'Consulte rapidamente as notas que voce ja publicou e volte para qualquer jogo com um clique.'
+                : 'Consulte rapidamente as notas publicadas por este perfil e volte para qualquer jogo com um clique.'}
             </p>
           </div>
 
@@ -89,12 +95,16 @@ export function ProfileReviewsSection({
 
         {isLoading ? (
           <div className="profile-reviews-empty">
-            <h3>Carregando suas reviews</h3>
-            <p>Estamos reunindo as avaliacoes que voce publicou no catalogo.</p>
+            <h3>{isOwnerView ? 'Carregando suas reviews' : 'Carregando reviews deste perfil'}</h3>
+            <p>
+              {isOwnerView
+                ? 'Estamos reunindo as avaliacoes que voce publicou no catalogo.'
+                : 'Estamos reunindo as avaliacoes publicadas por este perfil no catalogo.'}
+            </p>
           </div>
         ) : errorMessage ? (
           <div className="profile-reviews-empty">
-            <h3>Ocorreu um problema ao carregar suas reviews</h3>
+            <h3>Ocorreu um problema ao carregar as reviews deste perfil</h3>
             <p>{errorMessage}</p>
           </div>
         ) : !hasReviews ? (
