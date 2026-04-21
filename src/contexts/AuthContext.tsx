@@ -11,6 +11,7 @@ export interface UserProfile {
   id: string
   username: string
   nome_completo: string
+  avatar_path: string | null
   avatar_url: string | null
   bio: string | null
   data_cadastro: string
@@ -50,7 +51,10 @@ export type RegisterResult =
     }
 
 export type UserProfileUpdates = Partial<
-  Pick<UserProfile, 'nome_completo' | 'username' | 'bio' | 'avatar_url' | 'configuracoes_privacidade'>
+  Pick<
+    UserProfile,
+    'nome_completo' | 'username' | 'bio' | 'avatar_path' | 'avatar_url' | 'configuracoes_privacidade'
+  >
 >
 
 export interface ProfileUpdateError {
@@ -211,6 +215,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           id: nextUser.id,
           username,
           nome_completo,
+          avatar_path: null,
           avatar_url: null,
           bio: null,
           data_cadastro: new Date().toISOString(),

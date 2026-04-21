@@ -4,6 +4,7 @@ import HomePage from './pages/HomePage'
 import GamesPage from './pages/GamesPage'
 import GameDetailsPage from './pages/GameDetailsPage'
 import { ProfilePage } from './pages/ProfilePage'
+import { PublicProfilePage } from './pages/PublicProfilePage'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import './App.css'
@@ -17,6 +18,7 @@ function App() {
         <Route path="/games" element={<GamesPage />} />
         <Route path="/games/:id" element={<GameDetailsPage />} />
         <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/u/:username" element={<PublicProfilePage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
       </Routes>

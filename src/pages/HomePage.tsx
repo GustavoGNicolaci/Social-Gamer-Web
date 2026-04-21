@@ -29,7 +29,7 @@ interface SiteStats {
 
 interface UserSummary {
   username: string
-  avatar_url: string | null
+  avatar_path: string | null
 }
 
 interface GameTitleRelation {
@@ -147,7 +147,7 @@ function HomePage() {
               nota,
               data_publicacao,
               jogos!inner(titulo),
-              usuarios!inner(username, avatar_url)
+              usuarios!inner(username, avatar_path)
             `)
             .order('data_publicacao', { ascending: false })
             .limit(6),
@@ -177,7 +177,7 @@ function HomePage() {
           return {
             id: review.id,
             authorName: reviewUser?.username || 'Usuario',
-            authorAvatar: reviewUser?.avatar_url || null,
+            authorAvatar: reviewUser?.avatar_path || null,
             gameTitle: reviewGame?.titulo || 'Jogo desconhecido',
             summary: 'Publicou uma review na comunidade.',
             score: review.nota ?? null,
@@ -400,7 +400,7 @@ function HomePage() {
                         <div className="home-user-chip">
                           <UserAvatar
                             name={activity.authorName}
-                            src={activity.authorAvatar}
+                            avatarPath={activity.authorAvatar}
                             imageClassName="home-user-avatar"
                             fallbackClassName="home-user-avatar-fallback"
                           />

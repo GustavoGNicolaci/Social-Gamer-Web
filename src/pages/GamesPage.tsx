@@ -1,6 +1,5 @@
 import {
   useEffect,
-  useMemo,
   useState,
   type CSSProperties,
 } from 'react'
@@ -302,12 +301,24 @@ function GamesPage() {
   }, [showFiltersModal, showGenresModal])
 
   useEffect(() => {
-    setCurrentPage(1)
+    const timeoutId = window.setTimeout(() => {
+      setCurrentPage(1)
+    }, 0)
+
+    return () => {
+      window.clearTimeout(timeoutId)
+    }
   }, [facetFilters, navbarQuery])
 
   useEffect(() => {
-    if (!showFiltersModal) {
+    if (showFiltersModal) return
+
+    const timeoutId = window.setTimeout(() => {
       setFiltersModalSearch('')
+    }, 0)
+
+    return () => {
+      window.clearTimeout(timeoutId)
     }
   }, [showFiltersModal])
 
@@ -352,38 +363,22 @@ function GamesPage() {
       token => token.category === category && token.value.toLowerCase() === value.toLowerCase()
     )
 
-  const navbarScopedGames = useMemo(
-    () =>
-      games.filter(
-        game =>
-          normalizedNavbarQuery.length === 0 ||
-          game.titulo.toLowerCase().includes(normalizedNavbarQuery)
-      ),
-    [games, normalizedNavbarQuery]
+  const navbarScopedGames = games.filter(
+    game =>
+      normalizedNavbarQuery.length === 0 ||
+      game.titulo.toLowerCase().includes(normalizedNavbarQuery)
   )
 
-  const allGenres = useMemo(
-    () =>
-      sortAlphabetically(
-        Array.from(new Set(navbarScopedGames.flatMap(game => normalizeList(game.generos))))
-      ),
-    [navbarScopedGames]
+  const allGenres = sortAlphabetically(
+    Array.from(new Set(navbarScopedGames.flatMap(game => normalizeList(game.generos))))
   )
 
-  const allPlatforms = useMemo(
-    () =>
-      sortAlphabetically(
-        Array.from(new Set(navbarScopedGames.flatMap(game => normalizeList(game.plataformas))))
-      ),
-    [navbarScopedGames]
+  const allPlatforms = sortAlphabetically(
+    Array.from(new Set(navbarScopedGames.flatMap(game => normalizeList(game.plataformas))))
   )
 
-  const allDevelopers = useMemo(
-    () =>
-      sortAlphabetically(
-        Array.from(new Set(navbarScopedGames.flatMap(game => normalizeList(game.desenvolvedora))))
-      ),
-    [navbarScopedGames]
+  const allDevelopers = sortAlphabetically(
+    Array.from(new Set(navbarScopedGames.flatMap(game => normalizeList(game.desenvolvedora))))
   )
 
   const clearAllFilters = () => {
@@ -420,54 +415,37 @@ function GamesPage() {
   const platformFilterTokens = facetFilters.filter(filter => filter.category === 'platform')
   const developerFilterTokens = facetFilters.filter(filter => filter.category === 'developer')
 
-  const filteredGames = useMemo(
-    () =>
-      navbarScopedGames.filter(game => {
-        const genres = normalizeList(game.generos)
-        const platforms = normalizeList(game.plataformas)
-        const developers = normalizeList(game.desenvolvedora)
+  const filteredGames = navbarScopedGames.filter(game => {
+    const genres = normalizeList(game.generos)
+    const platforms = normalizeList(game.plataformas)
+    const developers = normalizeList(game.desenvolvedora)
 
-        const genreMatch =
-          genreFilterTokens.length === 0 ||
-          genreFilterTokens.every(filterToken =>
-            genres.some(genre => genre.toLowerCase().includes(filterToken.value.toLowerCase()))
-          )
+    const genreMatch =
+      genreFilterTokens.length === 0 ||
+      genreFilterTokens.every(filterToken =>
+        genres.some(genre => genre.toLowerCase().includes(filterToken.value.toLowerCase()))
+      )
 
-        const platformMatch =
-          platformFilterTokens.length === 0 ||
-          platformFilterTokens.every(filterToken =>
-            platforms.some(platform =>
-              platform.toLowerCase().includes(filterToken.value.toLowerCase())
-            )
-          )
+    const platformMatch =
+      platformFilterTokens.length === 0 ||
+      platformFilterTokens.every(filterToken =>
+        platforms.some(platform => platform.toLowerCase().includes(filterToken.value.toLowerCase()))
+      )
 
-        const developerMatch =
-          developerFilterTokens.length === 0 ||
-          developerFilterTokens.every(filterToken =>
-            developers.some(developer =>
-              developer.toLowerCase().includes(filterToken.value.toLowerCase())
-            )
-          )
+    const developerMatch =
+      developerFilterTokens.length === 0 ||
+      developerFilterTokens.every(filterToken =>
+        developers.some(developer =>
+          developer.toLowerCase().includes(filterToken.value.toLowerCase())
+        )
+      )
 
-        return genreMatch && platformMatch && developerMatch
-      }),
-    [developerFilterTokens, genreFilterTokens, navbarScopedGames, platformFilterTokens]
-  )
+    return genreMatch && platformMatch && developerMatch
+  })
 
-  const modalGenreOptions = useMemo(
-    () => buildVisibleFacetOptions(allGenres, trimmedModalSearch),
-    [allGenres, trimmedModalSearch]
-  )
-
-  const modalPlatformOptions = useMemo(
-    () => buildVisibleFacetOptions(allPlatforms, trimmedModalSearch),
-    [allPlatforms, trimmedModalSearch]
-  )
-
-  const modalDeveloperOptions = useMemo(
-    () => buildVisibleFacetOptions(allDevelopers, trimmedModalSearch),
-    [allDevelopers, trimmedModalSearch]
-  )
+  const modalGenreOptions = buildVisibleFacetOptions(allGenres, trimmedModalSearch)
+  const modalPlatformOptions = buildVisibleFacetOptions(allPlatforms, trimmedModalSearch)
+  const modalDeveloperOptions = buildVisibleFacetOptions(allDevelopers, trimmedModalSearch)
 
   const totalPages = Math.ceil(filteredGames.length / itemsPerPage)
   const safeCurrentPage = totalPages === 0 ? 1 : Math.min(currentPage, totalPages)
@@ -480,12 +458,6 @@ function GamesPage() {
     filteredGames.length === 0
       ? 'Nenhum item para exibir'
       : `Mostrando ${visibleStart}-${visibleEnd} de ${filteredGames.length}`
-
-  useEffect(() => {
-    if (currentPage !== safeCurrentPage) {
-      setCurrentPage(safeCurrentPage)
-    }
-  }, [currentPage, safeCurrentPage])
 
   const gridStyle = {
     '--gp-grid-columns': String(gridColumns),

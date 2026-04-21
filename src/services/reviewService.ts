@@ -10,7 +10,7 @@ export interface ReviewError {
 
 export interface ReviewAuthor {
   username: string
-  avatar_url: string | null
+  avatar_path: string | null
 }
 
 export type ReviewGamePreview = Pick<CatalogGamePreview, 'id' | 'titulo' | 'capa_url'>
@@ -77,7 +77,7 @@ interface DeleteReviewParams {
 
 interface ReviewAuthorRow {
   username: string
-  avatar_url: string | null
+  avatar_path: string | null
 }
 
 type ReviewAuthorRelation = ReviewAuthorRow | ReviewAuthorRow[] | null
@@ -142,7 +142,7 @@ const GAME_REVIEW_SELECT = `
   curtidas,
   data_publicacao,
   editado_em,
-  usuario:usuarios(username, avatar_url),
+  usuario:usuarios(username, avatar_path),
   comentarios(
     id,
     usuario_id,
@@ -150,7 +150,7 @@ const GAME_REVIEW_SELECT = `
     texto,
     data_comentario,
     editado_em,
-    usuario:usuarios(username, avatar_url)
+    usuario:usuarios(username, avatar_path)
   )
 `
 
@@ -163,7 +163,7 @@ const PROFILE_REVIEW_SELECT = `
   curtidas,
   data_publicacao,
   editado_em,
-  usuario:usuarios(username, avatar_url),
+  usuario:usuarios(username, avatar_path),
   jogo:jogos(id, titulo, capa_url)
 `
 

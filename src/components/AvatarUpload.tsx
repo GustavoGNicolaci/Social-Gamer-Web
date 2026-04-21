@@ -1,12 +1,12 @@
-import React, { useState } from 'react';
-import { uploadImage, getPublicUrl, deleteFile } from '../services/storageService';
-import './AvatarUpload.css';
+import React, { useState } from 'react'
+import { deleteFile, resolveAvatarPublicUrl, uploadAvatarImage } from '../services/storageService'
+import './AvatarUpload.css'
 
 interface AvatarUploadProps {
-  userId: string;
-  currentAvatarPath?: string;
-  onUploadSuccess: (url: string, path: string) => void;
-  showPreview?: boolean;
+  userId: string
+  currentAvatarPath?: string
+  onUploadSuccess: (url: string, path: string) => void
+  showPreview?: boolean
 }
 
 export function AvatarUpload({
@@ -15,47 +15,44 @@ export function AvatarUpload({
   onUploadSuccess,
   showPreview = true,
 }: AvatarUploadProps) {
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [preview, setPreview] = useState<string | null>(null)
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const file = e.target.files?.[0]
+    if (!file) return
 
-    setError(null);
-    setIsLoading(true);
+    setError(null)
+    setIsLoading(true)
 
     try {
-      // Criar preview
-      const reader = new FileReader();
+      const reader = new FileReader()
       reader.onloadend = () => {
-        setPreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+        setPreview(reader.result as string)
+      }
+      reader.readAsDataURL(file)
 
-      // Deletar avatar anterior se existir
       if (currentAvatarPath) {
-        await deleteFile(currentAvatarPath);
+        await deleteFile(currentAvatarPath)
       }
 
-      // Upload do novo avatar
-      const result = await uploadImage(file, userId);
+      const result = await uploadAvatarImage(file, userId)
 
       if (result) {
-        onUploadSuccess(result.url, result.path);
-        setError(null);
+        onUploadSuccess(result.publicUrl, result.path)
+        setError(null)
       } else {
-        setError('Erro ao fazer upload da imagem');
-        setPreview(null);
+        setError('Erro ao fazer upload da imagem')
+        setPreview(null)
       }
-    } catch (err) {
-      setError('Erro ao processar arquivo');
-      setPreview(null);
+    } catch {
+      setError('Erro ao processar arquivo')
+      setPreview(null)
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
-  };
+  }
 
   return (
     <div className="avatar-upload">
@@ -64,7 +61,7 @@ export function AvatarUpload({
           {preview ? (
             <img src={preview} alt="Preview" />
           ) : currentAvatarPath ? (
-            <img src={getPublicUrl(currentAvatarPath)} alt="Avatar" />
+            <img src={resolveAvatarPublicUrl(currentAvatarPath) || ''} alt="Avatar" />
           ) : (
             <div className="placeholder">Sem foto de perfil</div>
           )}
@@ -85,5 +82,5 @@ export function AvatarUpload({
 
       {error && <p className="error">{error}</p>}
     </div>
-  );
+  )
 }

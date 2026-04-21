@@ -1,164 +1,149 @@
-# Configuração do Storage com Supabase - Social-Gamer-Web
+# Configuracao do Storage com Supabase - Social-Gamer-Web
 
-## Passo 1: Criar o Bucket no Supabase
+## Passo 1: Criar o bucket no Supabase
 
-1. Acesse o painel do Supabase
-2. Vá para **Storage** > **Buckets**
-3. Clique em **Create a new bucket**
-4. Nome: `user-uploads`
-5. Deixe como **Private** (você configurará as políticas)
-6. Clique em **Create bucket**
+1. Acesse o painel do Supabase.
+2. Va para **Storage** > **Buckets**.
+3. Clique em **Create a new bucket**.
+4. Nome: `user-uploads`.
+5. Marque o bucket como **Public** para que fotos de perfil possam aparecer para outros usuarios e visitantes.
+6. Clique em **Create bucket**.
 
-## Passo 2: Criar a Tabela de Profiles (SE NÃO EXISTIR)
-
-Execute no SQL Editor do Supabase:
-
-```sql
-CREATE TABLE profiles (
-  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  email TEXT UNIQUE,
-  avatar_url TEXT,
-  avatar_path TEXT,
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
-);
-
--- Enable RLS
-ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
-
--- Policies
-CREATE POLICY "Users can view their own profile"
-  ON profiles FOR SELECT
-  USING (auth.uid() = id);
-
-CREATE POLICY "Users can update their own profile"
-  ON profiles FOR UPDATE
-  USING (auth.uid() = id);
-```
-
-## Passo 3: Configurar Políticas de Storage
+## Passo 2: Criar a tabela de profiles (se necessario)
 
 Execute no SQL Editor do Supabase:
 
 ```sql
--- Permitir usuários fazer upload em sua própria pasta
-CREATE POLICY "Users can upload to their own folder"
-ON storage.objects
-FOR INSERT
-TO authenticated
-WITH CHECK (
-  bucket_id = 'user-uploads' AND
+create table profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  email text unique,
+  avatar_url text,
+  avatar_path text,
+  created_at timestamp default now(),
+  updated_at timestamp default now()
+);
+
+alter table profiles enable row level security;
+
+create policy "Users can view their own profile"
+  on profiles for select
+  using (auth.uid() = id);
+
+create policy "Users can update their own profile"
+  on profiles for update
+  using (auth.uid() = id);
+```
+
+## Passo 3: Configurar politicas de storage
+
+Execute no SQL Editor do Supabase:
+
+```sql
+create policy "Users can upload to their own folder"
+on storage.objects
+for insert
+to authenticated
+with check (
+  bucket_id = 'user-uploads' and
   (storage.foldername(name))[1] = auth.uid()::text
 );
 
--- Usar URL pública (caso bucket seja público) ou gerar signed URLs
-CREATE POLICY "Users can view their own files"
-ON storage.objects
-FOR SELECT
-TO authenticated
-USING (
-  bucket_id = 'user-uploads' AND
-  (storage.foldername(name))[1] = auth.uid()::text
+create policy "Public can view avatar files"
+on storage.objects
+for select
+using (
+  bucket_id = 'user-uploads'
 );
 
--- Permitir usuários deletar seus próprios arquivos
-CREATE POLICY "Users can delete their own files"
-ON storage.objects
-FOR DELETE
-TO authenticated
-USING (
-  bucket_id = 'user-uploads' AND
+create policy "Users can delete their own files"
+on storage.objects
+for delete
+to authenticated
+using (
+  bucket_id = 'user-uploads' and
   (storage.foldername(name))[1] = auth.uid()::text
 );
 ```
 
-## Passo 4: Verificar as Variáveis de Ambiente
+## Passo 4: Verificar as variaveis de ambiente
 
-Verifique se seu `.env.local` tem:
+Garanta que o `.env` tenha:
 
 ```env
 VITE_SUPABASE_URL=your_supabase_url
 VITE_SUPABASE_ANON_KEY=your_anon_key
 ```
 
-## Passo 5: Usar no Código
+## Passo 5: Usar no codigo
 
-### Importar o Serviço
-
-```typescript
-import { uploadImage, getPublicUrl, deleteFile } from '../services/storageService';
-```
-
-### Usar o Componente de Avatar
-
-```tsx
-import { AvatarUpload } from '../components/AvatarUpload';
-
-<AvatarUpload
-  userId={user.id}
-  currentAvatarPath={profile?.avatar_path}
-  onUploadSuccess={(url, path) => {
-    // Atualizar seu banco de dados
-  }}
-/>
-```
-
-### Ou Usar as Funções Diretamente
+### Importar o servico
 
 ```typescript
-// Upload de imagem
-const result = await uploadImage(file, userId);
+import { uploadImage, getPublicUrl, deleteFile } from '../services/storageService'
+```
+
+### Upload de avatar
+
+```typescript
+const result = await uploadImage(file, userId)
+
 if (result) {
-  console.log('URL:', result.url);
-  console.log('Path:', result.path);
+  await updateOwnProfile({
+    avatar_url: result.url,
+  })
 }
-
-// Listar arquivos
-const files = await listUserFiles(userId);
-
-// Deletar arquivo
-await deleteFile('user-id/images/file.jpg');
-
-// Download
-const blob = await downloadFile('user-id/images/file.jpg');
 ```
 
-## Estrutura de Arquivos Criada
+### Outras funcoes
 
+```typescript
+const files = await listUserFiles(userId)
+await deleteFile('user-id/images/file.jpg')
+const blob = await downloadFile('user-id/images/file.jpg')
 ```
+
+## Estrutura de arquivos
+
+```text
 src/
-├── services/
-│   └── storageService.ts      # Funções de storage
-├── components/
-│   ├── AvatarUpload.tsx       # Componente de upload
-│   └── AvatarUpload.css       # Estilos
-└── pages/
-    └── ProfilePage.tsx         # Exemplo de uso
+|-- services/
+|   `-- storageService.ts
+|-- components/
+|   |-- AvatarUpload.tsx
+|   `-- AvatarUpload.css
+`-- pages/
+    `-- ProfilePage.tsx
 ```
 
-## Função Disponíveis
+## Funcoes disponiveis
 
 ### `uploadFile(file, userId, folder?)`
-Upload genérico de arquivo
+
+Upload generico de arquivo.
 
 ### `uploadImage(file, userId, maxSizeMB?)`
-Upload com validação de imagem (tamanho e tipo)
+
+Upload com validacao de imagem.
 
 ### `getPublicUrl(filePath)`
-Obtém URL pública de um arquivo
+
+Obtem a URL publica de um avatar.
 
 ### `deleteFile(filePath)`
-Deleta um arquivo
+
+Deleta um arquivo do bucket.
 
 ### `listUserFiles(userId, folder?)`
-Lista arquivos do usuário
+
+Lista arquivos do usuario.
 
 ### `downloadFile(filePath)`
-Faz download de um arquivo
 
-## Notas Importantes
+Faz download de um arquivo.
 
-- ⚠️ Mude `BUCKET_NAME` em `storageService.ts` se usar outro nome
-- 🔒 As políticas garantem que usuários só acessem seus próprios arquivos
-- 📁 A estrutura de pastas é `{userId}/{folder}/{file}`
-- 🖼️ O componente `AvatarUpload` já trata preview e deleção do avatar anterior
+## Notas importantes
+
+- Ajuste `BUCKET_NAME` em `storageService.ts` se usar outro bucket.
+- As fotos de perfil ficam publicas para aparecer em reviews, comentarios e na Home.
+- Upload e delecao continuam restritos a pasta do proprio usuario.
+- A estrutura de pastas continua sendo `{userId}/{folder}/{file}`.

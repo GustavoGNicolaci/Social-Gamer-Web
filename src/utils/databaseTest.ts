@@ -4,35 +4,30 @@ export const testDatabaseOperations = async () => {
   console.log('=== TESTE DE BANCO DE DADOS ===')
 
   try {
-    // Verificar se há sessão ativa
     const { data: sessionData } = await supabase.auth.getSession()
-    console.log('Sessão ativa:', sessionData.session ? '✅ Sim' : '❌ Não')
+    console.log('Sessao ativa:', sessionData.session ? 'Sim' : 'Nao')
 
-    // Teste 1: Verificar se conseguimos ler da tabela
     console.log('1. Testando leitura da tabela usuarios...')
-    const { data: readData, error: readError } = await supabase
-      .from('usuarios')
-      .select('*')
-      .limit(1)
+    const { data: readData, error: readError } = await supabase.from('usuarios').select('*').limit(1)
 
     if (readError) {
-      console.error('❌ Erro na leitura:', readError)
-      console.error('Código:', readError.code)
+      console.error('Erro na leitura:', readError)
+      console.error('Codigo:', readError.code)
     } else {
-      console.log('✅ Leitura OK. Dados encontrados:', readData?.length || 0)
+      console.log('Leitura OK. Dados encontrados:', readData?.length || 0)
     }
 
-    // Teste 2: Verificar se conseguimos inserir (usando um UUID válido para teste)
-    console.log('2. Testando inserção na tabela usuarios...')
-    const testId = crypto.randomUUID() // Gera um UUID válido
+    console.log('2. Testando insercao na tabela usuarios...')
+    const testId = crypto.randomUUID()
     const testData = {
       id: testId,
-      username: 'testuser_' + Date.now(),
-      nome_completo: 'Usuário Teste',
+      username: `testuser_${Date.now()}`,
+      nome_completo: 'Usuario Teste',
+      avatar_path: null,
       avatar_url: null,
       bio: 'Teste',
       data_cadastro: new Date().toISOString(),
-      configuracoes_privacidade: {}
+      configuracoes_privacidade: {},
     }
 
     console.log('Tentando inserir com ID:', testId)
@@ -43,26 +38,22 @@ export const testDatabaseOperations = async () => {
       .select()
 
     if (insertError) {
-      console.error('❌ Erro na inserção:', insertError)
-      console.error('Código:', insertError.code)
+      console.error('Erro na insercao:', insertError)
+      console.error('Codigo:', insertError.code)
       console.error('Mensagem:', insertError.message)
 
       if (insertError.code === '42501') {
-        console.log('💡 Provável problema: RLS (Row Level Security) bloqueando inserção')
-        console.log('💡 Solução: Verificar políticas RLS na tabela usuarios no Supabase')
+        console.log('Possivel problema: RLS bloqueando insercao')
       } else if (insertError.code === '23505') {
-        console.log('💡 Erro: Violação de constraint único (provavelmente username)')
+        console.log('Erro: violacao de constraint unica, provavelmente username')
       }
     } else {
-      console.log('✅ Inserção OK. Dados inseridos:', insertData)
-
-      // Limpar o registro de teste
+      console.log('Insercao OK. Dados inseridos:', insertData)
       await supabase.from('usuarios').delete().eq('id', testId)
-      console.log('🧹 Registro de teste removido')
+      console.log('Registro de teste removido')
     }
-
-  } catch (err) {
-    console.error('❌ Erro geral no teste:', err)
+  } catch (error) {
+    console.error('Erro geral no teste:', error)
   }
 
   console.log('=== FIM DO TESTE ===')

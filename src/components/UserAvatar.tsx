@@ -1,21 +1,12 @@
 import { useState } from 'react'
+import { resolveAvatarPublicUrl } from '../services/storageService'
 
 interface UserAvatarProps {
   name: string
-  src?: string | null
+  avatarPath?: string | null
   imageClassName: string
   fallbackClassName: string
   alt?: string
-}
-
-function sanitizeAvatarSrc(src: string | null | undefined) {
-  const normalizedSrc = src?.trim()
-
-  if (!normalizedSrc) return null
-  if (/^(null|undefined)$/i.test(normalizedSrc)) return null
-  if (/^javascript:/i.test(normalizedSrc)) return null
-
-  return normalizedSrc
 }
 
 function getInitial(name: string) {
@@ -25,12 +16,12 @@ function getInitial(name: string) {
 
 export function UserAvatar({
   name,
-  src,
+  avatarPath,
   imageClassName,
   fallbackClassName,
   alt,
 }: UserAvatarProps) {
-  const safeSrc = sanitizeAvatarSrc(src)
+  const safeSrc = resolveAvatarPublicUrl(avatarPath)
   const [failedSrc, setFailedSrc] = useState<string | null>(null)
   const shouldShowImage = Boolean(safeSrc) && safeSrc !== failedSrc
 

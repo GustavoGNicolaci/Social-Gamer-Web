@@ -4,6 +4,7 @@ import { ProfileGameStatusSection } from '../components/profile/ProfileGameStatu
 import { ProfileReviewsSection } from '../components/profile/ProfileReviewsSection'
 import { ProfileTopFiveSection } from '../components/profile/ProfileTopFiveSection'
 import { ProfileWishlistSection } from '../components/profile/ProfileWishlistSection'
+import { UserAvatar } from '../components/UserAvatar'
 import { useAuth } from '../contexts/AuthContext'
 import {
   deleteReview,
@@ -19,13 +20,14 @@ import {
   type GameStatusItem,
   type GameStatusValue,
 } from '../services/gameStatusService'
-import { uploadImage } from '../services/storageService'
+import { uploadAvatarImage } from '../services/storageService'
 import {
   deleteWishlistEntry,
   getWishlistGamesByUserId,
   type WishlistGameItem,
 } from '../services/wishlistService'
 import {
+  getTopFiveEntriesFromPrivacySettings,
   mergeTopFiveEntriesIntoPrivacySettings,
   type TopFiveStoredEntry,
 } from '../utils/profileTopFive'
@@ -398,7 +400,7 @@ export function ProfilePage() {
     setIsUploadingAvatar(true)
 
     try {
-      const result = await uploadImage(file, user.id)
+      const result = await uploadAvatarImage(file, user.id)
       if (!result) {
         setAvatarFeedback({
           tone: 'error',
@@ -408,7 +410,8 @@ export function ProfilePage() {
       }
 
       const { error } = await updateOwnProfile({
-        avatar_url: result.url,
+        avatar_path: result.path,
+        avatar_url: result.publicUrl,
       })
 
       if (error) {
@@ -685,16 +688,14 @@ export function ProfilePage() {
     }
   }
 
-  const avatarContent = profile.avatar_url ? (
-    <img
-      src={profile.avatar_url}
+  const avatarContent = (
+    <UserAvatar
+      name={visibleFullName}
+      avatarPath={profile.avatar_path}
+      imageClassName="avatar-img profile-avatar-large"
+      fallbackClassName="avatar-placeholder-large profile-avatar-large"
       alt={`Foto de perfil de ${visibleFullName}`}
-      className="avatar-img profile-avatar-large"
     />
-  ) : (
-    <div className="avatar-placeholder-large profile-avatar-large">
-      {visibleFullName.charAt(0).toUpperCase()}
-    </div>
   )
 
   return (
@@ -873,7 +874,7 @@ export function ProfilePage() {
 
             <ProfileTopFiveSection
               isOwnerView={isOwnerView}
-              privacySettings={profile.configuracoes_privacidade}
+              entries={getTopFiveEntriesFromPrivacySettings(profile.configuracoes_privacidade)}
               onSaveTopFive={handleSaveTopFive}
             />
           </section>

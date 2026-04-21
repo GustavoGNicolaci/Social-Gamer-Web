@@ -7,7 +7,6 @@ import {
 } from '../../services/gameCatalogService'
 import {
   TOP_FIVE_POSITIONS,
-  getTopFiveEntriesFromPrivacySettings,
   normalizeTopFiveEntries,
   type TopFivePosition,
   type TopFiveStoredEntry,
@@ -34,7 +33,7 @@ interface TopFiveSearchResultItem {
 
 interface ProfileTopFiveSectionProps {
   isOwnerView: boolean
-  privacySettings: Record<string, unknown> | null
+  entries: TopFiveStoredEntry[]
   onSaveTopFive: (entries: TopFiveStoredEntry[]) => Promise<SaveTopFiveResult>
 }
 
@@ -72,13 +71,10 @@ function getTopFiveHeadingCopy(filledSlotsCount: number) {
 
 export function ProfileTopFiveSection({
   isOwnerView,
-  privacySettings,
+  entries,
   onSaveTopFive,
 }: ProfileTopFiveSectionProps) {
-  const normalizedEntriesFromProps = useMemo(
-    () => getTopFiveEntriesFromPrivacySettings(privacySettings),
-    [privacySettings]
-  )
+  const normalizedEntriesFromProps = useMemo(() => normalizeTopFiveEntries(entries), [entries])
 
   const [storedEntries, setStoredEntries] = useState<TopFiveStoredEntry[]>(normalizedEntriesFromProps)
   const [gamesById, setGamesById] = useState<Record<number, CatalogGamePreview>>({})

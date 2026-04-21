@@ -465,26 +465,29 @@ function GameDetailsPage() {
   }, [reviews, user])
 
   useEffect(() => {
-    setReviewFeedback(null)
+    const timeoutId = window.setTimeout(() => {
+      setReviewFeedback(null)
 
-    if (!user || !game) {
+      if (!user || !game) {
+        setNota(5)
+        setTextoReview('')
+        return
+      }
+
+      if (currentUserReview) {
+        setNota(currentUserReview.nota)
+        setTextoReview(currentUserReview.texto_review || '')
+        return
+      }
+
       setNota(5)
       setTextoReview('')
+    }, 0)
+
+    return () => {
+      window.clearTimeout(timeoutId)
     }
-  }, [game?.id, user?.id])
-
-  useEffect(() => {
-    if (!user || !game) return
-
-    if (currentUserReview) {
-      setNota(currentUserReview.nota)
-      setTextoReview(currentUserReview.texto_review || '')
-      return
-    }
-
-    setNota(5)
-    setTextoReview('')
-  }, [currentUserReview?.id, game?.id, user?.id])
+  }, [currentUserReview, game, user])
 
   const handleSubmitAvaliacao = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -1170,7 +1173,7 @@ function GameDetailsPage() {
                       <div className="game-review-user">
                         <UserAvatar
                           name={avaliadorNome}
-                          src={review.usuario?.avatar_url}
+                          avatarPath={review.usuario?.avatar_path}
                           imageClassName="game-review-avatar"
                           fallbackClassName="game-review-avatar-fallback"
                         />
@@ -1256,7 +1259,7 @@ function GameDetailsPage() {
                                   <div className="game-review-comment-author">
                                     <UserAvatar
                                       name={autorComentario}
-                                      src={comentario.usuario?.avatar_url}
+                                      avatarPath={comentario.usuario?.avatar_path}
                                       imageClassName="game-review-comment-avatar"
                                       fallbackClassName="game-review-comment-avatar-fallback"
                                     />
