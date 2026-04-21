@@ -1,9 +1,15 @@
 import { useCallback, useEffect, useState, type ChangeEvent } from 'react'
 import type { ProfileUpdateError, UserProfile } from '../contexts/AuthContext'
 import { ProfileGameStatusSection } from '../components/profile/ProfileGameStatusSection'
+import { ProfileReviewsSection } from '../components/profile/ProfileReviewsSection'
 import { ProfileTopFiveSection } from '../components/profile/ProfileTopFiveSection'
 import { ProfileWishlistSection } from '../components/profile/ProfileWishlistSection'
 import { useAuth } from '../contexts/AuthContext'
+import {
+  getReviewsByUserId,
+  type ProfileReviewItem,
+  type ReviewError,
+} from '../services/reviewService'
 import {
   deleteGameStatus,
   getGameStatusesByUserId,
@@ -37,7 +43,7 @@ interface ProfileDraft {
   bio: string
 }
 
-type ProfileTab = 'status' | 'wishlist'
+type ProfileTab = 'status' | 'wishlist' | 'reviews'
 
 const createProfileDraft = (profile: UserProfile | null): ProfileDraft => ({
   nome_completo: profile?.nome_completo || '',
@@ -153,6 +159,29 @@ const getGameStatusErrorMessage = (
       : 'Nao foi possivel remover este jogo do perfil agora.'
 }
 
+const getReviewErrorMessage = (error: ReviewError | null) => {
+  if (!error) {
+    return 'Nao foi possivel carregar suas reviews agora.'
+  }
+
+  const fullMessage = [error.message, error.details, error.hint].filter(Boolean).join(' ').toLowerCase()
+
+  if (
+    error.code === '42501' ||
+    fullMessage.includes('permission denied') ||
+    fullMessage.includes('row-level security') ||
+    fullMessage.includes('policy')
+  ) {
+    return 'Nao foi possivel carregar suas reviews por permissao. Verifique as policies das tabelas avaliacoes e jogos no Supabase.'
+  }
+
+  if (fullMessage.includes('column')) {
+    return 'Nao foi possivel carregar suas reviews porque a estrutura das tabelas nao corresponde ao frontend.'
+  }
+
+  return 'Nao foi possivel carregar suas reviews agora.'
+}
+
 export function ProfilePage() {
   const { user, profile, loading, updateOwnProfile } = useAuth()
   const [draftProfile, setDraftProfile] = useState<ProfileDraft>(() => createProfileDraft(null))
@@ -168,6 +197,9 @@ export function ProfilePage() {
   const [wishlistGames, setWishlistGames] = useState<WishlistGameItem[]>([])
   const [wishlistLoading, setWishlistLoading] = useState(false)
   const [wishlistError, setWishlistError] = useState<string | null>(null)
+  const [userReviews, setUserReviews] = useState<ProfileReviewItem[]>([])
+  const [reviewsLoading, setReviewsLoading] = useState(false)
+  const [reviewsError, setReviewsError] = useState<string | null>(null)
 
   useEffect(() => {
     if (profile && !isEditing) {
@@ -206,6 +238,9 @@ export function ProfilePage() {
           setWishlistGames([])
           setWishlistError(null)
           setWishlistLoading(false)
+          setUserReviews([])
+          setReviewsError(null)
+          setReviewsLoading(false)
         }
         return
       }
@@ -214,10 +249,13 @@ export function ProfilePage() {
       setStatusError(null)
       setWishlistLoading(true)
       setWishlistError(null)
+      setReviewsLoading(true)
+      setReviewsError(null)
 
-      const [statusResult, wishlistResult] = await Promise.all([
+      const [statusResult, wishlistResult, reviewsResult] = await Promise.all([
         loadStatusGames(profile.id),
         getWishlistGamesByUserId(profile.id),
+        getReviewsByUserId(profile.id),
       ])
 
       if (!isMounted) return
@@ -237,8 +275,17 @@ export function ProfilePage() {
         setWishlistGames(wishlistResult.data)
       }
 
+      if (reviewsResult.error) {
+        console.error('Erro ao carregar reviews do perfil:', reviewsResult.error)
+        setUserReviews(reviewsResult.data)
+        setReviewsError(getReviewErrorMessage(reviewsResult.error))
+      } else {
+        setUserReviews(reviewsResult.data)
+      }
+
       setStatusLoading(false)
       setWishlistLoading(false)
+      setReviewsLoading(false)
     }
 
     void loadProfileCollections()
@@ -306,6 +353,8 @@ export function ProfilePage() {
     statusGames.length === 1 ? '1 jogo com status' : `${statusGames.length} jogos com status`
   const wishlistCountLabel =
     wishlistGames.length === 1 ? '1 jogo salvo' : `${wishlistGames.length} jogos salvos`
+  const reviewsCountLabel =
+    userReviews.length === 1 ? '1 review publicada' : `${userReviews.length} reviews publicadas`
 
   const resetDraft = () => {
     setDraftProfile(createProfileDraft(profile))
@@ -817,6 +866,19 @@ export function ProfilePage() {
                 <span>Wishlist</span>
                 <small>{wishlistCountLabel}</small>
               </button>
+
+              <button
+                id="profile-tab-reviews"
+                type="button"
+                role="tab"
+                className={`profile-tab-button${activeTab === 'reviews' ? ' is-active' : ''}`}
+                aria-selected={activeTab === 'reviews'}
+                aria-controls="profile-panel-reviews"
+                onClick={() => setActiveTab('reviews')}
+              >
+                <span>Reviews</span>
+                <small>{reviewsCountLabel}</small>
+              </button>
             </div>
 
             <div
@@ -857,6 +919,24 @@ export function ProfilePage() {
                   countLabel={wishlistCountLabel}
                   isOwnerView={isOwnerView}
                   onDeleteWishlistItem={handleDeleteWishlistItem}
+                />
+              ) : null}
+            </div>
+
+            <div
+              id="profile-panel-reviews"
+              className="profile-tab-panel"
+              role="tabpanel"
+              aria-labelledby="profile-tab-reviews"
+              hidden={activeTab !== 'reviews'}
+            >
+              {activeTab === 'reviews' ? (
+                <ProfileReviewsSection
+                  items={userReviews}
+                  isLoading={reviewsLoading}
+                  errorMessage={reviewsError}
+                  countLabel={reviewsCountLabel}
+                  isOwnerView={isOwnerView}
                 />
               ) : null}
             </div>

@@ -1,6 +1,14 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import {
+  createReviewComment,
+  getReviewsByGameId,
+  saveReview,
+  toggleReviewLike,
+  type ReviewError,
+  type ReviewItem,
+} from '../services/reviewService'
 import {
   deleteGameStatus,
   getGameStatusEntry,
@@ -28,36 +36,6 @@ interface Game {
   plataformas: string[] | string
 }
 
-interface UsuarioPerfil {
-  username: string
-  avatar_url: string | null
-}
-
-type UsuarioRelacionamento = UsuarioPerfil | UsuarioPerfil[] | null
-
-interface Comentario {
-  id: string
-  usuario_id: string
-  review_id: string
-  texto: string
-  data_comentario: string
-  editado_em: string | null
-  usuario: UsuarioRelacionamento
-}
-
-interface Avaliacao {
-  id: string
-  usuario_id: string
-  jogo_id: number
-  nota: number
-  texto_review: string
-  curtidas: number
-  data_publicacao: string
-  editado_em: string | null
-  usuario: UsuarioRelacionamento
-  comentarios?: Comentario[]
-}
-
 type FeedbackTone = 'success' | 'error' | 'info'
 
 interface FeedbackState {
@@ -76,15 +54,6 @@ const QUICK_PROFILE_STATUS_OPTIONS: Array<{
   { value: 'zerado', label: 'Zerei' },
   { value: 'dropado', label: 'Dropei' },
 ]
-
-const REVIEWS_QUERY = `
-  *,
-  usuario:usuarios(username, avatar_url),
-  comentarios(
-    *,
-    usuario:usuarios(username, avatar_url)
-  )
-`
 
 function normalizeList(value: string[] | string | null | undefined) {
   if (!value) return []
@@ -105,12 +74,22 @@ function formatDate(value: string | null | undefined, fallback = 'Nao informado'
   return parsedDate.toLocaleDateString('pt-BR')
 }
 
-function getWishlistErrorMessage(error: {
-  code?: string
-  message: string
-  details?: string | null
-  hint?: string | null
-} | null, action: 'save' | 'delete' = 'save') {
+function formatReviewScore(score: number) {
+  return score.toLocaleString('pt-BR', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 1,
+  })
+}
+
+function getWishlistErrorMessage(
+  error: {
+    code?: string
+    message: string
+    details?: string | null
+    hint?: string | null
+  } | null,
+  action: 'save' | 'delete' = 'save'
+) {
   if (!error) {
     return action === 'save'
       ? 'Nao foi possivel salvar este jogo na sua lista de desejos agora.'
@@ -143,7 +122,10 @@ function getWishlistErrorMessage(error: {
     : 'Nao foi possivel remover este jogo da sua lista de desejos agora.'
 }
 
-function getGameStatusErrorMessage(error: GameStatusError | null, action: 'save' | 'delete' = 'save') {
+function getGameStatusErrorMessage(
+  error: GameStatusError | null,
+  action: 'save' | 'delete' = 'save'
+) {
   if (!error) {
     return action === 'save'
       ? 'Nao foi possivel salvar este jogo no seu perfil agora.'
@@ -172,23 +154,68 @@ function getGameStatusErrorMessage(error: GameStatusError | null, action: 'save'
     : 'Nao foi possivel remover este jogo do seu perfil agora.'
 }
 
+function getReviewErrorMessage(
+  error: ReviewError | null,
+  action: 'load' | 'save' | 'comment' | 'like'
+) {
+  if (!error) {
+    if (action === 'save') return 'Nao foi possivel salvar sua review agora.'
+    if (action === 'comment') return 'Nao foi possivel publicar seu comentario agora.'
+    if (action === 'like') return 'Nao foi possivel atualizar a curtida desta review agora.'
+    return 'Nao foi possivel carregar as reviews deste jogo agora.'
+  }
+
+  const fullMessage = [error.message, error.details, error.hint].filter(Boolean).join(' ').toLowerCase()
+
+  if (
+    error.code === '42501' ||
+    fullMessage.includes('permission denied') ||
+    fullMessage.includes('row-level security') ||
+    fullMessage.includes('policy')
+  ) {
+    if (action === 'save') {
+      return 'Nao foi possivel salvar sua review por permissao. Verifique as policies da tabela avaliacoes no Supabase.'
+    }
+
+    if (action === 'comment') {
+      return 'Nao foi possivel publicar seu comentario por permissao. Verifique as policies da tabela comentarios no Supabase.'
+    }
+
+    if (action === 'like') {
+      return 'Nao foi possivel atualizar esta curtida por permissao. Verifique as policies da tabela avaliacao_curtidas no Supabase.'
+    }
+
+    return 'Nao foi possivel carregar as reviews por permissao. Verifique as policies das tabelas avaliacoes, comentarios e avaliacao_curtidas no Supabase.'
+  }
+
+  if (fullMessage.includes('duplicate') || fullMessage.includes('unique')) {
+    if (action === 'like') {
+      return 'Essa review ja estava curtida por este usuario.'
+    }
+
+    return 'Ja existe uma review sua para este jogo. Envie novamente para atualizar a avaliacao.'
+  }
+
+  if (fullMessage.includes('column')) {
+    return 'A estrutura das tabelas de reviews nao corresponde ao frontend.'
+  }
+
+  return error.message
+}
+
 function getGameStatusLabel(status: GameStatusValue | null | undefined) {
   if (status === 'zerado') return 'Zerei'
   if (status === 'dropado') return 'Dropei'
   return 'Jogando'
 }
 
-function resolveUser(usuario: UsuarioRelacionamento) {
-  if (Array.isArray(usuario)) return usuario[0] || null
-  return usuario
+function getUserName(usuario: { username?: string | null } | null | undefined) {
+  const username = usuario?.username?.trim()
+  return username || 'Usuario'
 }
 
-function getUserName(usuario: UsuarioRelacionamento) {
-  return resolveUser(usuario)?.username || 'Usuario'
-}
-
-function getUserAvatar(usuario: UsuarioRelacionamento) {
-  return resolveUser(usuario)?.avatar_url || null
+function getUserAvatar(usuario: { avatar_url?: string | null } | null | undefined) {
+  return usuario?.avatar_url || null
 }
 
 function getInitial(name: string) {
@@ -196,19 +223,18 @@ function getInitial(name: string) {
   return firstCharacter ? firstCharacter.toUpperCase() : 'U'
 }
 
-async function fetchAvaliacoesByGameId(gameId: number) {
-  const { data, error } = await supabase
-    .from('avaliacoes')
-    .select(REVIEWS_QUERY)
-    .eq('jogo_id', gameId)
-    .order('data_publicacao', { ascending: false })
-
-  if (error) {
-    console.error('Erro ao buscar avaliacoes:', error)
-    return []
-  }
-
-  return (data || []) as Avaliacao[]
+function iconHeart(isFilled: boolean) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M12 20.4L10.55 19.08C5.4 14.36 2 11.27 2 7.5C2 4.41 4.42 2 7.5 2C9.24 2 10.91 2.81 12 4.09C13.09 2.81 14.76 2 16.5 2C19.58 2 22 4.41 22 7.5C22 11.27 18.6 14.36 13.45 19.09L12 20.4Z"
+        fill={isFilled ? 'currentColor' : 'none'}
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
 }
 
 function GameDetailsPage() {
@@ -216,13 +242,16 @@ function GameDetailsPage() {
   const { user } = useAuth()
 
   const [game, setGame] = useState<Game | null>(null)
-  const [avaliacoes, setAvaliacoes] = useState<Avaliacao[]>([])
+  const [reviews, setReviews] = useState<ReviewItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [reviewsError, setReviewsError] = useState<string | null>(null)
   const [nota, setNota] = useState(5)
   const [textoReview, setTextoReview] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [reviewFeedback, setReviewFeedback] = useState<FeedbackState | null>(null)
   const [comentarioTexto, setComentarioTexto] = useState<Record<string, string>>({})
   const [submittingComentario, setSubmittingComentario] = useState<Record<string, boolean>>({})
+  const [likingReviewIds, setLikingReviewIds] = useState<string[]>([])
   const [wishlistLoading, setWishlistLoading] = useState(false)
   const [wishlistSaving, setWishlistSaving] = useState(false)
   const [isInWishlist, setIsInWishlist] = useState(false)
@@ -234,6 +263,36 @@ function GameDetailsPage() {
   const [gameStatusEntry, setGameStatusEntry] = useState<GameStatusEntry | null>(null)
   const [gameStatusFeedback, setGameStatusFeedback] = useState<FeedbackState | null>(null)
 
+  const refreshReviews = useCallback(
+    async (gameId: number) => {
+      const result = await getReviewsByGameId(gameId, user?.id)
+
+      setReviews(currentReviews => {
+        if (result.error && result.data.length > 0 && user?.id) {
+          const likedStateByReviewId = new Map(
+            currentReviews.map(review => [review.id, review.likedByCurrentUser])
+          )
+
+          return result.data.map(review => ({
+            ...review,
+            likedByCurrentUser: likedStateByReviewId.get(review.id) ?? review.likedByCurrentUser,
+          }))
+        }
+
+        return result.data
+      })
+
+      if (result.error && result.data.length === 0) {
+        setReviewsError(getReviewErrorMessage(result.error, 'load'))
+      } else {
+        setReviewsError(null)
+      }
+
+      return result
+    },
+    [user?.id]
+  )
+
   useEffect(() => {
     let isMounted = true
     const gameId = Number(id)
@@ -242,7 +301,8 @@ function GameDetailsPage() {
       if (!id || Number.isNaN(gameId)) {
         if (isMounted) {
           setGame(null)
-          setAvaliacoes([])
+          setReviews([])
+          setReviewsError(null)
           setLoading(false)
         }
         return
@@ -250,9 +310,9 @@ function GameDetailsPage() {
 
       setLoading(true)
 
-      const [gameResponse, loadedAvaliacoes] = await Promise.all([
+      const [gameResponse, reviewsResult] = await Promise.all([
         supabase.from('jogos').select('*').eq('id', gameId).single(),
-        fetchAvaliacoesByGameId(gameId),
+        getReviewsByGameId(gameId, user?.id),
       ])
 
       if (!isMounted) return
@@ -264,7 +324,12 @@ function GameDetailsPage() {
         setGame((gameResponse.data as Game | null) || null)
       }
 
-      setAvaliacoes(loadedAvaliacoes)
+      setReviews(reviewsResult.data)
+      setReviewsError(
+        reviewsResult.error && reviewsResult.data.length === 0
+          ? getReviewErrorMessage(reviewsResult.error, 'load')
+          : null
+      )
       setLoading(false)
     }
 
@@ -273,7 +338,7 @@ function GameDetailsPage() {
     return () => {
       isMounted = false
     }
-  }, [id])
+  }, [id, user?.id])
 
   useEffect(() => {
     let isMounted = true
@@ -360,27 +425,71 @@ function GameDetailsPage() {
     }
   }, [game, user])
 
+  const currentUserReview = useMemo(() => {
+    if (!user) return null
+    return reviews.find(review => review.usuario_id === user.id) || null
+  }, [reviews, user])
+
+  useEffect(() => {
+    setReviewFeedback(null)
+
+    if (!user || !game) {
+      setNota(5)
+      setTextoReview('')
+    }
+  }, [game?.id, user?.id])
+
+  useEffect(() => {
+    if (!user || !game) return
+
+    if (currentUserReview) {
+      setNota(currentUserReview.nota)
+      setTextoReview(currentUserReview.texto_review || '')
+      return
+    }
+
+    setNota(5)
+    setTextoReview('')
+  }, [currentUserReview?.id, game?.id, user?.id])
+
   const handleSubmitAvaliacao = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!user || !game) return
 
     setSubmitting(true)
-    const { error } = await supabase.from('avaliacoes').insert({
-      usuario_id: user.id,
-      jogo_id: game.id,
+    setReviewFeedback(null)
+
+    const saveResult = await saveReview({
+      userId: user.id,
+      gameId: game.id,
       nota,
-      texto_review: textoReview,
-      curtidas: 0,
-      data_publicacao: new Date().toISOString(),
+      textoReview,
     })
 
-    if (error) {
-      console.error('Erro ao enviar avaliacao:', error)
+    if (saveResult.error) {
+      setReviewFeedback({
+        tone: 'error',
+        message: getReviewErrorMessage(saveResult.error, 'save'),
+      })
+      setSubmitting(false)
+      return
+    }
+
+    const refreshResult = await refreshReviews(game.id)
+
+    if (refreshResult.error && refreshResult.data.length === 0) {
+      setReviewFeedback({
+        tone: 'info',
+        message: 'Sua review foi salva, mas nao foi possivel atualizar a lista agora.',
+      })
     } else {
-      setNota(5)
-      setTextoReview('')
-      const updatedAvaliacoes = await fetchAvaliacoesByGameId(game.id)
-      setAvaliacoes(updatedAvaliacoes)
+      setReviewFeedback({
+        tone: 'success',
+        message:
+          saveResult.status === 'updated'
+            ? 'Sua review foi atualizada com sucesso.'
+            : 'Sua review foi publicada com sucesso.',
+      })
     }
 
     setSubmitting(false)
@@ -388,25 +497,86 @@ function GameDetailsPage() {
 
   const handleSubmitComentario = async (reviewId: string, event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (!user || !comentarioTexto[reviewId]?.trim()) return
+    if (!user || !game) return
+
+    const texto = comentarioTexto[reviewId]?.trim()
+    if (!texto) return
 
     setSubmittingComentario(prevState => ({ ...prevState, [reviewId]: true }))
-    const { error } = await supabase.from('comentarios').insert({
-      usuario_id: user.id,
-      review_id: reviewId,
-      texto: comentarioTexto[reviewId],
-      data_comentario: new Date().toISOString(),
+    setReviewFeedback(null)
+
+    const commentResult = await createReviewComment({
+      userId: user.id,
+      reviewId,
+      texto,
     })
 
-    if (error) {
-      console.error('Erro ao enviar comentario:', error)
-    } else if (game) {
-      setComentarioTexto(prevState => ({ ...prevState, [reviewId]: '' }))
-      const updatedAvaliacoes = await fetchAvaliacoesByGameId(game.id)
-      setAvaliacoes(updatedAvaliacoes)
+    if (commentResult.error) {
+      setReviewFeedback({
+        tone: 'error',
+        message: getReviewErrorMessage(commentResult.error, 'comment'),
+      })
+      setSubmittingComentario(prevState => ({ ...prevState, [reviewId]: false }))
+      return
+    }
+
+    setComentarioTexto(prevState => ({ ...prevState, [reviewId]: '' }))
+
+    const refreshResult = await refreshReviews(game.id)
+
+    if (refreshResult.error && refreshResult.data.length === 0) {
+      setReviewFeedback({
+        tone: 'info',
+        message: 'Seu comentario foi publicado, mas nao foi possivel atualizar a lista agora.',
+      })
     }
 
     setSubmittingComentario(prevState => ({ ...prevState, [reviewId]: false }))
+  }
+
+  const handleToggleReviewLike = async (review: ReviewItem) => {
+    if (!user || !game || !review.canLike || likingReviewIds.includes(review.id)) return
+
+    const wasLiked = review.likedByCurrentUser
+
+    setLikingReviewIds(currentIds =>
+      currentIds.includes(review.id) ? currentIds : [...currentIds, review.id]
+    )
+    setReviewFeedback(null)
+    setReviews(currentReviews =>
+      currentReviews.map(currentReview =>
+        currentReview.id === review.id
+          ? {
+              ...currentReview,
+              likedByCurrentUser: !wasLiked,
+              curtidas: Math.max(currentReview.curtidas + (wasLiked ? -1 : 1), 0),
+            }
+          : currentReview
+      )
+    )
+
+    const likeResult = await toggleReviewLike({
+      reviewId: review.id,
+      userId: user.id,
+      reviewAuthorId: review.usuario_id,
+      likedByCurrentUser: wasLiked,
+    })
+
+    const refreshResult = await refreshReviews(game.id)
+
+    if (likeResult.error) {
+      setReviewFeedback({
+        tone: 'error',
+        message: getReviewErrorMessage(likeResult.error, 'like'),
+      })
+    } else if (refreshResult.error && refreshResult.data.length === 0) {
+      setReviewFeedback({
+        tone: 'info',
+        message: 'A curtida foi atualizada, mas nao foi possivel recarregar a lista agora.',
+      })
+    }
+
+    setLikingReviewIds(currentIds => currentIds.filter(currentId => currentId !== review.id))
   }
 
   const handleWishlistToggle = async () => {
@@ -563,15 +733,14 @@ function GameDetailsPage() {
   const plataformas = normalizeList(game.plataformas)
   const releaseDate = formatDate(game.data_lancamento)
   const descricaoCompleta = game.descricao?.trim() || 'Descricao nao informada.'
-  const totalAvaliacoes = avaliacoes.length
-  const totalComentarios = avaliacoes.reduce(
-    (commentCount, avaliacao) => commentCount + (avaliacao.comentarios?.length || 0),
+  const totalAvaliacoes = reviews.length
+  const totalComentarios = reviews.reduce(
+    (commentCount, review) => commentCount + review.comentarios.length,
     0
   )
   const mediaAvaliacoes =
     totalAvaliacoes > 0
-      ? avaliacoes.reduce((scoreTotal, avaliacao) => scoreTotal + avaliacao.nota, 0) /
-        totalAvaliacoes
+      ? reviews.reduce((scoreTotal, review) => scoreTotal + review.nota, 0) / totalAvaliacoes
       : null
   const mediaAvaliacoesLabel = mediaAvaliacoes
     ? mediaAvaliacoes.toLocaleString('pt-BR', {
@@ -600,6 +769,12 @@ function GameDetailsPage() {
     : gameStatusEntry
       ? `Status atual: ${getGameStatusLabel(gameStatusEntry.status)}. Toque novamente no botao ativo para remover.`
       : 'Escolha um status rapido sem sair da pagina.'
+  const reviewFormHeading = currentUserReview
+    ? 'Atualize sua review para este jogo'
+    : 'Publique sua review para este jogo'
+  const reviewFormDescription = currentUserReview
+    ? 'Sua nota continua obrigatoria e o comentario pode ficar vazio se voce quiser deixar apenas a avaliacao numerica.'
+    : 'Escolha uma nota e, se quiser, complemente com um comentario. O comentario e opcional.'
 
   return (
     <div className="page-container">
@@ -730,17 +905,17 @@ function GameDetailsPage() {
                 </div>
               ) : null}
 
-              {wishlistFeedback && (
+              {wishlistFeedback ? (
                 <p className={`game-details-feedback is-${wishlistFeedback.tone}`}>
                   {wishlistFeedback.message}
                 </p>
-              )}
+              ) : null}
 
-              {gameStatusFeedback && (
+              {gameStatusFeedback ? (
                 <p className={`game-details-feedback is-${gameStatusFeedback.tone}`}>
                   {gameStatusFeedback.message}
                 </p>
-              )}
+              ) : null}
             </div>
           </div>
         </section>
@@ -787,15 +962,26 @@ function GameDetailsPage() {
 
           {user ? (
             <form onSubmit={handleSubmitAvaliacao} className="game-details-review-form">
+              <div className="game-details-review-form-head">
+                <div>
+                  <strong>{reviewFormHeading}</strong>
+                  <p>{reviewFormDescription}</p>
+                </div>
+                {currentUserReview ? (
+                  <span className="game-details-review-form-badge">Review ja publicada</span>
+                ) : null}
+              </div>
+
               <div className="game-details-form-block">
                 <label className="game-details-form-label">Sua nota</label>
-                <div className="game-details-rating-grid">
+                <div className="game-details-rating-grid" role="radiogroup" aria-label="Escolha sua nota">
                   {REVIEW_SCORE_OPTIONS.map(score => (
                     <button
                       key={score}
                       type="button"
                       className={`game-details-rating-button${nota === score ? ' is-selected' : ''}`}
                       onClick={() => setNota(score)}
+                      aria-pressed={nota === score}
                     >
                       {score}
                     </button>
@@ -805,28 +991,31 @@ function GameDetailsPage() {
 
               <div className="game-details-form-block">
                 <label htmlFor="game-review-text" className="game-details-form-label">
-                  Comentario
+                  Comentario <span className="game-details-form-caption">(opcional)</span>
                 </label>
                 <textarea
                   id="game-review-text"
                   className="game-details-textarea"
                   value={textoReview}
                   onChange={event => setTextoReview(event.target.value)}
-                  placeholder="Compartilhe sua opiniao sobre jogabilidade, historia, visual ou comunidade."
-                  required
+                  placeholder="Compartilhe sua opiniao sobre jogabilidade, historia, visual ou comunidade, se quiser."
                 />
               </div>
 
               <div className="game-details-review-form-footer">
                 <span className="game-details-form-helper">
-                  Sua avaliacao aparece junto com os reviews da comunidade.
+                  Sua review fica vinculada automaticamente a este jogo e aparece no seu perfil.
                 </span>
                 <button
                   type="submit"
                   disabled={submitting}
                   className="game-button game-details-primary-button game-details-submit-button"
                 >
-                  {submitting ? 'Enviando...' : 'Enviar avaliacao'}
+                  {submitting
+                    ? 'Salvando...'
+                    : currentUserReview
+                      ? 'Atualizar review'
+                      : 'Publicar review'}
                 </button>
               </div>
             </form>
@@ -835,7 +1024,7 @@ function GameDetailsPage() {
               <div>
                 <span className="game-details-panel-kicker">Participar</span>
                 <h3>Entre para avaliar este jogo</h3>
-                <p>Faca login para publicar reviews e comentar nas avaliacoes da comunidade.</p>
+                <p>Faca login para publicar reviews, comentar e curtir as avaliacoes da comunidade.</p>
               </div>
 
               <Link to="/login" className="game-button game-details-primary-button">
@@ -844,20 +1033,43 @@ function GameDetailsPage() {
             </div>
           )}
 
+          {reviewFeedback ? (
+            <p className={`game-details-feedback is-${reviewFeedback.tone}`}>{reviewFeedback.message}</p>
+          ) : null}
+
           <div className="game-details-review-list">
-            {avaliacoes.length === 0 ? (
+            {reviewsError && reviews.length === 0 ? (
+              <div className="game-details-empty-card">
+                <h3>As reviews nao puderam ser carregadas</h3>
+                <p>{reviewsError}</p>
+                <button
+                  type="button"
+                  className="game-button game-details-secondary-button"
+                  onClick={() => void refreshReviews(game.id)}
+                >
+                  Tentar novamente
+                </button>
+              </div>
+            ) : reviews.length === 0 ? (
               <div className="game-details-empty-card">
                 <h3>Nenhuma avaliacao por enquanto</h3>
                 <p>Seja a primeira pessoa a compartilhar uma opiniao sobre este titulo.</p>
               </div>
             ) : (
-              avaliacoes.map(avaliacao => {
-                const avaliadorNome = getUserName(avaliacao.usuario)
-                const avaliadorAvatar = getUserAvatar(avaliacao.usuario)
-                const comentarios = avaliacao.comentarios || []
+              reviews.map(review => {
+                const avaliadorNome = getUserName(review.usuario)
+                const avaliadorAvatar = getUserAvatar(review.usuario)
+                const isLikePending = likingReviewIds.includes(review.id)
+                const likeButtonLabel = !user
+                  ? 'Faca login para curtir'
+                  : review.canLike
+                    ? review.likedByCurrentUser
+                      ? 'Descurtir review'
+                      : 'Curtir review'
+                    : 'Sua propria review'
 
                 return (
-                  <article key={avaliacao.id} className="game-review-card">
+                  <article key={review.id} className="game-review-card">
                     <div className="game-review-card-header">
                       <div className="game-review-user">
                         {avaliadorAvatar ? (
@@ -874,7 +1086,7 @@ function GameDetailsPage() {
 
                         <div className="game-review-user-copy">
                           <strong>{avaliadorNome}</strong>
-                          <span>{formatDate(avaliacao.data_publicacao)}</span>
+                          <span>{formatDate(review.data_publicacao)}</span>
                         </div>
                       </div>
 
@@ -883,27 +1095,58 @@ function GameDetailsPage() {
                           {REVIEW_SCORE_OPTIONS.map(score => (
                             <span
                               key={score}
-                              className={`game-review-score-pill${score <= avaliacao.nota ? ' is-filled' : ''}`}
+                              className={`game-review-score-pill${score <= review.nota ? ' is-filled' : ''}`}
                             >
                               {score}
                             </span>
                           ))}
                         </div>
-                        <span className="game-review-score-label">{avaliacao.nota}/10</span>
+                        <span className="game-review-score-label">
+                          {formatReviewScore(review.nota)}/10
+                        </span>
                       </div>
                     </div>
 
-                    {avaliacao.texto_review && <p className="game-review-body">{avaliacao.texto_review}</p>}
+                    {review.texto_review ? (
+                      <p className="game-review-body">{review.texto_review}</p>
+                    ) : (
+                      <p className="game-review-body is-muted">
+                        Esta review foi publicada apenas com a nota.
+                      </p>
+                    )}
 
                     <div className="game-review-meta">
-                      <span>{avaliacao.curtidas} curtidas</span>
-                      <span>{comentarios.length === 1 ? '1 comentario' : `${comentarios.length} comentarios`}</span>
+                      <button
+                        type="button"
+                        className={`game-review-like-button${review.likedByCurrentUser ? ' is-liked' : ''}`}
+                        onClick={() => void handleToggleReviewLike(review)}
+                        disabled={!user || !review.canLike || isLikePending}
+                        aria-label={likeButtonLabel}
+                        title={likeButtonLabel}
+                      >
+                        <span className="game-review-like-icon">
+                          {iconHeart(review.likedByCurrentUser)}
+                        </span>
+                        <span>
+                          {isLikePending
+                            ? 'Atualizando...'
+                            : review.likedByCurrentUser
+                              ? 'Curtido'
+                              : 'Curtir'}
+                        </span>
+                      </button>
+                      <span>{review.curtidas} curtidas</span>
+                      <span>
+                        {review.comentarios.length === 1
+                          ? '1 comentario'
+                          : `${review.comentarios.length} comentarios`}
+                      </span>
                     </div>
 
                     <div className="game-review-comments">
-                      {comentarios.length > 0 && (
+                      {review.comentarios.length > 0 ? (
                         <div className="game-review-comments-list">
-                          {comentarios.map(comentario => {
+                          {review.comentarios.map(comentario => {
                             const autorComentario = getUserName(comentario.usuario)
                             const avatarComentario = getUserAvatar(comentario.usuario)
 
@@ -936,20 +1179,20 @@ function GameDetailsPage() {
                             )
                           })}
                         </div>
-                      )}
+                      ) : null}
 
-                      {user && (
+                      {user ? (
                         <form
-                          onSubmit={event => handleSubmitComentario(avaliacao.id, event)}
+                          onSubmit={event => handleSubmitComentario(review.id, event)}
                           className="game-review-comment-form"
                         >
                           <textarea
                             className="game-review-comment-input"
-                            value={comentarioTexto[avaliacao.id] || ''}
+                            value={comentarioTexto[review.id] || ''}
                             onChange={event =>
                               setComentarioTexto(prevState => ({
                                 ...prevState,
-                                [avaliacao.id]: event.target.value,
+                                [review.id]: event.target.value,
                               }))
                             }
                             placeholder="Adicione um comentario para continuar a conversa."
@@ -958,13 +1201,13 @@ function GameDetailsPage() {
 
                           <button
                             type="submit"
-                            disabled={submittingComentario[avaliacao.id]}
+                            disabled={submittingComentario[review.id]}
                             className="game-review-comment-button"
                           >
-                            {submittingComentario[avaliacao.id] ? 'Enviando...' : 'Comentar'}
+                            {submittingComentario[review.id] ? 'Enviando...' : 'Comentar'}
                           </button>
                         </form>
-                      )}
+                      ) : null}
                     </div>
                   </article>
                 )

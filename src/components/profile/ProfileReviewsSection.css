@@ -1,0 +1,188 @@
+.profile-reviews-section {
+  padding: 1.5rem;
+}
+
+.profile-reviews-content {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 1rem;
+}
+
+.profile-reviews-summary {
+  min-width: 220px;
+}
+
+.profile-reviews-summary strong {
+  font-size: 1.05rem;
+}
+
+.profile-reviews-grid {
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.profile-reviews-card,
+.profile-reviews-empty {
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background:
+    radial-gradient(circle at top left, rgba(102, 126, 234, 0.1), transparent 34%),
+    rgba(255, 255, 255, 0.04);
+}
+
+.profile-reviews-card {
+  overflow: hidden;
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.profile-reviews-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(160, 177, 255, 0.2);
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.2);
+}
+
+.profile-reviews-card-link {
+  display: grid;
+  color: inherit;
+  text-decoration: none;
+  min-height: 100%;
+}
+
+.profile-reviews-card-cover {
+  aspect-ratio: 2.25 / 1;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.2), transparent 34%),
+    linear-gradient(135deg, rgba(102, 126, 234, 0.82), rgba(118, 75, 162, 0.88));
+}
+
+.profile-reviews-card-cover img,
+.profile-reviews-card-fallback {
+  width: 100%;
+  height: 100%;
+}
+
+.profile-reviews-card-cover img {
+  display: block;
+  object-fit: cover;
+}
+
+.profile-reviews-card-fallback {
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-size: clamp(1.3rem, 2vw, 2rem);
+  font-weight: 800;
+}
+
+.profile-reviews-card-body {
+  display: grid;
+  align-content: start;
+  gap: 0.55rem;
+  padding: 0.95rem;
+}
+
+.profile-reviews-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.profile-reviews-score-pill {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  border-radius: 999px;
+  padding: 0.34rem 0.7rem;
+  border: 1px solid rgba(160, 177, 255, 0.24);
+  background: rgba(126, 143, 255, 0.1);
+  color: #dbe4ff;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.profile-reviews-date {
+  color: rgba(200, 210, 255, 0.76);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.profile-reviews-card-body h3,
+.profile-reviews-empty h3 {
+  margin: 0;
+  color: #fff;
+}
+
+.profile-reviews-card-body h3 {
+  font-size: 0.98rem;
+  line-height: 1.35;
+}
+
+.profile-reviews-comment,
+.profile-reviews-empty p {
+  margin: 0;
+  color: rgba(238, 242, 255, 0.82);
+  line-height: 1.65;
+}
+
+.profile-reviews-comment {
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 5.6em;
+}
+
+.profile-reviews-comment.is-empty {
+  color: rgba(200, 210, 255, 0.72);
+}
+
+.profile-reviews-cta {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  color: rgba(219, 228, 255, 0.82);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.profile-reviews-empty {
+  display: grid;
+  gap: 0.85rem;
+  padding: 1.2rem;
+}
+
+.profile-reviews-link {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+@media (max-width: 768px) {
+  .profile-reviews-summary {
+    min-width: 0;
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .profile-reviews-section {
+    padding: 1.1rem;
+  }
+
+  .profile-reviews-card-body {
+    padding: 0.8rem;
+  }
+}
