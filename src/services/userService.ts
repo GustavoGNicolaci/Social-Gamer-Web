@@ -16,6 +16,16 @@ export interface UserSearchResult {
   isFollowing: boolean
 }
 
+export type FollowListKind = 'followers' | 'following'
+
+export interface FollowListUser {
+  id: string
+  username: string
+  nome_completo: string
+  avatar_path: string | null
+  isFollowing: boolean
+}
+
 export interface PublicUserProfile {
   id: string
   username: string
@@ -59,6 +69,12 @@ interface UserSearchRow {
   username: string
   nome_completo: string
   avatar_path: string | null
+}
+
+interface FollowRelationshipRow {
+  seguidor_id: string | null
+  seguido_id: string | null
+  data_inicio: string | null
 }
 
 const DEFAULT_USER_SEARCH_LIMIT = 5
@@ -109,11 +125,15 @@ function sortUsersByRelevance(users: UserSearchRow[], normalizedQuery: string) {
       return rightNamePrefix - leftNamePrefix
     }
 
-    const usernameDelta = leftUser.username.localeCompare(rightUser.username, 'pt-BR')
-    if (usernameDelta !== 0) return usernameDelta
-
-    return leftUser.nome_completo.localeCompare(rightUser.nome_completo, 'pt-BR')
+    return compareUsersAlphabetically(leftUser, rightUser)
   })
+}
+
+function compareUsersAlphabetically(leftUser: UserSearchRow, rightUser: UserSearchRow) {
+  const usernameDelta = leftUser.username.localeCompare(rightUser.username, 'pt-BR')
+  if (usernameDelta !== 0) return usernameDelta
+
+  return leftUser.nome_completo.localeCompare(rightUser.nome_completo, 'pt-BR')
 }
 
 async function getFollowingMap(
@@ -173,7 +193,7 @@ function buildSearchUsersResult(
   users: UserSearchRow[],
   viewerId: string | null | undefined,
   followingMap: Map<string, boolean>
-): UserSearchResult[] {
+): FollowListUser[] {
   return users.map(user => ({
     ...user,
     isFollowing: Boolean(viewerId && viewerId !== user.id && followingMap.get(user.id)),
@@ -230,6 +250,124 @@ async function getFollowCounts(profileId: string): Promise<ServiceResult<{
         followingCount: 0,
       },
       error: normalizeUserServiceError(error, 'Erro inesperado ao carregar as contagens deste perfil.'),
+    }
+  }
+}
+
+function getFollowRelationshipConfig(kind: FollowListKind) {
+  return kind === 'followers'
+    ? {
+        filterColumn: 'seguido_id' as const,
+        relatedUserColumn: 'seguidor_id' as const,
+      }
+    : {
+        filterColumn: 'seguidor_id' as const,
+        relatedUserColumn: 'seguido_id' as const,
+      }
+}
+
+export async function getProfileFollowList(
+  profileId: string,
+  kind: FollowListKind,
+  viewerId?: string | null
+): Promise<ServiceResult<FollowListUser[]>> {
+  if (!profileId) {
+    return {
+      data: [],
+      error: null,
+    }
+  }
+
+  const { filterColumn, relatedUserColumn } = getFollowRelationshipConfig(kind)
+
+  try {
+    const { data: relationshipData, error: relationshipError } = await supabase
+      .from('seguidores')
+      .select(`${relatedUserColumn}, data_inicio`)
+      .eq(filterColumn, profileId)
+      .order('data_inicio', { ascending: false })
+
+    if (relationshipError) {
+      return {
+        data: [],
+        error: normalizeUserServiceError(
+          relationshipError,
+          kind === 'followers'
+            ? 'Nao foi possivel carregar a lista de seguidores deste perfil.'
+            : 'Nao foi possivel carregar a lista de perfis seguidos deste perfil.'
+        ),
+      }
+    }
+
+    const relationshipRows = (relationshipData || []) as FollowRelationshipRow[]
+    const relatedUserIds = relationshipRows
+      .map(row => row[relatedUserColumn])
+      .filter((userId): userId is string => typeof userId === 'string' && userId.trim().length > 0)
+
+    if (relatedUserIds.length === 0) {
+      return {
+        data: [],
+        error: null,
+      }
+    }
+
+    const { data: usersData, error: usersError } = await supabase
+      .from('usuarios')
+      .select('id, username, nome_completo, avatar_path')
+      .in('id', relatedUserIds)
+
+    if (usersError) {
+      return {
+        data: [],
+        error: normalizeUserServiceError(
+          usersError,
+          kind === 'followers'
+            ? 'Nao foi possivel carregar os perfis dos seguidores.'
+            : 'Nao foi possivel carregar os perfis seguidos por este usuario.'
+        ),
+      }
+    }
+
+    const users = dedupeUsersById((usersData || []) as UserSearchRow[])
+    const relationshipOrder = new Map<string, number>()
+
+    relationshipRows.forEach((row, index) => {
+      const relatedUserId = row[relatedUserColumn]
+
+      if (typeof relatedUserId === 'string' && !relationshipOrder.has(relatedUserId)) {
+        relationshipOrder.set(relatedUserId, index)
+      }
+    })
+
+    const orderedUsers = [...users].sort((leftUser, rightUser) => {
+      const leftOrder = relationshipOrder.get(leftUser.id) ?? Number.MAX_SAFE_INTEGER
+      const rightOrder = relationshipOrder.get(rightUser.id) ?? Number.MAX_SAFE_INTEGER
+
+      if (leftOrder !== rightOrder) {
+        return leftOrder - rightOrder
+      }
+
+      return compareUsersAlphabetically(leftUser, rightUser)
+    })
+
+    const followMapResult = await getFollowingMap(
+      viewerId,
+      orderedUsers.map(user => user.id)
+    )
+
+    return {
+      data: buildSearchUsersResult(orderedUsers, viewerId, followMapResult.data),
+      error: followMapResult.error,
+    }
+  } catch (error) {
+    return {
+      data: [],
+      error: normalizeUserServiceError(
+        error,
+        kind === 'followers'
+          ? 'Erro inesperado ao carregar os seguidores deste perfil.'
+          : 'Erro inesperado ao carregar os perfis seguidos por este perfil.'
+      ),
     }
   }
 }

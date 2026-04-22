@@ -1,0 +1,384 @@
+.profile-connections-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 1.25rem;
+  background: rgba(4, 7, 16, 0.72);
+  backdrop-filter: blur(12px);
+}
+
+.profile-connections-modal {
+  position: relative;
+  width: min(720px, 100%);
+  max-height: min(86vh, 760px);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at top left, rgba(102, 126, 234, 0.22), transparent 34%),
+    linear-gradient(180deg, rgba(15, 18, 32, 0.98), rgba(9, 12, 24, 0.98));
+  box-shadow: 0 28px 64px rgba(0, 0, 0, 0.34);
+}
+
+.profile-connections-modal-glow {
+  position: absolute;
+  width: 240px;
+  height: 240px;
+  border-radius: 50%;
+  filter: blur(22px);
+  opacity: 0.38;
+  pointer-events: none;
+}
+
+.profile-connections-modal-glow-left {
+  top: -100px;
+  left: -120px;
+  background: rgba(102, 126, 234, 0.28);
+}
+
+.profile-connections-modal-glow-right {
+  right: -110px;
+  bottom: -120px;
+  background: rgba(84, 211, 194, 0.2);
+}
+
+.profile-connections-modal-content {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 1rem;
+  max-height: inherit;
+  padding: 1.35rem;
+}
+
+.profile-connections-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.profile-connections-modal-copy {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.profile-connections-modal-copy h2 {
+  margin: 0;
+  color: #fff;
+  font-size: clamp(1.45rem, 2vw, 1.9rem);
+}
+
+.profile-connections-modal-copy p {
+  margin: 0;
+  color: rgba(238, 242, 255, 0.8);
+  line-height: 1.65;
+}
+
+.profile-connections-close-button {
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  font: inherit;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease,
+    background 0.2s ease;
+}
+
+.profile-connections-close-button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(191, 219, 254, 0.34);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.profile-connections-close-button:focus-visible,
+.profile-connections-tab-button:focus-visible,
+.profile-connections-follow-button:focus-visible,
+.profile-connections-retry-button:focus-visible {
+  outline: 2px solid rgba(191, 219, 254, 0.85);
+  outline-offset: 2px;
+}
+
+.profile-connections-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.profile-connections-tab-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  min-height: 58px;
+  padding: 0.95rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease,
+    background 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.profile-connections-tab-button span {
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.profile-connections-tab-button strong {
+  color: rgba(219, 228, 255, 0.82);
+  font-size: 0.92rem;
+}
+
+.profile-connections-tab-button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(191, 219, 254, 0.28);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.profile-connections-tab-button.is-active {
+  border-color: rgba(160, 177, 255, 0.38);
+  background:
+    radial-gradient(circle at top left, rgba(102, 126, 234, 0.16), transparent 34%),
+    rgba(255, 255, 255, 0.1);
+  box-shadow: 0 16px 30px rgba(9, 12, 24, 0.2);
+}
+
+.profile-connections-panel {
+  min-height: 320px;
+}
+
+.profile-connections-state-card,
+.profile-connections-user-card {
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background:
+    radial-gradient(circle at top left, rgba(102, 126, 234, 0.1), transparent 34%),
+    rgba(255, 255, 255, 0.04);
+}
+
+.profile-connections-state-card {
+  display: grid;
+  gap: 0.85rem;
+  place-items: start;
+  padding: 1.2rem;
+}
+
+.profile-connections-state-card h3 {
+  margin: 0;
+  color: #fff;
+}
+
+.profile-connections-state-card p {
+  margin: 0;
+  color: rgba(238, 242, 255, 0.8);
+  line-height: 1.65;
+}
+
+.profile-connections-retry-button {
+  min-height: 44px;
+}
+
+.profile-connections-list-shell {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.profile-connections-list {
+  display: grid;
+  gap: 0.8rem;
+  max-height: min(52vh, 480px);
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+.profile-connections-user-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.85rem;
+}
+
+.profile-connections-user-link {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  color: inherit;
+  text-decoration: none;
+}
+
+.profile-connections-user-link:hover .profile-connections-user-copy strong {
+  color: #dbe4ff;
+}
+
+.profile-connections-user-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.profile-connections-user-avatar {
+  display: block;
+  object-fit: cover;
+}
+
+.profile-connections-user-avatar-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.24), transparent 35%),
+    linear-gradient(135deg, rgba(102, 126, 234, 0.72), rgba(118, 75, 162, 0.76));
+  color: #fff;
+  font-size: 1.3rem;
+  font-weight: 700;
+}
+
+.profile-connections-user-copy {
+  min-width: 0;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.profile-connections-user-copy strong {
+  color: #fff;
+  font-size: 1rem;
+  line-height: 1.35;
+  transition: color 0.2s ease;
+}
+
+.profile-connections-user-copy span {
+  color: rgba(200, 210, 255, 0.76);
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+
+.profile-connections-user-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.profile-connections-follow-button {
+  min-width: 164px;
+  min-height: 44px;
+  padding-inline: 0.95rem;
+}
+
+.profile-connections-follow-button.is-following {
+  border: 1px solid rgba(191, 219, 254, 0.24);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.profile-connections-follow-button:disabled {
+  cursor: not-allowed;
+}
+
+.profile-connections-user-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0.55rem 0.8rem;
+  border-radius: 999px;
+  border: 1px solid rgba(191, 219, 254, 0.18);
+  background: rgba(255, 255, 255, 0.06);
+  color: #dbe4ff;
+  font-size: 0.84rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+  .profile-connections-modal-backdrop {
+    align-items: end;
+    padding: 0.85rem;
+  }
+
+  .profile-connections-modal {
+    width: 100%;
+    max-height: min(88vh, 760px);
+    border-radius: 24px;
+  }
+
+  .profile-connections-modal-content {
+    padding: 1.1rem;
+  }
+
+  .profile-connections-tabs {
+    gap: 0.65rem;
+  }
+
+  .profile-connections-user-card {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .profile-connections-user-actions {
+    justify-content: flex-start;
+  }
+
+  .profile-connections-follow-button {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 480px) {
+  .profile-connections-modal-backdrop {
+    padding: 0;
+  }
+
+  .profile-connections-modal {
+    max-height: 100vh;
+    min-height: 100vh;
+    border-radius: 0;
+  }
+
+  .profile-connections-modal-content {
+    gap: 0.9rem;
+    padding: 1rem;
+  }
+
+  .profile-connections-modal-header {
+    align-items: flex-start;
+  }
+
+  .profile-connections-modal-copy h2 {
+    font-size: 1.3rem;
+  }
+
+  .profile-connections-tabs {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-connections-list {
+    max-height: none;
+    padding-bottom: 0.35rem;
+  }
+}

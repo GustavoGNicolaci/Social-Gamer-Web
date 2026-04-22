@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { UserAvatar } from '../components/UserAvatar'
+import { ProfileConnectionsModal } from '../components/profile/ProfileConnectionsModal'
 import { ProfileGameStatusSection } from '../components/profile/ProfileGameStatusSection'
 import { ProfileReviewsSection } from '../components/profile/ProfileReviewsSection'
 import { ProfileTopFiveSection } from '../components/profile/ProfileTopFiveSection'
@@ -27,6 +28,7 @@ import {
 import { uploadAvatarImage } from '../services/storageService'
 import {
   followUser,
+  type FollowListKind,
   getFollowState,
   getPublicProfileByUsername,
   unfollowUser,
@@ -376,6 +378,9 @@ export function ProfilePage() {
   const [followLoading, setFollowLoading] = useState(false)
   const [followSubmitting, setFollowSubmitting] = useState(false)
   const [followFeedback, setFollowFeedback] = useState<FollowFeedbackState | null>(null)
+  const [isConnectionsModalOpen, setIsConnectionsModalOpen] = useState(false)
+  const [connectionsInitialTab, setConnectionsInitialTab] = useState<FollowListKind>('followers')
+  const [followersRefreshKey, setFollowersRefreshKey] = useState(0)
   const [statusGames, setStatusGames] = useState<GameStatusItem[]>([])
   const [statusLoading, setStatusLoading] = useState(false)
   const [statusError, setStatusError] = useState<string | null>(null)
@@ -385,6 +390,8 @@ export function ProfilePage() {
   const [userReviews, setUserReviews] = useState<ProfileReviewItem[]>([])
   const [reviewsLoading, setReviewsLoading] = useState(false)
   const [reviewsError, setReviewsError] = useState<string | null>(null)
+
+  const followStateRequestIdRef = useRef(0)
 
   useEffect(() => {
     let isMounted = true
@@ -471,6 +478,8 @@ export function ProfilePage() {
 
   useEffect(() => {
     setActiveTab('status')
+    setIsConnectionsModalOpen(false)
+    setConnectionsInitialTab('followers')
   }, [activeProfile?.id])
 
   const loadStatusGames = useCallback(async (userId: string) => {
@@ -552,48 +561,49 @@ export function ProfilePage() {
     }
   }, [activeProfile, isOwnerView, loadStatusGames])
 
-  useEffect(() => {
-    let isMounted = true
+  const refreshFollowState = useCallback(async () => {
+    const requestId = followStateRequestIdRef.current + 1
+    followStateRequestIdRef.current = requestId
 
-    const loadCurrentFollowState = async () => {
-      if (!activeProfile) {
-        if (isMounted) {
-          setFollowLoading(false)
-          setFollowFeedback(null)
-          setFollowState({
-            isFollowing: false,
-            followersCount: 0,
-            followingCount: 0,
-          })
-        }
-        return
-      }
-
-      setFollowLoading(true)
-
-      const result = await getFollowState(user?.id, activeProfile.id)
-
-      if (!isMounted) return
-
-      if (result.error) {
-        setFollowFeedback({
-          tone: 'error',
-          message: getFollowErrorMessage(result.error, 'load'),
-        })
-      } else {
-        setFollowFeedback(null)
-      }
-
-      setFollowState(result.data)
+    if (!activeProfile) {
       setFollowLoading(false)
+      setFollowFeedback(null)
+      setFollowState({
+        isFollowing: false,
+        followersCount: 0,
+        followingCount: 0,
+      })
+      return
     }
 
-    void loadCurrentFollowState()
+    setFollowLoading(true)
+
+    const result = await getFollowState(user?.id, activeProfile.id)
+
+    if (followStateRequestIdRef.current !== requestId) {
+      return
+    }
+
+    if (result.error) {
+      setFollowFeedback({
+        tone: 'error',
+        message: getFollowErrorMessage(result.error, 'load'),
+      })
+    } else {
+      setFollowFeedback(null)
+    }
+
+    setFollowState(result.data)
+    setFollowLoading(false)
+  }, [activeProfile, user?.id])
+
+  useEffect(() => {
+    void refreshFollowState()
 
     return () => {
-      isMounted = false
+      followStateRequestIdRef.current += 1
     }
-  }, [activeProfile, user?.id])
+  }, [refreshFollowState])
 
   const pageLoading = loading || publicProfileLoading
 
@@ -717,6 +727,8 @@ export function ProfilePage() {
       ? 'Deixar de seguir'
       : 'Seguir'
   const sectionEyebrow = isOwnerView ? 'Perfil' : 'Perfil publico'
+  const canOpenFollowersModal = !followLoading && followState.followersCount > 0
+  const canOpenFollowingModal = !followLoading && followState.followingCount > 0
 
   const resetDraft = () => {
     setDraftProfile(createProfileDraft(editableProfile))
@@ -1040,6 +1052,15 @@ export function ProfilePage() {
     }
   }
 
+  const handleOpenConnectionsModal = (kind: FollowListKind) => {
+    const totalItems = kind === 'followers' ? followState.followersCount : followState.followingCount
+
+    if (followLoading || totalItems <= 0) return
+
+    setConnectionsInitialTab(kind)
+    setIsConnectionsModalOpen(true)
+  }
+
   const handleToggleFollow = async () => {
     if (!user || !activeProfile || followSubmitting || user.id === activeProfile.id) return
 
@@ -1060,6 +1081,7 @@ export function ProfilePage() {
     }
 
     setFollowState(result.data)
+    setFollowersRefreshKey(currentKey => currentKey + 1)
     setFollowSubmitting(false)
   }
 
@@ -1191,15 +1213,39 @@ export function ProfilePage() {
                     <strong>{joinedDate}</strong>
                   </div>
 
-                  <div className="profile-meta-item">
-                    <span>Seguidores</span>
-                    <strong>{followLoading ? '...' : followState.followersCount}</strong>
-                  </div>
+                  {canOpenFollowersModal ? (
+                    <button
+                      type="button"
+                      className="profile-meta-item profile-meta-item-button is-interactive"
+                      onClick={() => handleOpenConnectionsModal('followers')}
+                      aria-label={`Abrir lista de seguidores. ${followState.followersCount} seguidores.`}
+                    >
+                      <span>Seguidores</span>
+                      <strong>{followState.followersCount}</strong>
+                    </button>
+                  ) : (
+                    <div className="profile-meta-item profile-meta-item-button is-disabled">
+                      <span>Seguidores</span>
+                      <strong>{followLoading ? '...' : followState.followersCount}</strong>
+                    </div>
+                  )}
 
-                  <div className="profile-meta-item">
-                    <span>Seguindo</span>
-                    <strong>{followLoading ? '...' : followState.followingCount}</strong>
-                  </div>
+                  {canOpenFollowingModal ? (
+                    <button
+                      type="button"
+                      className="profile-meta-item profile-meta-item-button is-interactive"
+                      onClick={() => handleOpenConnectionsModal('following')}
+                      aria-label={`Abrir lista de perfis seguidos. ${followState.followingCount} perfis seguidos.`}
+                    >
+                      <span>Seguindo</span>
+                      <strong>{followState.followingCount}</strong>
+                    </button>
+                  ) : (
+                    <div className="profile-meta-item profile-meta-item-button is-disabled">
+                      <span>Seguindo</span>
+                      <strong>{followLoading ? '...' : followState.followingCount}</strong>
+                    </div>
+                  )}
                 </div>
 
                 {isEditing && isOwnerView ? (
@@ -1400,6 +1446,22 @@ export function ProfilePage() {
             </div>
           </section>
         </div>
+
+        {isConnectionsModalOpen ? (
+          <ProfileConnectionsModal
+            initialTab={connectionsInitialTab}
+            profileId={activeProfile.id}
+            profileUsername={activeProfile.username || 'usuario'}
+            profileDisplayName={activeProfile.nome_completo || activeProfile.username || 'este perfil'}
+            viewerId={user?.id}
+            isOwnerView={Boolean(isOwnerView)}
+            followersCount={followState.followersCount}
+            followingCount={followState.followingCount}
+            followersRefreshKey={followersRefreshKey}
+            onClose={() => setIsConnectionsModalOpen(false)}
+            onRefreshFollowState={refreshFollowState}
+          />
+        ) : null}
       </div>
     </div>
   )
