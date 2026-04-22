@@ -266,14 +266,14 @@
 
 .profile-connections-user-copy strong {
   color: #fff;
-  font-size: 1rem;
+  font-size: 0.98rem;
   line-height: 1.35;
   transition: color 0.2s ease;
 }
 
 .profile-connections-user-copy span {
   color: rgba(200, 210, 255, 0.76);
-  font-size: 0.88rem;
+  font-size: 0.86rem;
   line-height: 1.4;
 }
 

@@ -424,7 +424,7 @@ function Navbar() {
                               <div className="navbar-search-option-cover">
                                 <UserAvatar name={searchUser.nome_completo || searchUser.username} avatarPath={searchUser.avatar_path} imageClassName="navbar-search-user-avatar" fallbackClassName="navbar-search-option-fallback navbar-search-user-avatar-fallback" alt={`Foto de perfil de ${searchUser.nome_completo || searchUser.username}`} />
                               </div>
-                              <div className="navbar-search-option-copy"><strong>{searchUser.nome_completo}</strong><span>@{searchUser.username}</span></div>
+                              <div className="navbar-search-option-copy navbar-search-option-copy-user"><strong>@{searchUser.username}</strong><span>{searchUser.nome_completo || 'Nome nao informado'}</span></div>
                               <div className="navbar-search-user-actions">
                                 {user && !isOwnResult ? <button type="button" className={`navbar-search-follow-button${searchUser.isFollowing ? ' is-following' : ''}`} onClick={event => { event.stopPropagation(); void handleToggleFollowFromSearch(searchUser) }} disabled={isFollowPending}>{followButtonLabel}</button> : <span className="navbar-search-user-link">{isOwnResult ? 'Seu perfil' : 'Ver perfil'}</span>}
                               </div>

@@ -443,6 +443,17 @@
   font-size: 0.8rem;
 }
 
+.navbar-search-option-copy-user strong {
+  color: #fff;
+  font-size: 0.92rem;
+  letter-spacing: 0.01em;
+}
+
+.navbar-search-option-copy-user span {
+  color: rgba(216, 225, 255, 0.68);
+  font-size: 0.82rem;
+}
+
 .navbar-search-user-actions {
   display: flex;
   align-items: center;
