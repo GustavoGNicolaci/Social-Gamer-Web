@@ -805,10 +805,38 @@
 }
 
 .game-review-user,
+.game-review-user-link,
 .game-review-comment-author {
   display: flex;
   align-items: center;
   gap: 0.8rem;
+}
+
+.game-review-user-link,
+.game-review-comment-author-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.game-review-user-link {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.game-review-user-link:hover .game-review-user-copy strong,
+.game-review-user-link:focus-visible .game-review-user-copy strong,
+.game-review-comment-author-link:hover strong,
+.game-review-comment-author-link:focus-visible strong {
+  color: #dbe4ff;
+}
+
+.game-review-user-link:focus-visible,
+.game-review-comment-author-link:focus-visible,
+.game-review-comment-delete-button:focus-visible,
+.game-review-comments-expand-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
 }
 
 .game-review-avatar,
@@ -847,14 +875,14 @@
   font-weight: 700;
 }
 
-.game-review-user-copy,
-.game-review-comment-header {
+.game-review-user-copy {
   display: grid;
   gap: 0.2rem;
 }
 
 .game-review-user-copy strong,
-.game-review-comment-author strong {
+.game-review-comment-author strong,
+.game-review-comment-author-link strong {
   color: #fff;
 }
 
@@ -1033,6 +1061,69 @@
   align-items: center;
 }
 
+.game-review-comment-author,
+.game-review-comment-author-link {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.game-review-comment-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.65rem;
+  align-items: center;
+}
+
+.game-review-comment-delete-button,
+.game-review-comments-expand-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: #eef2ff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease,
+    background 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.game-review-comment-delete-button {
+  min-height: 34px;
+  padding: 0.4rem 0.75rem;
+  border-radius: 999px;
+  border-color: rgba(255, 188, 188, 0.16);
+  background: rgba(255, 120, 120, 0.08);
+  color: #ffd6d6;
+  font-size: 0.8rem;
+}
+
+.game-review-comment-delete-button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 188, 188, 0.32);
+  background: rgba(255, 120, 120, 0.14);
+}
+
+.game-review-comments-expand-button {
+  width: fit-content;
+  min-height: 38px;
+  padding: 0.5rem 0.85rem;
+  border-radius: 999px;
+  color: #dbe4ff;
+}
+
+.game-review-comments-expand-button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(160, 177, 255, 0.3);
+  background: rgba(126, 143, 255, 0.1);
+}
+
 .game-review-comment-form {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -1159,8 +1250,18 @@
     align-items: flex-start;
   }
 
+  .game-review-comment-meta {
+    width: 100%;
+    justify-content: space-between;
+  }
+
   .game-review-delete-button {
     margin-left: 0;
+  }
+
+  .game-review-comments-expand-button {
+    width: 100%;
+    justify-content: center;
   }
 }
 

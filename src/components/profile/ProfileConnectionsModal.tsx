@@ -9,6 +9,7 @@ import {
   type FollowListUser,
   type UserServiceError,
 } from '../../services/userService'
+import { getPublicProfilePath } from '../../utils/profileRoutes'
 import './ProfileConnectionsModal.css'
 
 interface ProfileConnectionsModalProps {
@@ -61,10 +62,6 @@ function createEmptyTabState(): Record<FollowListKind, FollowTabState> {
       hasLoaded: false,
     },
   }
-}
-
-function getPublicProfilePath(username: string) {
-  return `/u/${encodeURIComponent(username.trim())}`
 }
 
 function getFollowListErrorMessage(error: UserServiceError | null, kind: FollowListKind) {

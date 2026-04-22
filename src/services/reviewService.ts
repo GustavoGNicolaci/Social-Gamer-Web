@@ -70,6 +70,11 @@ interface CreateReviewCommentParams {
   texto: string
 }
 
+interface DeleteReviewCommentParams {
+  userId: string
+  commentId: string
+}
+
 interface DeleteReviewParams {
   userId: string
   reviewId: string
@@ -624,6 +629,47 @@ export async function createReviewComment({
     return {
       data: null,
       error: normalizeReviewError(error, 'Erro inesperado ao publicar o comentario desta review.'),
+    }
+  }
+}
+
+export async function deleteReviewComment({
+  userId,
+  commentId,
+}: DeleteReviewCommentParams): Promise<DeleteReviewResult> {
+  try {
+    const { data, error } = await supabase
+      .from('comentarios')
+      .delete()
+      .eq('id', commentId)
+      .eq('usuario_id', userId)
+      .select('id')
+      .maybeSingle()
+
+    if (error) {
+      return {
+        ok: false,
+        error: normalizeReviewError(error, 'Nao foi possivel apagar este comentario.'),
+      }
+    }
+
+    if (!data) {
+      return {
+        ok: false,
+        error: {
+          message: 'Voce nao tem permissao para apagar este comentario ou ele nao existe mais.',
+        },
+      }
+    }
+
+    return {
+      ok: true,
+      error: null,
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      error: normalizeReviewError(error, 'Erro inesperado ao apagar este comentario.'),
     }
   }
 }

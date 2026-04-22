@@ -4,6 +4,7 @@ import { UserAvatar } from '../UserAvatar'
 import { useAuth } from '../../contexts/AuthContext'
 import { searchCatalogGamesByTitle, type CatalogGamePreview } from '../../services/gameCatalogService'
 import { followUser, searchUsers, unfollowUser, type UserSearchResult, type UserServiceError } from '../../services/userService'
+import { getPublicProfilePath } from '../../utils/profileRoutes'
 import './Navbar.css'
 
 const SEARCH_DEBOUNCE_DELAY = 220
@@ -66,10 +67,6 @@ function getFollowActionErrorMessage(error: UserServiceError | null, action: 'fo
 
 function isCompactSearchViewport(viewportWidth: number) {
   return viewportWidth <= 960
-}
-
-function getPublicProfilePath(username: string) {
-  return `/u/${encodeURIComponent(username.trim())}`
 }
 
 function Navbar() {

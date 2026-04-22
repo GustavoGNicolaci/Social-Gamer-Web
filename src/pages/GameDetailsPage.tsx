@@ -4,10 +4,12 @@ import { UserAvatar } from '../components/UserAvatar'
 import { useAuth } from '../contexts/AuthContext'
 import {
   createReviewComment,
+  deleteReviewComment,
   deleteReview,
   getReviewsByGameId,
   saveReview,
   toggleReviewLike,
+  type ReviewComment,
   type ReviewError,
   type ReviewItem,
 } from '../services/reviewService'
@@ -25,6 +27,7 @@ import {
   getWishlistEntry,
 } from '../services/wishlistService'
 import { supabase } from '../supabase-client'
+import { getOptionalPublicProfilePath } from '../utils/profileRoutes'
 import './GameDetailsPage.css'
 
 interface Game {
@@ -48,6 +51,8 @@ interface FeedbackState {
 type QuickProfileStatusValue = GameStatusValue
 
 const REVIEW_SCORE_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+const INITIAL_VISIBLE_COMMENT_COUNT = 2
+const VISIBLE_COMMENT_BATCH_SIZE = 4
 const QUICK_PROFILE_STATUS_OPTIONS: Array<{
   value: QuickProfileStatusValue
   label: string
@@ -81,6 +86,18 @@ function formatReviewScore(score: number) {
     minimumFractionDigits: 0,
     maximumFractionDigits: 1,
   })
+}
+
+function getInitialVisibleCommentCount(totalComments: number) {
+  if (totalComments <= INITIAL_VISIBLE_COMMENT_COUNT) {
+    return totalComments
+  }
+
+  return INITIAL_VISIBLE_COMMENT_COUNT
+}
+
+function clampVisibleCommentCount(visibleComments: number, totalComments: number) {
+  return Math.max(0, Math.min(visibleComments, totalComments))
 }
 
 function getWishlistErrorMessage(
@@ -158,11 +175,12 @@ function getGameStatusErrorMessage(
 
 function getReviewErrorMessage(
   error: ReviewError | null,
-  action: 'load' | 'save' | 'comment' | 'like' | 'delete'
+  action: 'load' | 'save' | 'comment' | 'comment_delete' | 'like' | 'delete'
 ) {
   if (!error) {
     if (action === 'save') return 'Nao foi possivel salvar sua review agora.'
     if (action === 'comment') return 'Nao foi possivel publicar seu comentario agora.'
+    if (action === 'comment_delete') return 'Nao foi possivel apagar este comentario agora.'
     if (action === 'like') return 'Nao foi possivel atualizar a curtida desta review agora.'
     if (action === 'delete') return 'Nao foi possivel apagar esta review agora.'
     return 'Nao foi possivel carregar as reviews deste jogo agora.'
@@ -182,6 +200,10 @@ function getReviewErrorMessage(
 
     if (action === 'comment') {
       return 'Nao foi possivel publicar seu comentario por permissao. Verifique as policies da tabela comentarios no Supabase.'
+    }
+
+    if (action === 'comment_delete') {
+      return 'Nao foi possivel apagar este comentario por permissao. Verifique as policies DELETE da tabela comentarios no Supabase.'
     }
 
     if (action === 'like') {
@@ -253,6 +275,7 @@ function GameDetailsPage() {
   const [submitting, setSubmitting] = useState(false)
   const [reviewFeedback, setReviewFeedback] = useState<FeedbackState | null>(null)
   const [comentarioTexto, setComentarioTexto] = useState<Record<string, string>>({})
+  const [visibleCommentsByReviewId, setVisibleCommentsByReviewId] = useState<Record<string, number>>({})
   const [submittingComentario, setSubmittingComentario] = useState<Record<string, boolean>>({})
   const [likingReviewIds, setLikingReviewIds] = useState<string[]>([])
   const [deletingReviewIds, setDeletingReviewIds] = useState<string[]>([])
@@ -561,6 +584,15 @@ function GameDetailsPage() {
 
     const refreshResult = await refreshReviews(game.id)
 
+    const updatedReview = refreshResult.data.find(review => review.id === reviewId)
+
+    if (updatedReview) {
+      setVisibleCommentsByReviewId(currentVisibleComments => ({
+        ...currentVisibleComments,
+        [reviewId]: updatedReview.comentarios.length,
+      }))
+    }
+
     if (refreshResult.error && refreshResult.data.length === 0) {
       setReviewFeedback({
         tone: 'info',
@@ -624,6 +656,78 @@ function GameDetailsPage() {
     setLikingReviewIds(currentIds => currentIds.filter(currentId => currentId !== review.id))
   }
 
+  const handleExpandComments = (reviewId: string, totalComments: number) => {
+    setVisibleCommentsByReviewId(currentVisibleComments => {
+      const currentVisibleCommentsForReview =
+        currentVisibleComments[reviewId] ?? getInitialVisibleCommentCount(totalComments)
+
+      return {
+        ...currentVisibleComments,
+        [reviewId]: clampVisibleCommentCount(
+          currentVisibleCommentsForReview + VISIBLE_COMMENT_BATCH_SIZE,
+          totalComments
+        ),
+      }
+    })
+  }
+
+  const handleDeleteComment = async (reviewId: string, comment: ReviewComment) => {
+    if (!user || comment.usuario_id !== user.id) return
+
+    const reviewToUpdate = reviews.find(review => review.id === reviewId)
+    const originalCommentIndex =
+      reviewToUpdate?.comentarios.findIndex(currentComment => currentComment.id === comment.id) ?? -1
+
+    if (!reviewToUpdate || originalCommentIndex < 0) return
+
+    setReviewFeedback(null)
+    setReviews(currentReviews =>
+      currentReviews.map(currentReview =>
+        currentReview.id === reviewId
+          ? {
+              ...currentReview,
+              comentarios: currentReview.comentarios.filter(
+                currentComment => currentComment.id !== comment.id
+              ),
+            }
+          : currentReview
+      )
+    )
+
+    const deleteResult = await deleteReviewComment({
+      userId: user.id,
+      commentId: comment.id,
+    })
+
+    if (deleteResult.ok) {
+      return
+    }
+
+    setReviews(currentReviews =>
+      currentReviews.map(currentReview => {
+        if (
+          currentReview.id !== reviewId ||
+          currentReview.comentarios.some(currentComment => currentComment.id === comment.id)
+        ) {
+          return currentReview
+        }
+
+        const nextComments = [...currentReview.comentarios]
+        const restoreIndex = Math.min(originalCommentIndex, nextComments.length)
+        nextComments.splice(restoreIndex, 0, comment)
+
+        return {
+          ...currentReview,
+          comentarios: nextComments,
+        }
+      })
+    )
+    setReviewFeedback({
+      tone: 'error',
+      message: getReviewErrorMessage(deleteResult.error, 'comment_delete'),
+    })
+  }
+
   const handleDeleteReview = async (review: ReviewItem) => {
     if (!user || !game || review.usuario_id !== user.id || deletingReviewIds.includes(review.id)) {
       return
@@ -658,6 +762,11 @@ function GameDetailsPage() {
       const nextStates = { ...currentStates }
       delete nextStates[review.id]
       return nextStates
+    })
+    setVisibleCommentsByReviewId(currentVisibleComments => {
+      const nextVisibleComments = { ...currentVisibleComments }
+      delete nextVisibleComments[review.id]
+      return nextVisibleComments
     })
 
     const refreshResult = await refreshReviews(game.id)
@@ -1156,9 +1265,15 @@ function GameDetailsPage() {
             ) : (
               reviews.map(review => {
                 const avaliadorNome = getUserName(review.usuario)
+                const avaliadorProfilePath = getOptionalPublicProfilePath(review.usuario?.username)
                 const isLikePending = likingReviewIds.includes(review.id)
                 const isDeletePending = deletingReviewIds.includes(review.id)
                 const isOwnerReview = Boolean(user && review.usuario_id === user.id)
+                const visibleCommentCount =
+                  visibleCommentsByReviewId[review.id] ??
+                  getInitialVisibleCommentCount(review.comentarios.length)
+                const visibleComments = review.comentarios.slice(0, visibleCommentCount)
+                const hiddenCommentsCount = review.comentarios.length - visibleComments.length
                 const likeButtonLabel = !user
                   ? 'Faca login para curtir'
                   : review.canLike
@@ -1170,19 +1285,39 @@ function GameDetailsPage() {
                 return (
                   <article key={review.id} className="game-review-card">
                     <div className="game-review-card-header">
-                      <div className="game-review-user">
-                        <UserAvatar
-                          name={avaliadorNome}
-                          avatarPath={review.usuario?.avatar_path}
-                          imageClassName="game-review-avatar"
-                          fallbackClassName="game-review-avatar-fallback"
-                        />
+                      {avaliadorProfilePath ? (
+                        <Link
+                          to={avaliadorProfilePath}
+                          className="game-review-user-link"
+                          aria-label={`Abrir perfil de ${avaliadorNome}`}
+                        >
+                          <UserAvatar
+                            name={avaliadorNome}
+                            avatarPath={review.usuario?.avatar_path}
+                            imageClassName="game-review-avatar"
+                            fallbackClassName="game-review-avatar-fallback"
+                          />
 
-                        <div className="game-review-user-copy">
-                          <strong>{avaliadorNome}</strong>
-                          <span>{formatDate(review.data_publicacao)}</span>
+                          <div className="game-review-user-copy">
+                            <strong>{avaliadorNome}</strong>
+                            <span>{formatDate(review.data_publicacao)}</span>
+                          </div>
+                        </Link>
+                      ) : (
+                        <div className="game-review-user">
+                          <UserAvatar
+                            name={avaliadorNome}
+                            avatarPath={review.usuario?.avatar_path}
+                            imageClassName="game-review-avatar"
+                            fallbackClassName="game-review-avatar-fallback"
+                          />
+
+                          <div className="game-review-user-copy">
+                            <strong>{avaliadorNome}</strong>
+                            <span>{formatDate(review.data_publicacao)}</span>
+                          </div>
                         </div>
-                      </div>
+                      )}
 
                       <div className="game-review-score">
                         <div className="game-review-score-grid">
@@ -1250,26 +1385,59 @@ function GameDetailsPage() {
                     <div className="game-review-comments">
                       {review.comentarios.length > 0 ? (
                         <div className="game-review-comments-list">
-                          {review.comentarios.map(comentario => {
+                          {visibleComments.map(comentario => {
                             const autorComentario = getUserName(comentario.usuario)
+                            const autorComentarioProfilePath = getOptionalPublicProfilePath(
+                              comentario.usuario?.username
+                            )
+                            const isOwnerComment = Boolean(user && comentario.usuario_id === user.id)
 
                             return (
                               <div key={comentario.id} className="game-review-comment-card">
                                 <div className="game-review-comment-header">
-                                  <div className="game-review-comment-author">
-                                    <UserAvatar
-                                      name={autorComentario}
-                                      avatarPath={comentario.usuario?.avatar_path}
-                                      imageClassName="game-review-comment-avatar"
-                                      fallbackClassName="game-review-comment-avatar-fallback"
-                                    />
+                                  {autorComentarioProfilePath ? (
+                                    <Link
+                                      to={autorComentarioProfilePath}
+                                      className="game-review-comment-author-link"
+                                      aria-label={`Abrir perfil de ${autorComentario}`}
+                                    >
+                                      <UserAvatar
+                                        name={autorComentario}
+                                        avatarPath={comentario.usuario?.avatar_path}
+                                        imageClassName="game-review-comment-avatar"
+                                        fallbackClassName="game-review-comment-avatar-fallback"
+                                      />
 
-                                    <strong>{autorComentario}</strong>
+                                      <strong>{autorComentario}</strong>
+                                    </Link>
+                                  ) : (
+                                    <div className="game-review-comment-author">
+                                      <UserAvatar
+                                        name={autorComentario}
+                                        avatarPath={comentario.usuario?.avatar_path}
+                                        imageClassName="game-review-comment-avatar"
+                                        fallbackClassName="game-review-comment-avatar-fallback"
+                                      />
+
+                                      <strong>{autorComentario}</strong>
+                                    </div>
+                                  )}
+
+                                  <div className="game-review-comment-meta">
+                                    <span className="game-review-comment-date">
+                                      {formatDate(comentario.data_comentario)}
+                                    </span>
+
+                                    {isOwnerComment ? (
+                                      <button
+                                        type="button"
+                                        className="game-review-comment-delete-button"
+                                        onClick={() => void handleDeleteComment(review.id, comentario)}
+                                      >
+                                        Apagar
+                                      </button>
+                                    ) : null}
                                   </div>
-
-                                  <span className="game-review-comment-date">
-                                    {formatDate(comentario.data_comentario)}
-                                  </span>
                                 </div>
 
                                 <p className="game-review-comment-body">{comentario.texto}</p>
@@ -1277,6 +1445,17 @@ function GameDetailsPage() {
                             )
                           })}
                         </div>
+                      ) : null}
+
+                      {hiddenCommentsCount > 0 ? (
+                        <button
+                          type="button"
+                          className="game-review-comments-expand-button"
+                          onClick={() => handleExpandComments(review.id, review.comentarios.length)}
+                          aria-label={`Ver mais comentarios. ${hiddenCommentsCount} restantes.`}
+                        >
+                          Ver mais comentarios
+                        </button>
                       ) : null}
 
                       {user ? (
