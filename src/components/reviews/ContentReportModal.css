@@ -1,0 +1,258 @@
+.content-report-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: grid;
+  place-items: center;
+  padding: 1.25rem;
+  background: rgba(4, 6, 12, 0.78);
+  backdrop-filter: blur(10px);
+}
+
+.content-report-modal {
+  position: relative;
+  width: min(100%, 560px);
+  overflow: hidden;
+  border-radius: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background:
+    radial-gradient(circle at top right, rgba(102, 126, 234, 0.16), transparent 32%),
+    linear-gradient(180deg, rgba(15, 18, 32, 0.98), rgba(9, 12, 24, 0.98));
+  box-shadow: 0 32px 70px rgba(0, 0, 0, 0.32);
+}
+
+.content-report-modal-glow {
+  position: absolute;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  filter: blur(28px);
+  opacity: 0.34;
+  pointer-events: none;
+}
+
+.content-report-modal-glow-left {
+  top: -90px;
+  left: -120px;
+  background: rgba(102, 126, 234, 0.32);
+}
+
+.content-report-modal-glow-right {
+  right: -120px;
+  bottom: -120px;
+  background: rgba(84, 211, 194, 0.2);
+}
+
+.content-report-modal-content {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 1rem;
+  padding: 1.4rem;
+}
+
+.content-report-modal-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.content-report-modal-copy {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.content-report-modal-kicker {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 0.38rem 0.74rem;
+  border-radius: 999px;
+  border: 1px solid rgba(160, 177, 255, 0.24);
+  background: rgba(126, 143, 255, 0.1);
+  color: #dbe4ff;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.content-report-modal-copy h2 {
+  margin: 0;
+  color: #fff;
+}
+
+.content-report-modal-copy p {
+  margin: 0;
+  color: rgba(238, 242, 255, 0.78);
+  line-height: 1.7;
+}
+
+.content-report-modal-close-button {
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #eef2ff;
+  font: inherit;
+  cursor: pointer;
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease,
+    background 0.2s ease;
+}
+
+.content-report-modal-close-button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(160, 177, 255, 0.32);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.content-report-modal-feedback {
+  margin: 0;
+  color: rgba(222, 232, 255, 0.82);
+  line-height: 1.6;
+}
+
+.content-report-modal-feedback.is-success {
+  color: #c9ffe0;
+}
+
+.content-report-modal-feedback.is-error {
+  color: #ffd7d7;
+}
+
+.content-report-modal-feedback.is-info {
+  color: #dbe4ff;
+}
+
+.content-report-modal-form,
+.content-report-modal-summary {
+  display: grid;
+  gap: 1rem;
+}
+
+.content-report-modal-field {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.content-report-modal-field span,
+.content-report-modal-note strong {
+  color: rgba(238, 242, 255, 0.9);
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.content-report-modal-select,
+.content-report-modal-textarea {
+  width: 100%;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+  font: inherit;
+}
+
+.content-report-modal-select {
+  min-height: 48px;
+  padding: 0.8rem 0.95rem;
+}
+
+.content-report-modal-textarea {
+  min-height: 132px;
+  padding: 0.9rem 0.95rem;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+.content-report-modal-select:focus,
+.content-report-modal-textarea:focus,
+.content-report-modal-close-button:focus-visible,
+.content-report-modal-actions .game-button:focus-visible {
+  outline: none;
+  border-color: rgba(126, 143, 255, 0.58);
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.18);
+}
+
+.content-report-modal-textarea::placeholder {
+  color: rgba(238, 242, 255, 0.42);
+}
+
+.content-report-modal-pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.content-report-modal-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.45rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(238, 242, 255, 0.84);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.content-report-modal-note {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.95rem 1rem;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.content-report-modal-note p {
+  margin: 0;
+  color: rgba(238, 242, 255, 0.78);
+  line-height: 1.65;
+}
+
+.content-report-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.content-report-modal-actions .game-button {
+  width: auto;
+  min-height: 46px;
+  padding: 0.8rem 1.05rem;
+  border-radius: 14px;
+}
+
+.content-report-modal-primary-action {
+  box-shadow: 0 16px 30px rgba(82, 96, 204, 0.22);
+}
+
+.content-report-modal-secondary-action {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.06);
+  color: #eef2ff;
+}
+
+@media (max-width: 640px) {
+  .content-report-modal-backdrop {
+    padding: 0.85rem;
+  }
+
+  .content-report-modal-content {
+    padding: 1.15rem;
+  }
+
+  .content-report-modal-header,
+  .content-report-modal-actions {
+    display: grid;
+  }
+
+  .content-report-modal-actions .game-button {
+    width: 100%;
+  }
+}

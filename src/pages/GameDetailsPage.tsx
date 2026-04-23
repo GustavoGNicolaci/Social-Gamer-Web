@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { ContentReportModal } from '../components/reviews/ContentReportModal'
 import { UserAvatar } from '../components/UserAvatar'
 import { useAuth } from '../contexts/AuthContext'
 import {
@@ -13,6 +14,16 @@ import {
   type ReviewError,
   type ReviewItem,
 } from '../services/reviewService'
+import {
+  submitContentReport,
+  toggleCommentDislike,
+  toggleReviewDislike,
+  type CommentDislikeState,
+  type CurrentUserReportSummary,
+  type ReportReason,
+  type ReportTargetType,
+  type ReviewReactionState,
+} from '../services/reviewInteractionsService'
 import {
   deleteGameStatus,
   getGameStatusEntry,
@@ -46,6 +57,12 @@ type FeedbackTone = 'success' | 'error' | 'info'
 interface FeedbackState {
   tone: FeedbackTone
   message: string
+}
+
+interface ReportModalTargetState {
+  targetType: ReportTargetType
+  targetId: string
+  reviewId: string
 }
 
 type QuickProfileStatusValue = GameStatusValue
@@ -175,13 +192,29 @@ function getGameStatusErrorMessage(
 
 function getReviewErrorMessage(
   error: ReviewError | null,
-  action: 'load' | 'save' | 'comment' | 'comment_delete' | 'like' | 'delete'
+  action:
+    | 'load'
+    | 'save'
+    | 'comment'
+    | 'comment_delete'
+    | 'review_like'
+    | 'review_dislike'
+    | 'comment_dislike'
+    | 'report'
+    | 'delete'
 ) {
   if (!error) {
     if (action === 'save') return 'Nao foi possivel salvar sua review agora.'
     if (action === 'comment') return 'Nao foi possivel publicar seu comentario agora.'
     if (action === 'comment_delete') return 'Nao foi possivel apagar este comentario agora.'
-    if (action === 'like') return 'Nao foi possivel atualizar a curtida desta review agora.'
+    if (action === 'review_like') return 'Nao foi possivel atualizar a curtida desta review agora.'
+    if (action === 'review_dislike') {
+      return 'Nao foi possivel atualizar o "Não gostei" desta review agora.'
+    }
+    if (action === 'comment_dislike') {
+      return 'Nao foi possivel atualizar o "Não gostei" deste comentario agora.'
+    }
+    if (action === 'report') return 'Nao foi possivel registrar esta denuncia agora.'
     if (action === 'delete') return 'Nao foi possivel apagar esta review agora.'
     return 'Nao foi possivel carregar as reviews deste jogo agora.'
   }
@@ -206,20 +239,40 @@ function getReviewErrorMessage(
       return 'Nao foi possivel apagar este comentario por permissao. Verifique as policies DELETE da tabela comentarios no Supabase.'
     }
 
-    if (action === 'like') {
+    if (action === 'review_like') {
       return 'Nao foi possivel atualizar esta curtida por permissao. Verifique as policies da tabela avaliacao_curtidas no Supabase.'
+    }
+
+    if (action === 'review_dislike') {
+      return 'Nao foi possivel atualizar este "Não gostei" por permissao. Verifique as policies da tabela avaliacao_deslikes no Supabase.'
+    }
+
+    if (action === 'comment_dislike') {
+      return 'Nao foi possivel atualizar este "Não gostei" por permissao. Verifique as policies da tabela comentario_deslikes no Supabase.'
+    }
+
+    if (action === 'report') {
+      return 'Nao foi possivel registrar esta denuncia por permissao. Verifique as policies da tabela denuncias_conteudo no Supabase.'
     }
 
     if (action === 'delete') {
       return 'Nao foi possivel apagar esta review por permissao. Verifique as policies DELETE da tabela avaliacoes no Supabase.'
     }
 
-    return 'Nao foi possivel carregar as reviews por permissao. Verifique as policies das tabelas avaliacoes, comentarios e avaliacao_curtidas no Supabase.'
+    return 'Nao foi possivel carregar as reviews por permissao. Verifique as policies das tabelas avaliacoes, comentarios, avaliacao_curtidas, avaliacao_deslikes, comentario_deslikes e denuncias_conteudo no Supabase.'
   }
 
   if (fullMessage.includes('duplicate') || fullMessage.includes('unique')) {
-    if (action === 'like') {
+    if (action === 'review_like') {
       return 'Essa review ja estava curtida por este usuario.'
+    }
+
+    if (action === 'review_dislike' || action === 'comment_dislike') {
+      return 'Esse "Não gostei" ja estava registrado por este usuario.'
+    }
+
+    if (action === 'report') {
+      return 'Voce ja denunciou este conteudo anteriormente.'
     }
 
     return 'Ja existe uma review sua para este jogo. Envie novamente para atualizar a avaliacao.'
@@ -262,6 +315,29 @@ function iconHeart(isFilled: boolean) {
   )
 }
 
+function iconThumbDown(isFilled: boolean) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M14 4H6.5C5.67 4 4.95 4.5 4.64 5.22L2.08 11.18C2.03 11.31 2 11.45 2 11.6V13.5C2 14.33 2.67 15 3.5 15H8.24L7.52 18.46C7.5 18.56 7.49 18.66 7.49 18.76C7.49 19.17 7.66 19.56 7.93 19.84L8.72 20.62L13.64 15.71C13.88 15.47 14 15.15 14 14.81V4ZM18 4H22V14H18V4Z"
+        fill={isFilled ? 'currentColor' : 'none'}
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function iconFlag(isFilled: boolean) {
+  return (
+    <span className={`game-review-report-emoji${isFilled ? ' is-filled' : ''}`} aria-hidden="true">
+      {isFilled ? '⚑' : '⚐'}
+    </span>
+  )
+}
+
 function GameDetailsPage() {
   const { id } = useParams()
   const { user } = useAuth()
@@ -277,8 +353,12 @@ function GameDetailsPage() {
   const [comentarioTexto, setComentarioTexto] = useState<Record<string, string>>({})
   const [visibleCommentsByReviewId, setVisibleCommentsByReviewId] = useState<Record<string, number>>({})
   const [submittingComentario, setSubmittingComentario] = useState<Record<string, boolean>>({})
-  const [likingReviewIds, setLikingReviewIds] = useState<string[]>([])
+  const [pendingReviewReactionIds, setPendingReviewReactionIds] = useState<string[]>([])
+  const [pendingCommentDislikeIds, setPendingCommentDislikeIds] = useState<string[]>([])
   const [deletingReviewIds, setDeletingReviewIds] = useState<string[]>([])
+  const [reportModalTarget, setReportModalTarget] = useState<ReportModalTargetState | null>(null)
+  const [reportModalFeedback, setReportModalFeedback] = useState<FeedbackState | null>(null)
+  const [submittingReport, setSubmittingReport] = useState(false)
   const [wishlistLoading, setWishlistLoading] = useState(false)
   const [wishlistSaving, setWishlistSaving] = useState(false)
   const [isInWishlist, setIsInWishlist] = useState(false)
@@ -300,23 +380,42 @@ function GameDetailsPage() {
         }
 
         if (result.error && result.data.length > 0) {
-          const currentLikeStateByReviewId = new Map(
-            currentReviews.map(review => [
-              review.id,
-              {
-                curtidas: review.curtidas,
-                likedByCurrentUser: review.likedByCurrentUser,
-              },
-            ])
-          )
+          const currentReviewStateById = new Map(currentReviews.map(review => [review.id, review]))
 
-          return result.data.map(review => ({
-            ...review,
-            curtidas: currentLikeStateByReviewId.get(review.id)?.curtidas ?? review.curtidas,
-            likedByCurrentUser:
-              currentLikeStateByReviewId.get(review.id)?.likedByCurrentUser ??
-              review.likedByCurrentUser,
-          }))
+          return result.data.map(review => {
+            const currentReview = currentReviewStateById.get(review.id)
+
+            if (!currentReview) {
+              return review
+            }
+
+            const currentCommentStateById = new Map(
+              currentReview.comentarios.map(comment => [comment.id, comment])
+            )
+
+            return {
+              ...review,
+              curtidas: currentReview.curtidas,
+              likedByCurrentUser: currentReview.likedByCurrentUser,
+              dislikes: currentReview.dislikes,
+              dislikedByCurrentUser: currentReview.dislikedByCurrentUser,
+              currentUserReport: currentReview.currentUserReport,
+              comentarios: review.comentarios.map(comment => {
+                const currentComment = currentCommentStateById.get(comment.id)
+
+                if (!currentComment) {
+                  return comment
+                }
+
+                return {
+                  ...comment,
+                  dislikes: currentComment.dislikes,
+                  dislikedByCurrentUser: currentComment.dislikedByCurrentUser,
+                  currentUserReport: currentComment.currentUserReport,
+                }
+              }),
+            }
+          })
         }
 
         return result.data
@@ -333,18 +432,81 @@ function GameDetailsPage() {
     [user?.id]
   )
 
-  const applyReviewLikeState = useCallback(
-    (reviewId: string, nextLikeState: { curtidas: number; likedByCurrentUser: boolean }) => {
+  const applyReviewReactionState = useCallback(
+    (reviewId: string, nextReactionState: ReviewReactionState) => {
       setReviews(currentReviews =>
         currentReviews.map(currentReview =>
           currentReview.id === reviewId
             ? {
                 ...currentReview,
-                curtidas: nextLikeState.curtidas,
-                likedByCurrentUser: nextLikeState.likedByCurrentUser,
+                curtidas: nextReactionState.curtidas,
+                likedByCurrentUser: nextReactionState.likedByCurrentUser,
+                dislikes: nextReactionState.dislikes,
+                dislikedByCurrentUser: nextReactionState.dislikedByCurrentUser,
               }
             : currentReview
         )
+      )
+    },
+    []
+  )
+
+  const applyCommentDislikeState = useCallback(
+    (reviewId: string, commentId: string, nextDislikeState: CommentDislikeState) => {
+      setReviews(currentReviews =>
+        currentReviews.map(currentReview =>
+          currentReview.id === reviewId
+            ? {
+                ...currentReview,
+                comentarios: currentReview.comentarios.map(currentComment =>
+                  currentComment.id === commentId
+                    ? {
+                        ...currentComment,
+                        dislikes: nextDislikeState.dislikes,
+                        dislikedByCurrentUser: nextDislikeState.dislikedByCurrentUser,
+                      }
+                    : currentComment
+                ),
+              }
+            : currentReview
+        )
+      )
+    },
+    []
+  )
+
+  const applyContentReportState = useCallback(
+    (
+      reviewId: string,
+      targetType: ReportTargetType,
+      targetId: string,
+      nextReport: CurrentUserReportSummary
+    ) => {
+      setReviews(currentReviews =>
+        currentReviews.map(currentReview => {
+          if (currentReview.id !== reviewId) {
+            return currentReview
+          }
+
+          if (targetType === 'review') {
+            return {
+              ...currentReview,
+              currentUserReport: nextReport,
+            }
+          }
+
+          return {
+            ...currentReview,
+            comentarios: currentReview.comentarios.map(currentComment =>
+              currentComment.id === targetId
+                ? {
+                    ...currentComment,
+                    currentUserReport: nextReport,
+                  }
+                : currentComment
+            ),
+          }
+        })
       )
     },
     []
@@ -487,6 +649,41 @@ function GameDetailsPage() {
     return reviews.find(review => review.usuario_id === user.id) || null
   }, [reviews, user])
 
+  const activeReportTarget = useMemo(() => {
+    if (!reportModalTarget) return null
+
+    if (reportModalTarget.targetType === 'review') {
+      const review = reviews.find(currentReview => currentReview.id === reportModalTarget.targetId)
+
+      if (!review) return null
+
+      return {
+        targetType: 'review' as const,
+        targetId: review.id,
+        reviewId: review.id,
+        authorId: review.usuario_id,
+        authorName: getUserName(review.usuario),
+        currentReport: review.currentUserReport,
+      }
+    }
+
+    const parentReview = reviews.find(currentReview => currentReview.id === reportModalTarget.reviewId)
+    const comment = parentReview?.comentarios.find(
+      currentComment => currentComment.id === reportModalTarget.targetId
+    )
+
+    if (!parentReview || !comment) return null
+
+    return {
+      targetType: 'comment' as const,
+      targetId: comment.id,
+      reviewId: parentReview.id,
+      authorId: comment.usuario_id,
+      authorName: getUserName(comment.usuario),
+      currentReport: comment.currentUserReport,
+    }
+  }, [reportModalTarget, reviews])
+
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
       setReviewFeedback(null)
@@ -604,44 +801,50 @@ function GameDetailsPage() {
   }
 
   const handleToggleReviewLike = async (review: ReviewItem) => {
-    if (!user || !game || !review.canLike || likingReviewIds.includes(review.id)) return
+    if (!user || !game || !review.canLike || pendingReviewReactionIds.includes(review.id)) return
 
     const wasLiked = review.likedByCurrentUser
-    const previousLikeState = {
+    const previousReactionState: ReviewReactionState = {
       curtidas: review.curtidas,
       likedByCurrentUser: review.likedByCurrentUser,
+      dislikes: review.dislikes,
+      dislikedByCurrentUser: review.dislikedByCurrentUser,
     }
-    const optimisticLikeState = {
+    const optimisticReactionState: ReviewReactionState = {
       curtidas: Math.max(review.curtidas + (wasLiked ? -1 : 1), 0),
       likedByCurrentUser: !wasLiked,
+      dislikes: Math.max(review.dislikes - (review.dislikedByCurrentUser && !wasLiked ? 1 : 0), 0),
+      dislikedByCurrentUser: false,
     }
 
-    setLikingReviewIds(currentIds =>
+    setPendingReviewReactionIds(currentIds =>
       currentIds.includes(review.id) ? currentIds : [...currentIds, review.id]
     )
     setReviewFeedback(null)
-    applyReviewLikeState(review.id, optimisticLikeState)
+    applyReviewReactionState(review.id, optimisticReactionState)
 
     const likeResult = await toggleReviewLike({
       reviewId: review.id,
       userId: user.id,
       reviewAuthorId: review.usuario_id,
       likedByCurrentUser: wasLiked,
+      dislikedByCurrentUser: review.dislikedByCurrentUser,
       currentLikeCount: review.curtidas,
+      currentDislikeCount: review.dislikes,
     })
 
     if (likeResult.error) {
-      applyReviewLikeState(review.id, previousLikeState)
+      applyReviewReactionState(review.id, previousReactionState)
       setReviewFeedback({
         tone: 'error',
-        message: getReviewErrorMessage(likeResult.error, 'like'),
+        message: getReviewErrorMessage(likeResult.error, 'review_like'),
       })
-      setLikingReviewIds(currentIds => currentIds.filter(currentId => currentId !== review.id))
+      setPendingReviewReactionIds(currentIds => currentIds.filter(currentId => currentId !== review.id))
       return
     }
 
     if (likeResult.data) {
-      applyReviewLikeState(review.id, likeResult.data)
+      applyReviewReactionState(review.id, likeResult.data)
     }
 
     const refreshResult = await refreshReviews(game.id)
@@ -653,7 +856,178 @@ function GameDetailsPage() {
       })
     }
 
-    setLikingReviewIds(currentIds => currentIds.filter(currentId => currentId !== review.id))
+    setPendingReviewReactionIds(currentIds => currentIds.filter(currentId => currentId !== review.id))
+  }
+
+  const handleToggleReviewDislike = async (review: ReviewItem) => {
+    if (!user || !game || !review.canDislike || pendingReviewReactionIds.includes(review.id)) return
+
+    const wasDisliked = review.dislikedByCurrentUser
+    const previousReactionState: ReviewReactionState = {
+      curtidas: review.curtidas,
+      likedByCurrentUser: review.likedByCurrentUser,
+      dislikes: review.dislikes,
+      dislikedByCurrentUser: review.dislikedByCurrentUser,
+    }
+    const optimisticReactionState: ReviewReactionState = {
+      curtidas: Math.max(review.curtidas - (review.likedByCurrentUser && !wasDisliked ? 1 : 0), 0),
+      likedByCurrentUser: false,
+      dislikes: Math.max(review.dislikes + (wasDisliked ? -1 : 1), 0),
+      dislikedByCurrentUser: !wasDisliked,
+    }
+
+    setPendingReviewReactionIds(currentIds =>
+      currentIds.includes(review.id) ? currentIds : [...currentIds, review.id]
+    )
+    setReviewFeedback(null)
+    applyReviewReactionState(review.id, optimisticReactionState)
+
+    const dislikeResult = await toggleReviewDislike({
+      reviewId: review.id,
+      userId: user.id,
+      reviewAuthorId: review.usuario_id,
+      likedByCurrentUser: review.likedByCurrentUser,
+      dislikedByCurrentUser: wasDisliked,
+      currentLikeCount: review.curtidas,
+      currentDislikeCount: review.dislikes,
+    })
+
+    if (dislikeResult.error) {
+      applyReviewReactionState(review.id, previousReactionState)
+      setReviewFeedback({
+        tone: 'error',
+        message: getReviewErrorMessage(dislikeResult.error, 'review_dislike'),
+      })
+      setPendingReviewReactionIds(currentIds => currentIds.filter(currentId => currentId !== review.id))
+      return
+    }
+
+    if (dislikeResult.data) {
+      applyReviewReactionState(review.id, dislikeResult.data)
+    }
+
+    const refreshResult = await refreshReviews(game.id)
+
+    if (refreshResult.error && refreshResult.data.length === 0) {
+      setReviewFeedback({
+        tone: 'info',
+        message: 'O "Não gostei" foi atualizado, mas nao foi possivel recarregar a lista agora.',
+      })
+    }
+
+    setPendingReviewReactionIds(currentIds => currentIds.filter(currentId => currentId !== review.id))
+  }
+
+  const handleToggleCommentDislike = async (reviewId: string, comment: ReviewComment) => {
+    if (!user || pendingCommentDislikeIds.includes(comment.id) || !comment.canDislike) return
+
+    const previousDislikeState: CommentDislikeState = {
+      dislikes: comment.dislikes,
+      dislikedByCurrentUser: comment.dislikedByCurrentUser,
+    }
+    const optimisticDislikeState: CommentDislikeState = {
+      dislikes: Math.max(comment.dislikes + (comment.dislikedByCurrentUser ? -1 : 1), 0),
+      dislikedByCurrentUser: !comment.dislikedByCurrentUser,
+    }
+
+    setPendingCommentDislikeIds(currentIds =>
+      currentIds.includes(comment.id) ? currentIds : [...currentIds, comment.id]
+    )
+    setReviewFeedback(null)
+    applyCommentDislikeState(reviewId, comment.id, optimisticDislikeState)
+
+    const dislikeResult = await toggleCommentDislike({
+      commentId: comment.id,
+      userId: user.id,
+      commentAuthorId: comment.usuario_id,
+      dislikedByCurrentUser: comment.dislikedByCurrentUser,
+      currentDislikeCount: comment.dislikes,
+    })
+
+    if (dislikeResult.error) {
+      applyCommentDislikeState(reviewId, comment.id, previousDislikeState)
+      setReviewFeedback({
+        tone: 'error',
+        message: getReviewErrorMessage(dislikeResult.error, 'comment_dislike'),
+      })
+      setPendingCommentDislikeIds(currentIds => currentIds.filter(currentId => currentId !== comment.id))
+      return
+    }
+
+    if (dislikeResult.data) {
+      applyCommentDislikeState(reviewId, comment.id, dislikeResult.data)
+    }
+
+    setPendingCommentDislikeIds(currentIds => currentIds.filter(currentId => currentId !== comment.id))
+  }
+
+  const handleOpenReportModal = (
+    targetType: ReportTargetType,
+    targetId: string,
+    reviewId: string
+  ) => {
+    setReportModalTarget({
+      targetType,
+      targetId,
+      reviewId,
+    })
+    setReportModalFeedback(null)
+  }
+
+  const handleCloseReportModal = () => {
+    if (submittingReport) return
+
+    setReportModalTarget(null)
+    setReportModalFeedback(null)
+  }
+
+  const handleSubmitReport = async ({
+    reason,
+    description,
+  }: {
+    reason: ReportReason
+    description: string
+  }) => {
+    if (!user || !activeReportTarget) return
+
+    setSubmittingReport(true)
+    setReportModalFeedback(null)
+
+    const reportResult = await submitContentReport({
+      userId: user.id,
+      targetType: activeReportTarget.targetType,
+      targetId: activeReportTarget.targetId,
+      targetAuthorId: activeReportTarget.authorId,
+      reason,
+      description,
+    })
+
+    if (reportResult.error) {
+      setReportModalFeedback({
+        tone: 'error',
+        message: getReviewErrorMessage(reportResult.error, 'report'),
+      })
+      setSubmittingReport(false)
+      return
+    }
+
+    if (reportResult.data) {
+      applyContentReportState(
+        activeReportTarget.reviewId,
+        activeReportTarget.targetType,
+        activeReportTarget.targetId,
+        reportResult.data
+      )
+    }
+
+    setReportModalFeedback({
+      tone: reportResult.status === 'already_exists' ? 'info' : 'success',
+      message:
+        reportResult.status === 'already_exists'
+          ? 'Voce ja havia denunciado este conteudo. Mantivemos o registro atual.'
+          : 'Denuncia enviada com sucesso. Obrigado por ajudar a manter a comunidade segura.',
+    })
+    setSubmittingReport(false)
   }
 
   const handleExpandComments = (reviewId: string, totalComments: number) => {
@@ -693,6 +1067,13 @@ function GameDetailsPage() {
           : currentReview
       )
     )
+    setPendingCommentDislikeIds(currentIds => currentIds.filter(currentId => currentId !== comment.id))
+    setReportModalTarget(currentTarget =>
+      currentTarget && currentTarget.targetType === 'comment' && currentTarget.targetId === comment.id
+        ? null
+        : currentTarget
+    )
+    setReportModalFeedback(null)
 
     const deleteResult = await deleteReviewComment({
       userId: user.id,
@@ -768,6 +1149,16 @@ function GameDetailsPage() {
       delete nextVisibleComments[review.id]
       return nextVisibleComments
     })
+    setPendingReviewReactionIds(currentIds => currentIds.filter(currentId => currentId !== review.id))
+    setPendingCommentDislikeIds(currentIds =>
+      currentIds.filter(currentId =>
+        !review.comentarios.some(currentComment => currentComment.id === currentId)
+      )
+    )
+    setReportModalTarget(currentTarget =>
+      currentTarget && currentTarget.reviewId === review.id ? null : currentTarget
+    )
+    setReportModalFeedback(null)
 
     const refreshResult = await refreshReviews(game.id)
 
@@ -1266,7 +1657,7 @@ function GameDetailsPage() {
               reviews.map(review => {
                 const avaliadorNome = getUserName(review.usuario)
                 const avaliadorProfilePath = getOptionalPublicProfilePath(review.usuario?.username)
-                const isLikePending = likingReviewIds.includes(review.id)
+                const isReactionPending = pendingReviewReactionIds.includes(review.id)
                 const isDeletePending = deletingReviewIds.includes(review.id)
                 const isOwnerReview = Boolean(user && review.usuario_id === user.id)
                 const visibleCommentCount =
@@ -1281,6 +1672,16 @@ function GameDetailsPage() {
                       ? 'Descurtir review'
                       : 'Curtir review'
                     : 'Sua propria review'
+                const dislikeButtonLabel = !user
+                  ? 'Faca login para usar "Não gostei"'
+                  : review.canDislike
+                    ? review.dislikedByCurrentUser
+                      ? 'Remover "Não gostei" da review'
+                      : 'Marcar "Não gostei" nesta review'
+                    : 'Sua propria review'
+                const reportButtonLabel = review.currentUserReport
+                  ? 'Ver detalhes da sua denuncia desta review'
+                  : 'Denunciar review'
 
                 return (
                   <article key={review.id} className="game-review-card">
@@ -1319,20 +1720,34 @@ function GameDetailsPage() {
                         </div>
                       )}
 
-                      <div className="game-review-score">
-                        <div className="game-review-score-grid">
-                          {REVIEW_SCORE_OPTIONS.map(score => (
-                            <span
-                              key={score}
-                              className={`game-review-score-pill${score <= review.nota ? ' is-filled' : ''}`}
-                            >
-                              {score}
-                            </span>
-                          ))}
+                      <div className="game-review-header-side">
+                        {user && !isOwnerReview ? (
+                          <button
+                            type="button"
+                            className={`game-review-report-button${review.currentUserReport ? ' is-reported' : ''}`}
+                            onClick={() => handleOpenReportModal('review', review.id, review.id)}
+                            aria-label={reportButtonLabel}
+                            title={reportButtonLabel}
+                          >
+                            {iconFlag(Boolean(review.currentUserReport))}
+                          </button>
+                        ) : null}
+
+                        <div className="game-review-score">
+                          <div className="game-review-score-grid">
+                            {REVIEW_SCORE_OPTIONS.map(score => (
+                              <span
+                                key={score}
+                                className={`game-review-score-pill${score <= review.nota ? ' is-filled' : ''}`}
+                              >
+                                {score}
+                              </span>
+                            ))}
+                          </div>
+                          <span className="game-review-score-label">
+                            {formatReviewScore(review.nota)}/10
+                          </span>
                         </div>
-                        <span className="game-review-score-label">
-                          {formatReviewScore(review.nota)}/10
-                        </span>
                       </div>
                     </div>
 
@@ -1345,26 +1760,50 @@ function GameDetailsPage() {
                     )}
 
                     <div className="game-review-meta">
-                      <button
-                        type="button"
-                        className={`game-review-like-button${review.likedByCurrentUser ? ' is-liked' : ''}`}
-                        onClick={() => void handleToggleReviewLike(review)}
-                        disabled={!user || !review.canLike || isLikePending}
-                        aria-label={likeButtonLabel}
-                        title={likeButtonLabel}
-                      >
-                        <span className="game-review-like-icon">
-                          {iconHeart(review.likedByCurrentUser)}
-                        </span>
-                        <span>
-                          {isLikePending
-                            ? 'Atualizando...'
-                            : review.likedByCurrentUser
-                              ? 'Curtido'
-                              : 'Curtir'}
-                        </span>
-                      </button>
-                      <span>{review.curtidas} curtidas</span>
+                      <div className="game-review-reactions">
+                        <button
+                          type="button"
+                          className={`game-review-reaction-button is-like${review.likedByCurrentUser ? ' is-active is-liked' : ''}`}
+                          onClick={() => void handleToggleReviewLike(review)}
+                          disabled={!user || !review.canLike || isReactionPending}
+                          aria-label={likeButtonLabel}
+                          title={likeButtonLabel}
+                        >
+                          <span className="game-review-reaction-icon">
+                            {iconHeart(review.likedByCurrentUser)}
+                          </span>
+                          <span>
+                            {isReactionPending
+                              ? 'Atualizando...'
+                              : review.likedByCurrentUser
+                                ? 'Curtido'
+                                : 'Curtir'}
+                          </span>
+                        </button>
+                        <span>{review.curtidas} curtidas</span>
+
+                        <button
+                          type="button"
+                          className={`game-review-reaction-button is-dislike${review.dislikedByCurrentUser ? ' is-active is-disliked' : ''}`}
+                          onClick={() => void handleToggleReviewDislike(review)}
+                          disabled={!user || !review.canDislike || isReactionPending}
+                          aria-label={dislikeButtonLabel}
+                          title={dislikeButtonLabel}
+                        >
+                          <span className="game-review-reaction-icon">
+                            {iconThumbDown(review.dislikedByCurrentUser)}
+                          </span>
+                          <span>
+                            {isReactionPending
+                              ? 'Atualizando...'
+                              : review.dislikedByCurrentUser
+                                ? 'Não gostei'
+                                : 'Não gostei'}
+                          </span>
+                        </button>
+                        <span>{review.dislikes} não gostaram</span>
+                      </div>
+
                       <span>
                         {review.comentarios.length === 1
                           ? '1 comentario'
@@ -1391,6 +1830,20 @@ function GameDetailsPage() {
                               comentario.usuario?.username
                             )
                             const isOwnerComment = Boolean(user && comentario.usuario_id === user.id)
+                            const isCommentDislikePending = pendingCommentDislikeIds.includes(
+                              comentario.id
+                            )
+                            const canReportComment = Boolean(user && !isOwnerComment)
+                            const commentDislikeButtonLabel = !user
+                              ? 'Faca login para usar "Não gostei"'
+                              : comentario.canDislike
+                                ? comentario.dislikedByCurrentUser
+                                  ? 'Remover "Não gostei" do comentario'
+                                  : 'Marcar "Não gostei" neste comentario'
+                                : 'Seu proprio comentario'
+                            const commentReportButtonLabel = comentario.currentUserReport
+                              ? 'Ver detalhes da sua denuncia deste comentario'
+                              : 'Denunciar comentario'
 
                             return (
                               <div key={comentario.id} className="game-review-comment-card">
@@ -1428,15 +1881,63 @@ function GameDetailsPage() {
                                       {formatDate(comentario.data_comentario)}
                                     </span>
 
-                                    {isOwnerComment ? (
+                                    <div className="game-review-comment-meta-actions">
+                                      {canReportComment ? (
+                                        <button
+                                          type="button"
+                                          className={`game-review-report-button is-comment${comentario.currentUserReport ? ' is-reported' : ''}`}
+                                          onClick={() =>
+                                            handleOpenReportModal(
+                                              'comment',
+                                              comentario.id,
+                                              review.id
+                                            )
+                                          }
+                                          aria-label={commentReportButtonLabel}
+                                          title={commentReportButtonLabel}
+                                        >
+                                          {iconFlag(Boolean(comentario.currentUserReport))}
+                                        </button>
+                                      ) : null}
+
                                       <button
                                         type="button"
-                                        className="game-review-comment-delete-button"
-                                        onClick={() => void handleDeleteComment(review.id, comentario)}
+                                        className={`game-review-comment-reaction-button${comentario.dislikedByCurrentUser ? ' is-disliked' : ''}`}
+                                        onClick={() =>
+                                          void handleToggleCommentDislike(review.id, comentario)
+                                        }
+                                        disabled={
+                                          !user ||
+                                          !comentario.canDislike ||
+                                          isCommentDislikePending
+                                        }
+                                        aria-label={commentDislikeButtonLabel}
+                                        title={commentDislikeButtonLabel}
                                       >
-                                        Apagar
+                                        <span className="game-review-reaction-icon">
+                                          {iconThumbDown(comentario.dislikedByCurrentUser)}
+                                        </span>
+                                        <span>
+                                          {isCommentDislikePending
+                                            ? 'Atualizando...'
+                                            : comentario.dislikedByCurrentUser
+                                              ? `Não gostei (${comentario.dislikes})`
+                                              : `Não gostei (${comentario.dislikes})`}
+                                        </span>
                                       </button>
-                                    ) : null}
+
+                                      {isOwnerComment ? (
+                                        <button
+                                          type="button"
+                                          className="game-review-comment-delete-button"
+                                          onClick={() =>
+                                            void handleDeleteComment(review.id, comentario)
+                                          }
+                                        >
+                                          Apagar
+                                        </button>
+                                      ) : null}
+                                    </div>
                                   </div>
                                 </div>
 
@@ -1492,6 +1993,23 @@ function GameDetailsPage() {
             )}
           </div>
         </section>
+
+        {activeReportTarget ? (
+          <ContentReportModal
+            key={`${activeReportTarget.targetType}-${activeReportTarget.targetId}-${activeReportTarget.currentReport?.id || 'new'}`}
+            targetType={activeReportTarget.targetType}
+            targetLabel={
+              activeReportTarget.targetType === 'review'
+                ? `a review de ${activeReportTarget.authorName}`
+                : `o comentario de ${activeReportTarget.authorName}`
+            }
+            currentReport={activeReportTarget.currentReport}
+            feedback={reportModalFeedback}
+            isSubmitting={submittingReport}
+            onClose={handleCloseReportModal}
+            onSubmit={handleSubmitReport}
+          />
+        ) : null}
       </div>
     </div>
   )
