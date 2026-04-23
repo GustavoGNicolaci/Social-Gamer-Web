@@ -2033,24 +2033,6 @@ function GameDetailsPage() {
                                         </span>
                                       </button>
 
-                                      {canReportComment ? (
-                                        <button
-                                          type="button"
-                                          className={`game-review-report-button is-comment${comentario.currentUserReport ? ' is-reported' : ''}`}
-                                          onClick={() =>
-                                            handleOpenReportModal(
-                                              'comment',
-                                              comentario.id,
-                                              review.id
-                                            )
-                                          }
-                                          aria-label={commentReportButtonLabel}
-                                          title={commentReportButtonLabel}
-                                        >
-                                          {iconFlag(Boolean(comentario.currentUserReport))}
-                                        </button>
-                                      ) : null}
-
                                       <button
                                         type="button"
                                         className={`game-review-comment-reaction-button${comentario.dislikedByCurrentUser ? ' is-disliked' : ''}`}
@@ -2076,6 +2058,24 @@ function GameDetailsPage() {
                                               : `Não gostei (${comentario.dislikes})`}
                                         </span>
                                       </button>
+
+                                      {canReportComment ? (
+                                        <button
+                                          type="button"
+                                          className={`game-review-report-button is-comment${comentario.currentUserReport ? ' is-reported' : ''}`}
+                                          onClick={() =>
+                                            handleOpenReportModal(
+                                              'comment',
+                                              comentario.id,
+                                              review.id
+                                            )
+                                          }
+                                          aria-label={commentReportButtonLabel}
+                                          title={commentReportButtonLabel}
+                                        >
+                                          {iconFlag(Boolean(comentario.currentUserReport))}
+                                        </button>
+                                      ) : null}
 
                                       {isOwnerComment ? (
                                         <button
