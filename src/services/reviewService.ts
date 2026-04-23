@@ -1,6 +1,7 @@
 import { supabase } from '../supabase-client'
 import type { CatalogGamePreview } from './gameCatalogService'
 import {
+  getCommentLikeStates,
   getCommentDislikeStates,
   getCurrentUserContentReports,
   getReviewDislikeStates,
@@ -34,6 +35,9 @@ export interface ReviewComment {
   data_comentario: string
   editado_em: string | null
   usuario: ReviewAuthor | null
+  curtidas: number
+  likedByCurrentUser: boolean
+  canLike: boolean
   dislikes: number
   dislikedByCurrentUser: boolean
   canDislike: boolean
@@ -215,6 +219,41 @@ function getTimestamp(value: string | null | undefined) {
   return Number.isNaN(parsedDate.getTime()) ? 0 : parsedDate.getTime()
 }
 
+function compareByLikesAndTimestamp(
+  leftLikes: number,
+  rightLikes: number,
+  leftTimestamp: string,
+  rightTimestamp: string
+) {
+  if (rightLikes !== leftLikes) {
+    return rightLikes - leftLikes
+  }
+
+  return getTimestamp(rightTimestamp) - getTimestamp(leftTimestamp)
+}
+
+export function sortCommentsByRelevance(comments: ReviewComment[]) {
+  return [...comments].sort((leftComment, rightComment) =>
+    compareByLikesAndTimestamp(
+      leftComment.curtidas,
+      rightComment.curtidas,
+      leftComment.data_comentario,
+      rightComment.data_comentario
+    )
+  )
+}
+
+export function sortReviewsByRelevance(reviews: ReviewItem[]) {
+  return [...reviews].sort((leftReview, rightReview) =>
+    compareByLikesAndTimestamp(
+      leftReview.curtidas,
+      rightReview.curtidas,
+      leftReview.data_publicacao,
+      rightReview.data_publicacao
+    )
+  )
+}
+
 function normalizeReviewComment(
   row: ReviewCommentRow,
   currentUserId?: string | null
@@ -227,6 +266,9 @@ function normalizeReviewComment(
     data_comentario: row.data_comentario,
     editado_em: row.editado_em,
     usuario: resolveSingleRelation(row.usuario),
+    curtidas: 0,
+    likedByCurrentUser: false,
+    canLike: Boolean(currentUserId) && currentUserId !== row.usuario_id,
     dislikes: 0,
     dislikedByCurrentUser: false,
     canDislike: Boolean(currentUserId) && currentUserId !== row.usuario_id,
@@ -235,11 +277,9 @@ function normalizeReviewComment(
 }
 
 function normalizeReviewItem(row: ReviewRow, currentUserId?: string | null): ReviewItem {
-  const comentarios = (row.comentarios || [])
-    .map(comment => normalizeReviewComment(comment, currentUserId))
-    .sort((leftComment, rightComment) => {
-      return getTimestamp(leftComment.data_comentario) - getTimestamp(rightComment.data_comentario)
-    })
+  const comentarios = sortCommentsByRelevance(
+    (row.comentarios || []).map(comment => normalizeReviewComment(comment, currentUserId))
+  )
 
   return {
     id: row.id,
@@ -300,15 +340,22 @@ export async function getReviewsByGameId(
     const reviewIds = normalizedReviews.map(review => review.id)
     const commentIds = normalizedReviews.flatMap(review => review.comentarios.map(comment => comment.id))
 
-    const [likeStatesResult, dislikeStatesResult, commentDislikeStatesResult, reportsResult] =
+    const [
+      likeStatesResult,
+      dislikeStatesResult,
+      commentLikeStatesResult,
+      commentDislikeStatesResult,
+      reportsResult,
+    ] =
       await Promise.all([
         getReviewLikeStates(reviewIds, currentUserId),
         getReviewDislikeStates(reviewIds, currentUserId),
+        getCommentLikeStates(commentIds, currentUserId),
         getCommentDislikeStates(commentIds, currentUserId),
         getCurrentUserContentReports(reviewIds, commentIds, currentUserId),
       ])
 
-    const reviewsWithInteractionState = normalizedReviews.map(review => {
+    const reviewsWithInteractionState = sortReviewsByRelevance(normalizedReviews.map(review => {
       const likeState = likeStatesResult.data.get(review.id)
       const dislikeState = dislikeStatesResult.data.get(review.id)
 
@@ -325,11 +372,18 @@ export async function getReviewsByGameId(
         currentUserReport: reportsResult.error
           ? review.currentUserReport
           : reportsResult.data.reportsByReviewId.get(review.id) || review.currentUserReport,
-        comentarios: review.comentarios.map(comment => {
+        comentarios: sortCommentsByRelevance(review.comentarios.map(comment => {
+          const commentLikeState = commentLikeStatesResult.data.get(comment.id)
           const commentDislikeState = commentDislikeStatesResult.data.get(comment.id)
 
           return {
             ...comment,
+            curtidas: commentLikeStatesResult.error
+              ? comment.curtidas
+              : commentLikeState?.curtidas ?? comment.curtidas,
+            likedByCurrentUser: commentLikeStatesResult.error
+              ? comment.likedByCurrentUser
+              : commentLikeState?.likedByCurrentUser ?? comment.likedByCurrentUser,
             dislikes: commentDislikeStatesResult.error
               ? comment.dislikes
               : commentDislikeState?.dislikes ?? comment.dislikes,
@@ -340,15 +394,16 @@ export async function getReviewsByGameId(
               ? comment.currentUserReport
               : reportsResult.data.reportsByCommentId.get(comment.id) || comment.currentUserReport,
           }
-        }),
+        })),
       }
-    })
+    }))
 
     return {
       data: reviewsWithInteractionState,
       error:
         likeStatesResult.error ||
         dislikeStatesResult.error ||
+        commentLikeStatesResult.error ||
         commentDislikeStatesResult.error ||
         reportsResult.error,
     }

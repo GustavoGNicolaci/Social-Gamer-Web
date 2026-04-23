@@ -18,7 +18,9 @@ export interface ReviewReactionState {
   dislikedByCurrentUser: boolean
 }
 
-export interface CommentDislikeState {
+export interface CommentReactionState {
+  curtidas: number
+  likedByCurrentUser: boolean
   dislikes: number
   dislikedByCurrentUser: boolean
 }
@@ -44,6 +46,11 @@ interface ReviewLikeRow {
 
 interface ReviewDislikeRow {
   avaliacao_id: string
+  usuario_id: string
+}
+
+interface CommentLikeRow {
+  comentario_id: string
   usuario_id: string
 }
 
@@ -77,7 +84,19 @@ interface ToggleCommentDislikeParams {
   commentId: string
   userId: string
   commentAuthorId: string
+  likedByCurrentUser: boolean
   dislikedByCurrentUser: boolean
+  currentLikeCount: number
+  currentDislikeCount: number
+}
+
+interface ToggleCommentLikeParams {
+  commentId: string
+  userId: string
+  commentAuthorId: string
+  likedByCurrentUser: boolean
+  dislikedByCurrentUser: boolean
+  currentLikeCount: number
   currentDislikeCount: number
 }
 
@@ -98,7 +117,13 @@ interface ToggleReviewDislikeResult {
 
 interface ToggleCommentDislikeResult {
   status: 'disliked' | 'undisliked' | 'error'
-  data: CommentDislikeState | null
+  data: CommentReactionState | null
+  error: ReviewError | null
+}
+
+interface ToggleCommentLikeResult {
+  status: 'liked' | 'unliked' | 'error'
+  data: CommentReactionState | null
   error: ReviewError | null
 }
 
@@ -183,17 +208,19 @@ function createReviewReactionStateMap(reviewIds: string[]) {
   return reactionStates
 }
 
-function createCommentDislikeStateMap(commentIds: string[]) {
-  const dislikeStates = new Map<string, CommentDislikeState>()
+function createCommentReactionStateMap(commentIds: string[]) {
+  const reactionStates = new Map<string, CommentReactionState>()
 
   commentIds.forEach(commentId => {
-    dislikeStates.set(commentId, {
+    reactionStates.set(commentId, {
+      curtidas: 0,
+      likedByCurrentUser: false,
       dislikes: 0,
       dislikedByCurrentUser: false,
     })
   })
 
-  return dislikeStates
+  return reactionStates
 }
 
 function normalizeReportSummary(row: ContentReportRow): CurrentUserReportSummary {
@@ -220,6 +247,22 @@ async function rollbackInsertedReviewDislike(reviewId: string, userId: string) {
     .from('avaliacao_deslikes')
     .delete()
     .eq('avaliacao_id', reviewId)
+    .eq('usuario_id', userId)
+}
+
+async function rollbackInsertedCommentLike(commentId: string, userId: string) {
+  await supabase
+    .from('comentario_curtidas')
+    .delete()
+    .eq('comentario_id', commentId)
+    .eq('usuario_id', userId)
+}
+
+async function rollbackInsertedCommentDislike(commentId: string, userId: string) {
+  await supabase
+    .from('comentario_deslikes')
+    .delete()
+    .eq('comentario_id', commentId)
     .eq('usuario_id', userId)
 }
 
@@ -331,15 +374,75 @@ export async function getReviewDislikeStates(
   }
 }
 
-export async function getCommentDislikeStates(
+export async function getCommentLikeStates(
   commentIds: string[],
   currentUserId?: string | null
-): Promise<ServiceResult<Map<string, CommentDislikeState>>> {
-  const dislikeStates = createCommentDislikeStateMap(commentIds)
+): Promise<ServiceResult<Map<string, CommentReactionState>>> {
+  const reactionStates = createCommentReactionStateMap(commentIds)
 
   if (commentIds.length === 0) {
     return {
-      data: dislikeStates,
+      data: reactionStates,
+      error: null,
+    }
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('comentario_curtidas')
+      .select('comentario_id, usuario_id')
+      .in('comentario_id', commentIds)
+
+    if (error) {
+      return {
+        data: reactionStates,
+        error: normalizeReviewError(
+          error,
+          'Nao foi possivel carregar as curtidas dos comentarios.'
+        ),
+      }
+    }
+
+    const likeRows = (data || []) as CommentLikeRow[]
+
+    likeRows.forEach(like => {
+      const currentState = reactionStates.get(like.comentario_id)
+
+      if (!currentState) return
+
+      reactionStates.set(like.comentario_id, {
+        ...currentState,
+        curtidas: currentState.curtidas + 1,
+        likedByCurrentUser:
+          currentState.likedByCurrentUser ||
+          Boolean(currentUserId && like.usuario_id === currentUserId),
+      })
+    })
+
+    return {
+      data: reactionStates,
+      error: null,
+    }
+  } catch (error) {
+    return {
+      data: reactionStates,
+      error: normalizeReviewError(
+        error,
+        'Erro inesperado ao carregar as curtidas dos comentarios.'
+      ),
+    }
+  }
+}
+
+export async function getCommentDislikeStates(
+  commentIds: string[],
+  currentUserId?: string | null
+): Promise<ServiceResult<Map<string, CommentReactionState>>> {
+  const reactionStates = createCommentReactionStateMap(commentIds)
+
+  if (commentIds.length === 0) {
+    return {
+      data: reactionStates,
       error: null,
     }
   }
@@ -352,7 +455,7 @@ export async function getCommentDislikeStates(
 
     if (error) {
       return {
-        data: dislikeStates,
+        data: reactionStates,
         error: normalizeReviewError(error, 'Nao foi possivel carregar os dislikes dos comentarios.'),
       }
     }
@@ -360,11 +463,12 @@ export async function getCommentDislikeStates(
     const dislikeRows = (data || []) as CommentDislikeRow[]
 
     dislikeRows.forEach(dislike => {
-      const currentState = dislikeStates.get(dislike.comentario_id)
+      const currentState = reactionStates.get(dislike.comentario_id)
 
       if (!currentState) return
 
-      dislikeStates.set(dislike.comentario_id, {
+      reactionStates.set(dislike.comentario_id, {
+        ...currentState,
         dislikes: currentState.dislikes + 1,
         dislikedByCurrentUser:
           currentState.dislikedByCurrentUser ||
@@ -373,12 +477,12 @@ export async function getCommentDislikeStates(
     })
 
     return {
-      data: dislikeStates,
+      data: reactionStates,
       error: null,
     }
   } catch (error) {
     return {
-      data: dislikeStates,
+      data: reactionStates,
       error: normalizeReviewError(error, 'Erro inesperado ao carregar os dislikes dos comentarios.'),
     }
   }
@@ -482,16 +586,32 @@ export async function getSingleReviewReactionState(
   }
 }
 
-export async function getSingleCommentDislikeState(
+export async function getSingleCommentReactionState(
   commentId: string,
   currentUserId?: string | null
-): Promise<ServiceResult<CommentDislikeState | null>> {
-  const dislikeStatesResult = await getCommentDislikeStates([commentId], currentUserId)
+): Promise<ServiceResult<CommentReactionState | null>> {
+  const [likeStatesResult, dislikeStatesResult] = await Promise.all([
+    getCommentLikeStates([commentId], currentUserId),
+    getCommentDislikeStates([commentId], currentUserId),
+  ])
 
   return {
-    data: dislikeStatesResult.data.get(commentId) || null,
-    error: dislikeStatesResult.error,
+    data: {
+      curtidas: likeStatesResult.data.get(commentId)?.curtidas ?? 0,
+      likedByCurrentUser: likeStatesResult.data.get(commentId)?.likedByCurrentUser ?? false,
+      dislikes: dislikeStatesResult.data.get(commentId)?.dislikes ?? 0,
+      dislikedByCurrentUser:
+        dislikeStatesResult.data.get(commentId)?.dislikedByCurrentUser ?? false,
+    },
+    error: likeStatesResult.error || dislikeStatesResult.error,
   }
+}
+
+async function getSingleCommentDislikeState(
+  commentId: string,
+  currentUserId?: string | null
+) {
+  return getSingleCommentReactionState(commentId, currentUserId)
 }
 
 async function getExistingContentReport(
@@ -639,11 +759,119 @@ export async function toggleReviewDislike({
   }
 }
 
-export async function toggleCommentDislike({
+export async function toggleCommentLike({
   commentId,
   userId,
   commentAuthorId,
+  likedByCurrentUser,
   dislikedByCurrentUser,
+  currentLikeCount,
+  currentDislikeCount,
+}: ToggleCommentLikeParams): Promise<ToggleCommentLikeResult> {
+  if (userId === commentAuthorId) {
+    return {
+      status: 'error',
+      data: null,
+      error: {
+        message: 'Voce nao pode curtir o proprio comentario.',
+      },
+    }
+  }
+
+  try {
+    if (likedByCurrentUser) {
+      const { error } = await supabase
+        .from('comentario_curtidas')
+        .delete()
+        .eq('comentario_id', commentId)
+        .eq('usuario_id', userId)
+
+      if (error) {
+        return {
+          status: 'error',
+          data: null,
+          error: normalizeReviewError(error, 'Nao foi possivel remover a curtida deste comentario.'),
+        }
+      }
+
+      const reactionStateResult = await getSingleCommentReactionState(commentId, userId)
+
+      return {
+        status: 'unliked',
+        data: reactionStateResult.data || {
+          curtidas: Math.max(currentLikeCount - 1, 0),
+          likedByCurrentUser: false,
+          dislikes: currentDislikeCount,
+          dislikedByCurrentUser,
+        },
+        error: null,
+      }
+    }
+
+    const { error: insertLikeError } = await supabase.from('comentario_curtidas').insert({
+      comentario_id: commentId,
+      usuario_id: userId,
+    })
+
+    if (insertLikeError && insertLikeError.code !== '23505') {
+      return {
+        status: 'error',
+        data: null,
+        error: normalizeReviewError(insertLikeError, 'Nao foi possivel curtir este comentario.'),
+      }
+    }
+
+    if (dislikedByCurrentUser) {
+      const { error: removeDislikeError } = await supabase
+        .from('comentario_deslikes')
+        .delete()
+        .eq('comentario_id', commentId)
+        .eq('usuario_id', userId)
+
+      if (removeDislikeError) {
+        if (!insertLikeError) {
+          await rollbackInsertedCommentLike(commentId, userId)
+        }
+
+        return {
+          status: 'error',
+          data: null,
+          error: normalizeReviewError(
+            removeDislikeError,
+            'Nao foi possivel sincronizar curtida e Nao gostei deste comentario.'
+          ),
+        }
+      }
+    }
+
+    const reactionStateResult = await getSingleCommentReactionState(commentId, userId)
+
+    return {
+      status: 'liked',
+      data: reactionStateResult.data || {
+        curtidas: currentLikeCount + (likedByCurrentUser ? 0 : 1),
+        likedByCurrentUser: true,
+        dislikes: Math.max(currentDislikeCount - (dislikedByCurrentUser ? 1 : 0), 0),
+        dislikedByCurrentUser: false,
+      },
+      error: null,
+    }
+  } catch (error) {
+    return {
+      status: 'error',
+      data: null,
+      error: normalizeReviewError(error, 'Erro inesperado ao atualizar a curtida deste comentario.'),
+    }
+  }
+}
+
+async function toggleCommentDislikeLegacy({
+  commentId,
+  userId,
+  commentAuthorId,
+  likedByCurrentUser,
+  dislikedByCurrentUser,
+  currentLikeCount,
   currentDislikeCount,
 }: ToggleCommentDislikeParams): Promise<ToggleCommentDislikeResult> {
   if (userId === commentAuthorId) {
@@ -672,11 +900,13 @@ export async function toggleCommentDislike({
         }
       }
 
-      const dislikeStateResult = await getSingleCommentDislikeState(commentId, userId)
+      const reactionStateResult = await getSingleCommentReactionState(commentId, userId)
 
       return {
         status: 'undisliked',
-        data: dislikeStateResult.data || {
+        data: reactionStateResult.data || {
+          curtidas: currentLikeCount,
+          likedByCurrentUser,
           dislikes: Math.max(currentDislikeCount - 1, 0),
           dislikedByCurrentUser: false,
         },
@@ -684,12 +914,13 @@ export async function toggleCommentDislike({
       }
     }
 
-    const { error } = await supabase.from('comentario_deslikes').insert({
+    const { error: insertDislikeError } = await supabase.from('comentario_deslikes').insert({
       comentario_id: commentId,
       usuario_id: userId,
     })
+    const error = insertDislikeError
 
-    if (error && error.code !== '23505') {
+    if (insertDislikeError && insertDislikeError.code !== '23505') {
       return {
         status: 'error',
         data: null,
@@ -702,6 +933,8 @@ export async function toggleCommentDislike({
     return {
       status: 'disliked',
       data: dislikeStateResult.data || {
+        curtidas: Math.max(currentLikeCount - (likedByCurrentUser ? 1 : 0), 0),
+        likedByCurrentUser: false,
         dislikes: currentDislikeCount + 1,
         dislikedByCurrentUser: true,
       },
@@ -714,6 +947,120 @@ export async function toggleCommentDislike({
       error: normalizeReviewError(
         error,
         'Erro inesperado ao atualizar o "Não gostei" deste comentario.'
+      ),
+    }
+  }
+}
+
+void toggleCommentDislikeLegacy
+
+export async function toggleCommentDislike({
+  commentId,
+  userId,
+  commentAuthorId,
+  likedByCurrentUser,
+  dislikedByCurrentUser,
+  currentLikeCount,
+  currentDislikeCount,
+}: ToggleCommentDislikeParams): Promise<ToggleCommentDislikeResult> {
+  if (userId === commentAuthorId) {
+    return {
+      status: 'error',
+      data: null,
+      error: {
+        message: 'Voce nao pode marcar "NÃ£o gostei" no proprio comentario.',
+      },
+    }
+  }
+
+  try {
+    if (dislikedByCurrentUser) {
+      const { error } = await supabase
+        .from('comentario_deslikes')
+        .delete()
+        .eq('comentario_id', commentId)
+        .eq('usuario_id', userId)
+
+      if (error) {
+        return {
+          status: 'error',
+          data: null,
+          error: normalizeReviewError(error, 'Nao foi possivel remover o "NÃ£o gostei" deste comentario.'),
+        }
+      }
+
+      const reactionStateResult = await getSingleCommentReactionState(commentId, userId)
+
+      return {
+        status: 'undisliked',
+        data: reactionStateResult.data || {
+          curtidas: currentLikeCount,
+          likedByCurrentUser,
+          dislikes: Math.max(currentDislikeCount - 1, 0),
+          dislikedByCurrentUser: false,
+        },
+        error: null,
+      }
+    }
+
+    const { error: insertDislikeError } = await supabase.from('comentario_deslikes').insert({
+      comentario_id: commentId,
+      usuario_id: userId,
+    })
+
+    if (insertDislikeError && insertDislikeError.code !== '23505') {
+      return {
+        status: 'error',
+        data: null,
+        error: normalizeReviewError(
+          insertDislikeError,
+          'Nao foi possivel marcar "NÃ£o gostei" neste comentario.'
+        ),
+      }
+    }
+
+    if (likedByCurrentUser) {
+      const { error: removeLikeError } = await supabase
+        .from('comentario_curtidas')
+        .delete()
+        .eq('comentario_id', commentId)
+        .eq('usuario_id', userId)
+
+      if (removeLikeError) {
+        if (!insertDislikeError) {
+          await rollbackInsertedCommentDislike(commentId, userId)
+        }
+
+        return {
+          status: 'error',
+          data: null,
+          error: normalizeReviewError(
+            removeLikeError,
+            'Nao foi possivel sincronizar curtida e "Nao gostei" deste comentario.'
+          ),
+        }
+      }
+    }
+
+    const reactionStateResult = await getSingleCommentReactionState(commentId, userId)
+
+    return {
+      status: 'disliked',
+      data: reactionStateResult.data || {
+        curtidas: Math.max(currentLikeCount - (likedByCurrentUser ? 1 : 0), 0),
+        likedByCurrentUser: false,
+        dislikes: currentDislikeCount + (dislikedByCurrentUser ? 0 : 1),
+        dislikedByCurrentUser: true,
+      },
+      error: null,
+    }
+  } catch (error) {
+    return {
+      status: 'error',
+      data: null,
+      error: normalizeReviewError(
+        error,
+        'Erro inesperado ao atualizar o "NÃ£o gostei" deste comentario.'
       ),
     }
   }

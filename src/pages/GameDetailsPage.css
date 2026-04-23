@@ -837,7 +837,8 @@
 .game-review-reaction-button:focus-visible,
 .game-review-comment-reaction-button:focus-visible,
 .game-review-comment-delete-button:focus-visible,
-.game-review-comments-expand-button:focus-visible {
+.game-review-comments-expand-button:focus-visible,
+.game-details-reviews-expand-button:focus-visible {
   outline: none;
   box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
 }
@@ -1010,6 +1011,16 @@
 }
 
 .game-review-reaction-button.is-like.is-active {
+  border-color: rgba(255, 167, 195, 0.36);
+  background: rgba(255, 120, 166, 0.12);
+  color: #ffd6e7;
+}
+
+.game-review-comment-reaction-button.is-like:hover:not(:disabled) {
+  border-color: rgba(255, 189, 214, 0.34);
+}
+
+.game-review-comment-reaction-button.is-liked {
   border-color: rgba(255, 167, 195, 0.36);
   background: rgba(255, 120, 166, 0.12);
   color: #ffd6e7;
@@ -1232,7 +1243,8 @@
 }
 
 .game-review-comment-delete-button,
-.game-review-comments-expand-button {
+.game-review-comments-expand-button,
+.game-details-reviews-expand-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1273,10 +1285,20 @@
   color: #dbe4ff;
 }
 
-.game-review-comments-expand-button:hover {
+.game-review-comments-expand-button:hover,
+.game-details-reviews-expand-button:hover {
   transform: translateY(-1px);
   border-color: rgba(160, 177, 255, 0.3);
   background: rgba(126, 143, 255, 0.1);
+}
+
+.game-details-reviews-expand-button {
+  width: fit-content;
+  min-height: 40px;
+  padding: 0.55rem 0.95rem;
+  justify-self: start;
+  border-radius: 999px;
+  color: #dbe4ff;
 }
 
 .game-review-comment-form {
@@ -1424,6 +1446,11 @@
   }
 
   .game-review-comments-expand-button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .game-details-reviews-expand-button {
     width: 100%;
     justify-content: center;
   }

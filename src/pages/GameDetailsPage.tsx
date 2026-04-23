@@ -9,16 +9,19 @@ import {
   deleteReview,
   getReviewsByGameId,
   saveReview,
+  sortCommentsByRelevance,
+  sortReviewsByRelevance,
   toggleReviewLike,
   type ReviewComment,
   type ReviewError,
   type ReviewItem,
 } from '../services/reviewService'
 import {
+  toggleCommentLike,
   submitContentReport,
   toggleCommentDislike,
   toggleReviewDislike,
-  type CommentDislikeState,
+  type CommentReactionState,
   type CurrentUserReportSummary,
   type ReportReason,
   type ReportTargetType,
@@ -68,6 +71,8 @@ interface ReportModalTargetState {
 type QuickProfileStatusValue = GameStatusValue
 
 const REVIEW_SCORE_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+const INITIAL_VISIBLE_REVIEW_COUNT = 3
+const VISIBLE_REVIEW_BATCH_SIZE = 4
 const INITIAL_VISIBLE_COMMENT_COUNT = 2
 const VISIBLE_COMMENT_BATCH_SIZE = 4
 const QUICK_PROFILE_STATUS_OPTIONS: Array<{
@@ -113,8 +118,20 @@ function getInitialVisibleCommentCount(totalComments: number) {
   return INITIAL_VISIBLE_COMMENT_COUNT
 }
 
+function getInitialVisibleReviewCount(totalReviews: number) {
+  if (totalReviews <= INITIAL_VISIBLE_REVIEW_COUNT) {
+    return totalReviews
+  }
+
+  return INITIAL_VISIBLE_REVIEW_COUNT
+}
+
 function clampVisibleCommentCount(visibleComments: number, totalComments: number) {
   return Math.max(0, Math.min(visibleComments, totalComments))
+}
+
+function clampVisibleReviewCount(visibleReviews: number, totalReviews: number) {
+  return Math.max(0, Math.min(visibleReviews, totalReviews))
 }
 
 function getWishlistErrorMessage(
@@ -199,6 +216,7 @@ function getReviewErrorMessage(
     | 'comment_delete'
     | 'review_like'
     | 'review_dislike'
+    | 'comment_like'
     | 'comment_dislike'
     | 'report'
     | 'delete'
@@ -208,6 +226,7 @@ function getReviewErrorMessage(
     if (action === 'comment') return 'Nao foi possivel publicar seu comentario agora.'
     if (action === 'comment_delete') return 'Nao foi possivel apagar este comentario agora.'
     if (action === 'review_like') return 'Nao foi possivel atualizar a curtida desta review agora.'
+    if (action === 'comment_like') return 'Nao foi possivel atualizar a curtida deste comentario agora.'
     if (action === 'review_dislike') {
       return 'Nao foi possivel atualizar o "Não gostei" desta review agora.'
     }
@@ -243,6 +262,10 @@ function getReviewErrorMessage(
       return 'Nao foi possivel atualizar esta curtida por permissao. Verifique as policies da tabela avaliacao_curtidas no Supabase.'
     }
 
+    if (action === 'comment_like') {
+      return 'Nao foi possivel atualizar esta curtida por permissao. Verifique as policies da tabela comentario_curtidas no Supabase.'
+    }
+
     if (action === 'review_dislike') {
       return 'Nao foi possivel atualizar este "Não gostei" por permissao. Verifique as policies da tabela avaliacao_deslikes no Supabase.'
     }
@@ -259,12 +282,16 @@ function getReviewErrorMessage(
       return 'Nao foi possivel apagar esta review por permissao. Verifique as policies DELETE da tabela avaliacoes no Supabase.'
     }
 
-    return 'Nao foi possivel carregar as reviews por permissao. Verifique as policies das tabelas avaliacoes, comentarios, avaliacao_curtidas, avaliacao_deslikes, comentario_deslikes e denuncias_conteudo no Supabase.'
+    return 'Nao foi possivel carregar as reviews por permissao. Verifique as policies das tabelas avaliacoes, comentarios, avaliacao_curtidas, comentario_curtidas, avaliacao_deslikes, comentario_deslikes e denuncias_conteudo no Supabase.'
   }
 
   if (fullMessage.includes('duplicate') || fullMessage.includes('unique')) {
     if (action === 'review_like') {
       return 'Essa review ja estava curtida por este usuario.'
+    }
+
+    if (action === 'comment_like') {
+      return 'Esse comentario ja estava curtido por este usuario.'
     }
 
     if (action === 'review_dislike' || action === 'comment_dislike') {
@@ -344,6 +371,7 @@ function GameDetailsPage() {
 
   const [game, setGame] = useState<Game | null>(null)
   const [reviews, setReviews] = useState<ReviewItem[]>([])
+  const [visibleReviewCount, setVisibleReviewCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [reviewsError, setReviewsError] = useState<string | null>(null)
   const [nota, setNota] = useState(5)
@@ -354,7 +382,7 @@ function GameDetailsPage() {
   const [visibleCommentsByReviewId, setVisibleCommentsByReviewId] = useState<Record<string, number>>({})
   const [submittingComentario, setSubmittingComentario] = useState<Record<string, boolean>>({})
   const [pendingReviewReactionIds, setPendingReviewReactionIds] = useState<string[]>([])
-  const [pendingCommentDislikeIds, setPendingCommentDislikeIds] = useState<string[]>([])
+  const [pendingCommentReactionIds, setPendingCommentReactionIds] = useState<string[]>([])
   const [deletingReviewIds, setDeletingReviewIds] = useState<string[]>([])
   const [reportModalTarget, setReportModalTarget] = useState<ReportModalTargetState | null>(null)
   const [reportModalFeedback, setReportModalFeedback] = useState<FeedbackState | null>(null)
@@ -382,7 +410,7 @@ function GameDetailsPage() {
         if (result.error && result.data.length > 0) {
           const currentReviewStateById = new Map(currentReviews.map(review => [review.id, review]))
 
-          return result.data.map(review => {
+          return sortReviewsByRelevance(result.data.map(review => {
             const currentReview = currentReviewStateById.get(review.id)
 
             if (!currentReview) {
@@ -400,7 +428,7 @@ function GameDetailsPage() {
               dislikes: currentReview.dislikes,
               dislikedByCurrentUser: currentReview.dislikedByCurrentUser,
               currentUserReport: currentReview.currentUserReport,
-              comentarios: review.comentarios.map(comment => {
+              comentarios: sortCommentsByRelevance(review.comentarios.map(comment => {
                 const currentComment = currentCommentStateById.get(comment.id)
 
                 if (!currentComment) {
@@ -409,17 +437,29 @@ function GameDetailsPage() {
 
                 return {
                   ...comment,
+                  curtidas: currentComment.curtidas,
+                  likedByCurrentUser: currentComment.likedByCurrentUser,
                   dislikes: currentComment.dislikes,
                   dislikedByCurrentUser: currentComment.dislikedByCurrentUser,
                   currentUserReport: currentComment.currentUserReport,
                 }
-              }),
+              })),
             }
-          })
+          }))
         }
 
         return result.data
       })
+
+      if (!(result.error && result.data.length === 0)) {
+        setVisibleReviewCount(currentVisibleReviewCount => {
+          if (currentVisibleReviewCount === 0) {
+            return getInitialVisibleReviewCount(result.data.length)
+          }
+
+          return clampVisibleReviewCount(currentVisibleReviewCount, result.data.length)
+        })
+      }
 
       if (result.error && result.data.length === 0) {
         setReviewsError(getReviewErrorMessage(result.error, 'load'))
@@ -435,7 +475,7 @@ function GameDetailsPage() {
   const applyReviewReactionState = useCallback(
     (reviewId: string, nextReactionState: ReviewReactionState) => {
       setReviews(currentReviews =>
-        currentReviews.map(currentReview =>
+        sortReviewsByRelevance(currentReviews.map(currentReview =>
           currentReview.id === reviewId
             ? {
                 ...currentReview,
@@ -445,27 +485,31 @@ function GameDetailsPage() {
                 dislikedByCurrentUser: nextReactionState.dislikedByCurrentUser,
               }
             : currentReview
-        )
+        ))
       )
     },
     []
   )
 
-  const applyCommentDislikeState = useCallback(
-    (reviewId: string, commentId: string, nextDislikeState: CommentDislikeState) => {
+  const applyCommentReactionState = useCallback(
+    (reviewId: string, commentId: string, nextReactionState: CommentReactionState) => {
       setReviews(currentReviews =>
         currentReviews.map(currentReview =>
           currentReview.id === reviewId
             ? {
                 ...currentReview,
-                comentarios: currentReview.comentarios.map(currentComment =>
-                  currentComment.id === commentId
-                    ? {
-                        ...currentComment,
-                        dislikes: nextDislikeState.dislikes,
-                        dislikedByCurrentUser: nextDislikeState.dislikedByCurrentUser,
-                      }
-                    : currentComment
+                comentarios: sortCommentsByRelevance(
+                  currentReview.comentarios.map(currentComment =>
+                    currentComment.id === commentId
+                      ? {
+                          ...currentComment,
+                          curtidas: nextReactionState.curtidas,
+                          likedByCurrentUser: nextReactionState.likedByCurrentUser,
+                          dislikes: nextReactionState.dislikes,
+                          dislikedByCurrentUser: nextReactionState.dislikedByCurrentUser,
+                        }
+                      : currentComment
+                  )
                 ),
               }
             : currentReview
@@ -517,13 +561,14 @@ function GameDetailsPage() {
     const gameId = Number(id)
 
     const fetchPageData = async () => {
-      if (!id || Number.isNaN(gameId)) {
-        if (isMounted) {
-          setGame(null)
-          setReviews([])
-          setReviewsError(null)
-          setLoading(false)
-        }
+        if (!id || Number.isNaN(gameId)) {
+          if (isMounted) {
+            setGame(null)
+            setReviews([])
+            setVisibleReviewCount(0)
+            setReviewsError(null)
+            setLoading(false)
+          }
         return
       }
 
@@ -544,6 +589,7 @@ function GameDetailsPage() {
       }
 
       setReviews(reviewsResult.data)
+      setVisibleReviewCount(getInitialVisibleReviewCount(reviewsResult.data.length))
       setReviewsError(
         reviewsResult.error && reviewsResult.data.length === 0
           ? getReviewErrorMessage(reviewsResult.error, 'load')
@@ -643,6 +689,13 @@ function GameDetailsPage() {
       isMounted = false
     }
   }, [game, user])
+
+  const effectiveVisibleReviewCount =
+    visibleReviewCount > 0 || reviews.length === 0
+      ? clampVisibleReviewCount(visibleReviewCount, reviews.length)
+      : getInitialVisibleReviewCount(reviews.length)
+  const visibleReviews = reviews.slice(0, effectiveVisibleReviewCount)
+  const hiddenReviewsCount = Math.max(reviews.length - visibleReviews.length, 0)
 
   const currentUserReview = useMemo(() => {
     if (!user) return null
@@ -918,47 +971,104 @@ function GameDetailsPage() {
     setPendingReviewReactionIds(currentIds => currentIds.filter(currentId => currentId !== review.id))
   }
 
-  const handleToggleCommentDislike = async (reviewId: string, comment: ReviewComment) => {
-    if (!user || pendingCommentDislikeIds.includes(comment.id) || !comment.canDislike) return
+  const handleToggleCommentLike = async (reviewId: string, comment: ReviewComment) => {
+    if (!user || pendingCommentReactionIds.includes(comment.id) || !comment.canLike) return
 
-    const previousDislikeState: CommentDislikeState = {
+    const wasLiked = comment.likedByCurrentUser
+    const previousReactionState: CommentReactionState = {
+      curtidas: comment.curtidas,
+      likedByCurrentUser: comment.likedByCurrentUser,
       dislikes: comment.dislikes,
       dislikedByCurrentUser: comment.dislikedByCurrentUser,
     }
-    const optimisticDislikeState: CommentDislikeState = {
-      dislikes: Math.max(comment.dislikes + (comment.dislikedByCurrentUser ? -1 : 1), 0),
-      dislikedByCurrentUser: !comment.dislikedByCurrentUser,
+    const optimisticReactionState: CommentReactionState = {
+      curtidas: Math.max(comment.curtidas + (wasLiked ? -1 : 1), 0),
+      likedByCurrentUser: !wasLiked,
+      dislikes: Math.max(comment.dislikes - (comment.dislikedByCurrentUser && !wasLiked ? 1 : 0), 0),
+      dislikedByCurrentUser: false,
     }
 
-    setPendingCommentDislikeIds(currentIds =>
+    setPendingCommentReactionIds(currentIds =>
       currentIds.includes(comment.id) ? currentIds : [...currentIds, comment.id]
     )
     setReviewFeedback(null)
-    applyCommentDislikeState(reviewId, comment.id, optimisticDislikeState)
+    applyCommentReactionState(reviewId, comment.id, optimisticReactionState)
+
+    const likeResult = await toggleCommentLike({
+      commentId: comment.id,
+      userId: user.id,
+      commentAuthorId: comment.usuario_id,
+      likedByCurrentUser: wasLiked,
+      dislikedByCurrentUser: comment.dislikedByCurrentUser,
+      currentLikeCount: comment.curtidas,
+      currentDislikeCount: comment.dislikes,
+    })
+
+    if (likeResult.error) {
+      applyCommentReactionState(reviewId, comment.id, previousReactionState)
+      setReviewFeedback({
+        tone: 'error',
+        message: getReviewErrorMessage(likeResult.error, 'comment_like'),
+      })
+      setPendingCommentReactionIds(currentIds => currentIds.filter(currentId => currentId !== comment.id))
+      return
+    }
+
+    if (likeResult.data) {
+      applyCommentReactionState(reviewId, comment.id, likeResult.data)
+    }
+
+    setPendingCommentReactionIds(currentIds => currentIds.filter(currentId => currentId !== comment.id))
+  }
+
+  const handleToggleCommentDislike = async (reviewId: string, comment: ReviewComment) => {
+    if (!user || pendingCommentReactionIds.includes(comment.id) || !comment.canDislike) return
+
+    const wasDisliked = comment.dislikedByCurrentUser
+    const previousReactionState: CommentReactionState = {
+      curtidas: comment.curtidas,
+      likedByCurrentUser: comment.likedByCurrentUser,
+      dislikes: comment.dislikes,
+      dislikedByCurrentUser: comment.dislikedByCurrentUser,
+    }
+    const optimisticReactionState: CommentReactionState = {
+      curtidas: Math.max(comment.curtidas - (comment.likedByCurrentUser && !wasDisliked ? 1 : 0), 0),
+      likedByCurrentUser: false,
+      dislikes: Math.max(comment.dislikes + (wasDisliked ? -1 : 1), 0),
+      dislikedByCurrentUser: !wasDisliked,
+    }
+
+    setPendingCommentReactionIds(currentIds =>
+      currentIds.includes(comment.id) ? currentIds : [...currentIds, comment.id]
+    )
+    setReviewFeedback(null)
+    applyCommentReactionState(reviewId, comment.id, optimisticReactionState)
 
     const dislikeResult = await toggleCommentDislike({
       commentId: comment.id,
       userId: user.id,
       commentAuthorId: comment.usuario_id,
-      dislikedByCurrentUser: comment.dislikedByCurrentUser,
+      likedByCurrentUser: comment.likedByCurrentUser,
+      dislikedByCurrentUser: wasDisliked,
+      currentLikeCount: comment.curtidas,
       currentDislikeCount: comment.dislikes,
     })
 
     if (dislikeResult.error) {
-      applyCommentDislikeState(reviewId, comment.id, previousDislikeState)
+      applyCommentReactionState(reviewId, comment.id, previousReactionState)
       setReviewFeedback({
         tone: 'error',
         message: getReviewErrorMessage(dislikeResult.error, 'comment_dislike'),
       })
-      setPendingCommentDislikeIds(currentIds => currentIds.filter(currentId => currentId !== comment.id))
+      setPendingCommentReactionIds(currentIds => currentIds.filter(currentId => currentId !== comment.id))
       return
     }
 
     if (dislikeResult.data) {
-      applyCommentDislikeState(reviewId, comment.id, dislikeResult.data)
+      applyCommentReactionState(reviewId, comment.id, dislikeResult.data)
     }
 
-    setPendingCommentDislikeIds(currentIds => currentIds.filter(currentId => currentId !== comment.id))
+    setPendingCommentReactionIds(currentIds => currentIds.filter(currentId => currentId !== comment.id))
   }
 
   const handleOpenReportModal = (
@@ -1045,6 +1155,12 @@ function GameDetailsPage() {
     })
   }
 
+  const handleExpandReviews = () => {
+    setVisibleReviewCount(currentVisibleReviewCount =>
+      clampVisibleReviewCount(currentVisibleReviewCount + VISIBLE_REVIEW_BATCH_SIZE, reviews.length)
+    )
+  }
+
   const handleDeleteComment = async (reviewId: string, comment: ReviewComment) => {
     if (!user || comment.usuario_id !== user.id) return
 
@@ -1067,7 +1183,7 @@ function GameDetailsPage() {
           : currentReview
       )
     )
-    setPendingCommentDislikeIds(currentIds => currentIds.filter(currentId => currentId !== comment.id))
+    setPendingCommentReactionIds(currentIds => currentIds.filter(currentId => currentId !== comment.id))
     setReportModalTarget(currentTarget =>
       currentTarget && currentTarget.targetType === 'comment' && currentTarget.targetId === comment.id
         ? null
@@ -1099,7 +1215,7 @@ function GameDetailsPage() {
 
         return {
           ...currentReview,
-          comentarios: nextComments,
+          comentarios: sortCommentsByRelevance(nextComments),
         }
       })
     )
@@ -1134,6 +1250,9 @@ function GameDetailsPage() {
     }
 
     setReviews(currentReviews => currentReviews.filter(currentReview => currentReview.id !== review.id))
+    setVisibleReviewCount(currentVisibleReviewCount =>
+      clampVisibleReviewCount(currentVisibleReviewCount, Math.max(reviews.length - 1, 0))
+    )
     setComentarioTexto(currentComments => {
       const nextComments = { ...currentComments }
       delete nextComments[review.id]
@@ -1150,7 +1269,7 @@ function GameDetailsPage() {
       return nextVisibleComments
     })
     setPendingReviewReactionIds(currentIds => currentIds.filter(currentId => currentId !== review.id))
-    setPendingCommentDislikeIds(currentIds =>
+    setPendingCommentReactionIds(currentIds =>
       currentIds.filter(currentId =>
         !review.comentarios.some(currentComment => currentComment.id === currentId)
       )
@@ -1654,7 +1773,8 @@ function GameDetailsPage() {
                 <p>Seja a primeira pessoa a compartilhar uma opiniao sobre este titulo.</p>
               </div>
             ) : (
-              reviews.map(review => {
+              <>
+                {visibleReviews.map((review) => {
                 const avaliadorNome = getUserName(review.usuario)
                 const avaliadorProfilePath = getOptionalPublicProfilePath(review.usuario?.username)
                 const isReactionPending = pendingReviewReactionIds.includes(review.id)
@@ -1830,10 +1950,17 @@ function GameDetailsPage() {
                               comentario.usuario?.username
                             )
                             const isOwnerComment = Boolean(user && comentario.usuario_id === user.id)
-                            const isCommentDislikePending = pendingCommentDislikeIds.includes(
+                            const isCommentReactionPending = pendingCommentReactionIds.includes(
                               comentario.id
                             )
                             const canReportComment = Boolean(user && !isOwnerComment)
+                            const commentLikeButtonLabel = !user
+                              ? 'Faca login para curtir'
+                              : comentario.canLike
+                                ? comentario.likedByCurrentUser
+                                  ? 'Descurtir comentario'
+                                  : 'Curtir comentario'
+                                : 'Seu proprio comentario'
                             const commentDislikeButtonLabel = !user
                               ? 'Faca login para usar "Não gostei"'
                               : comentario.canDislike
@@ -1882,6 +2009,30 @@ function GameDetailsPage() {
                                     </span>
 
                                     <div className="game-review-comment-meta-actions">
+                                      <button
+                                        type="button"
+                                        className={`game-review-comment-reaction-button is-like${comentario.likedByCurrentUser ? ' is-liked' : ''}`}
+                                        onClick={() =>
+                                          void handleToggleCommentLike(review.id, comentario)
+                                        }
+                                        disabled={
+                                          !user ||
+                                          !comentario.canLike ||
+                                          isCommentReactionPending
+                                        }
+                                        aria-label={commentLikeButtonLabel}
+                                        title={commentLikeButtonLabel}
+                                      >
+                                        <span className="game-review-reaction-icon">
+                                          {iconHeart(comentario.likedByCurrentUser)}
+                                        </span>
+                                        <span>
+                                          {isCommentReactionPending
+                                            ? 'Atualizando...'
+                                            : `Curtir (${comentario.curtidas})`}
+                                        </span>
+                                      </button>
+
                                       {canReportComment ? (
                                         <button
                                           type="button"
@@ -1909,7 +2060,7 @@ function GameDetailsPage() {
                                         disabled={
                                           !user ||
                                           !comentario.canDislike ||
-                                          isCommentDislikePending
+                                          isCommentReactionPending
                                         }
                                         aria-label={commentDislikeButtonLabel}
                                         title={commentDislikeButtonLabel}
@@ -1918,7 +2069,7 @@ function GameDetailsPage() {
                                           {iconThumbDown(comentario.dislikedByCurrentUser)}
                                         </span>
                                         <span>
-                                          {isCommentDislikePending
+                                          {isCommentReactionPending
                                             ? 'Atualizando...'
                                             : comentario.dislikedByCurrentUser
                                               ? `Não gostei (${comentario.dislikes})`
@@ -1988,8 +2139,19 @@ function GameDetailsPage() {
                       ) : null}
                     </div>
                   </article>
-                )
-              })
+                )})}
+
+                {hiddenReviewsCount > 0 ? (
+                  <button
+                    type="button"
+                    className="game-details-reviews-expand-button"
+                    onClick={handleExpandReviews}
+                    aria-label={`Ver mais reviews. ${hiddenReviewsCount} restantes.`}
+                  >
+                    Ver mais reviews
+                  </button>
+                ) : null}
+              </>
             )}
           </div>
         </section>
