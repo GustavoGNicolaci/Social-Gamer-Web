@@ -17,6 +17,7 @@ import {
   type ReviewItem,
 } from '../services/reviewService'
 import {
+  deleteContentReport,
   toggleCommentLike,
   submitContentReport,
   toggleCommentDislike,
@@ -219,6 +220,7 @@ function getReviewErrorMessage(
     | 'comment_like'
     | 'comment_dislike'
     | 'report'
+    | 'report_delete'
     | 'delete'
 ) {
   if (!error) {
@@ -234,6 +236,7 @@ function getReviewErrorMessage(
       return 'Nao foi possivel atualizar o "Não gostei" deste comentario agora.'
     }
     if (action === 'report') return 'Nao foi possivel registrar esta denuncia agora.'
+    if (action === 'report_delete') return 'Nao foi possivel remover esta denuncia agora.'
     if (action === 'delete') return 'Nao foi possivel apagar esta review agora.'
     return 'Nao foi possivel carregar as reviews deste jogo agora.'
   }
@@ -276,6 +279,10 @@ function getReviewErrorMessage(
 
     if (action === 'report') {
       return 'Nao foi possivel registrar esta denuncia por permissao. Verifique as policies da tabela denuncias_conteudo no Supabase.'
+    }
+
+    if (action === 'report_delete') {
+      return 'Nao foi possivel remover esta denuncia por permissao. Verifique as policies DELETE da tabela denuncias_conteudo no Supabase.'
     }
 
     if (action === 'delete') {
@@ -387,6 +394,7 @@ function GameDetailsPage() {
   const [reportModalTarget, setReportModalTarget] = useState<ReportModalTargetState | null>(null)
   const [reportModalFeedback, setReportModalFeedback] = useState<FeedbackState | null>(null)
   const [submittingReport, setSubmittingReport] = useState(false)
+  const [removingReport, setRemovingReport] = useState(false)
   const [wishlistLoading, setWishlistLoading] = useState(false)
   const [wishlistSaving, setWishlistSaving] = useState(false)
   const [isInWishlist, setIsInWishlist] = useState(false)
@@ -524,7 +532,7 @@ function GameDetailsPage() {
       reviewId: string,
       targetType: ReportTargetType,
       targetId: string,
-      nextReport: CurrentUserReportSummary
+      nextReport: CurrentUserReportSummary | null
     ) => {
       setReviews(currentReviews =>
         currentReviews.map(currentReview => {
@@ -1085,7 +1093,7 @@ function GameDetailsPage() {
   }
 
   const handleCloseReportModal = () => {
-    if (submittingReport) return
+    if (submittingReport || removingReport) return
 
     setReportModalTarget(null)
     setReportModalFeedback(null)
@@ -1138,6 +1146,39 @@ function GameDetailsPage() {
           : 'Denuncia enviada com sucesso. Obrigado por ajudar a manter a comunidade segura.',
     })
     setSubmittingReport(false)
+  }
+
+  const handleRemoveReport = async () => {
+    if (!user || !activeReportTarget?.currentReport) return
+
+    setRemovingReport(true)
+    setReportModalFeedback(null)
+
+    const reportResult = await deleteContentReport({
+      userId: user.id,
+      reportId: activeReportTarget.currentReport.id,
+    })
+
+    if (reportResult.error) {
+      setReportModalFeedback({
+        tone: 'error',
+        message: getReviewErrorMessage(reportResult.error, 'report_delete'),
+      })
+      setRemovingReport(false)
+      return
+    }
+
+    applyContentReportState(
+      activeReportTarget.reviewId,
+      activeReportTarget.targetType,
+      activeReportTarget.targetId,
+      null
+    )
+    setReportModalFeedback({
+      tone: 'success',
+      message: 'Denuncia removida com sucesso.',
+    })
+    setRemovingReport(false)
   }
 
   const handleExpandComments = (reviewId: string, totalComments: number) => {
@@ -2168,8 +2209,10 @@ function GameDetailsPage() {
             currentReport={activeReportTarget.currentReport}
             feedback={reportModalFeedback}
             isSubmitting={submittingReport}
+            isRemoving={removingReport}
             onClose={handleCloseReportModal}
             onSubmit={handleSubmitReport}
+            onRemove={handleRemoveReport}
           />
         ) : null}
       </div>

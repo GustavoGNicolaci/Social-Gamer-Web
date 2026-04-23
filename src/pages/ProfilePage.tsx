@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { UserAvatar } from '../components/UserAvatar'
 import { ProfileConnectionsModal } from '../components/profile/ProfileConnectionsModal'
 import { ProfileGameStatusSection } from '../components/profile/ProfileGameStatusSection'
+import { ProfileReportModal } from '../components/profile/ProfileReportModal'
 import { ProfileReviewsSection } from '../components/profile/ProfileReviewsSection'
 import { ProfileTopFiveSection } from '../components/profile/ProfileTopFiveSection'
 import { ProfileWishlistSection } from '../components/profile/ProfileWishlistSection'
@@ -19,6 +20,14 @@ import {
   type GameStatusItem,
   type GameStatusValue,
 } from '../services/gameStatusService'
+import {
+  deleteProfileReport,
+  getCurrentUserProfileReport,
+  submitProfileReport,
+  type CurrentUserProfileReportSummary,
+  type ProfileReportError,
+  type ProfileReportReason,
+} from '../services/profileReportService'
 import {
   deleteReview,
   getReviewsByUserId,
@@ -51,6 +60,7 @@ import './ProfilePage.css'
 
 type FeedbackTone = 'success' | 'error'
 type FollowFeedbackTone = 'error' | 'info'
+type ReportFeedbackTone = 'success' | 'error' | 'info'
 type ProfileTab = 'status' | 'wishlist' | 'reviews'
 
 interface FeedbackState {
@@ -60,6 +70,11 @@ interface FeedbackState {
 
 interface FollowFeedbackState {
   tone: FollowFeedbackTone
+  message: string
+}
+
+interface ReportFeedbackState {
+  tone: ReportFeedbackTone
   message: string
 }
 
@@ -161,8 +176,8 @@ function getPublicProfileErrorMessage(error: UserServiceError | null) {
 
 function getFollowErrorMessage(error: UserServiceError | null, action: 'load' | 'follow' | 'unfollow') {
   if (!error) {
-    return action === 'load'
-      ? 'Nao foi possivel carregar as relacoes deste perfil agora.'
+  return action === 'load'
+    ? 'Nao foi possivel carregar as relacoes deste perfil agora.'
       : action === 'follow'
         ? 'Nao foi possivel seguir este perfil agora.'
         : 'Nao foi possivel deixar de seguir este perfil agora.'
@@ -188,6 +203,68 @@ function getFollowErrorMessage(error: UserServiceError | null, action: 'load' | 
   }
 
   return error.message || 'Nao foi possivel continuar com esta acao agora.'
+}
+
+function getProfileReportErrorMessage(
+  error: ProfileReportError | null,
+  action: 'load' | 'submit' | 'delete'
+) {
+  if (!error) {
+    return action === 'load'
+      ? 'Nao foi possivel carregar o estado da denuncia deste perfil agora.'
+      : action === 'submit'
+        ? 'Nao foi possivel registrar esta denuncia de perfil agora.'
+        : 'Nao foi possivel remover esta denuncia de perfil agora.'
+  }
+
+  const fullMessage = [error.message, error.details, error.hint].filter(Boolean).join(' ').toLowerCase()
+
+  if (
+    error.code === '42501' ||
+    fullMessage.includes('permission denied') ||
+    fullMessage.includes('row-level security') ||
+    fullMessage.includes('policy')
+  ) {
+    return action === 'load'
+      ? 'Nao foi possivel carregar a denuncia deste perfil por permissao. Verifique as policies da tabela denuncias_perfil no Supabase.'
+      : action === 'submit'
+        ? 'Nao foi possivel registrar esta denuncia por permissao. Verifique as policies da tabela denuncias_perfil no Supabase.'
+        : 'Nao foi possivel remover esta denuncia por permissao. Verifique as policies DELETE da tabela denuncias_perfil no Supabase.'
+  }
+
+  if (fullMessage.includes('duplicate') || fullMessage.includes('unique')) {
+    return 'Voce ja denunciou este perfil anteriormente.'
+  }
+
+  if (fullMessage.includes('column')) {
+    return 'A estrutura da tabela denuncias_perfil nao corresponde ao frontend.'
+  }
+
+  return error.message
+}
+
+function iconFlag(isFilled: boolean) {
+  return (
+    <span className="profile-report-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none">
+        <path
+          d="M6 4V20"
+          stroke="currentColor"
+          strokeWidth="2.1"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M6 5.2H15.5L14.2 8.3L17.5 11.4H6V5.2Z"
+          fill={isFilled ? 'currentColor' : 'none'}
+          stroke="currentColor"
+          strokeWidth="2.1"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </span>
+  )
 }
 
 function getWishlistErrorMessage(
@@ -390,6 +467,13 @@ export function ProfilePage() {
   const [userReviews, setUserReviews] = useState<ProfileReviewItem[]>([])
   const [reviewsLoading, setReviewsLoading] = useState(false)
   const [reviewsError, setReviewsError] = useState<string | null>(null)
+  const [currentProfileReport, setCurrentProfileReport] =
+    useState<CurrentUserProfileReportSummary | null>(null)
+  const [profileReportLoading, setProfileReportLoading] = useState(false)
+  const [isProfileReportModalOpen, setIsProfileReportModalOpen] = useState(false)
+  const [profileReportSubmitting, setProfileReportSubmitting] = useState(false)
+  const [profileReportRemoving, setProfileReportRemoving] = useState(false)
+  const [profileReportFeedback, setProfileReportFeedback] = useState<ReportFeedbackState | null>(null)
 
   const followStateRequestIdRef = useRef(0)
 
@@ -480,6 +564,8 @@ export function ProfilePage() {
     setActiveTab('status')
     setIsConnectionsModalOpen(false)
     setConnectionsInitialTab('followers')
+    setIsProfileReportModalOpen(false)
+    setProfileReportFeedback(null)
   }, [activeProfile?.id])
 
   const loadStatusGames = useCallback(async (userId: string) => {
@@ -560,6 +646,41 @@ export function ProfilePage() {
       isMounted = false
     }
   }, [activeProfile, isOwnerView, loadStatusGames])
+
+  useEffect(() => {
+    let isMounted = true
+
+    const loadCurrentProfileReport = async () => {
+      if (!user || !activeProfile || isOwnerView) {
+        if (isMounted) {
+          setCurrentProfileReport(null)
+          setProfileReportLoading(false)
+          setProfileReportSubmitting(false)
+          setProfileReportRemoving(false)
+        }
+        return
+      }
+
+      setProfileReportLoading(true)
+
+      const result = await getCurrentUserProfileReport(user.id, activeProfile.id)
+
+      if (!isMounted) return
+
+      if (result.error) {
+        console.error('Erro ao carregar denuncia atual do perfil:', result.error)
+      }
+
+      setCurrentProfileReport(result.data)
+      setProfileReportLoading(false)
+    }
+
+    void loadCurrentProfileReport()
+
+    return () => {
+      isMounted = false
+    }
+  }, [activeProfile, isOwnerView, user])
 
   const refreshFollowState = useCallback(async () => {
     const requestId = followStateRequestIdRef.current + 1
@@ -729,6 +850,15 @@ export function ProfilePage() {
   const sectionEyebrow = isOwnerView ? 'Perfil' : 'Perfil publico'
   const canOpenFollowersModal = !followLoading && followState.followersCount > 0
   const canOpenFollowingModal = !followLoading && followState.followingCount > 0
+  const canReportProfile = Boolean(user && activeProfile && !isOwnerView)
+  const profileReportButtonLabel = profileReportLoading
+    ? 'Carregando denuncia do perfil'
+    : currentProfileReport
+      ? 'Ver detalhes da sua denuncia deste perfil'
+      : 'Denunciar perfil'
+  const profileReportTargetLabel = activeProfile.username
+    ? `o perfil de @${activeProfile.username}`
+    : 'este perfil'
 
   const resetDraft = () => {
     setDraftProfile(createProfileDraft(editableProfile))
@@ -1085,6 +1215,91 @@ export function ProfilePage() {
     setFollowSubmitting(false)
   }
 
+  const handleOpenProfileReportModal = () => {
+    if (!canReportProfile || profileReportLoading) return
+
+    setProfileReportFeedback(null)
+    setIsProfileReportModalOpen(true)
+  }
+
+  const handleCloseProfileReportModal = () => {
+    if (profileReportSubmitting) return
+    if (profileReportRemoving) return
+
+    setIsProfileReportModalOpen(false)
+    setProfileReportFeedback(null)
+  }
+
+  const handleSubmitProfileReport = async ({
+    reason,
+    description,
+  }: {
+    reason: ProfileReportReason
+    description: string
+  }) => {
+    if (!user || !activeProfile || isOwnerView) return
+
+    setProfileReportSubmitting(true)
+    setProfileReportFeedback(null)
+
+    const reportResult = await submitProfileReport({
+      reporterId: user.id,
+      reportedUserId: activeProfile.id,
+      reason,
+      description,
+    })
+
+    if (reportResult.error) {
+      setProfileReportFeedback({
+        tone: 'error',
+        message: getProfileReportErrorMessage(reportResult.error, 'submit'),
+      })
+      setProfileReportSubmitting(false)
+      return
+    }
+
+    if (reportResult.data) {
+      setCurrentProfileReport(reportResult.data)
+    }
+
+    setProfileReportFeedback({
+      tone: reportResult.status === 'already_exists' ? 'info' : 'success',
+      message:
+        reportResult.status === 'already_exists'
+          ? 'Voce ja denunciou este perfil. Aqui esta o status atual da sua denuncia.'
+          : 'Denuncia de perfil enviada com sucesso.',
+    })
+    setProfileReportSubmitting(false)
+  }
+
+  const handleRemoveProfileReport = async () => {
+    if (!user || !currentProfileReport) return
+
+    setProfileReportRemoving(true)
+    setProfileReportFeedback(null)
+
+    const result = await deleteProfileReport({
+      reporterId: user.id,
+      reportId: currentProfileReport.id,
+    })
+
+    if (result.error) {
+      setProfileReportFeedback({
+        tone: 'error',
+        message: getProfileReportErrorMessage(result.error, 'delete'),
+      })
+      setProfileReportRemoving(false)
+      return
+    }
+
+    setCurrentProfileReport(null)
+    setProfileReportFeedback({
+      tone: 'success',
+      message: 'Denuncia de perfil removida com sucesso.',
+    })
+    setProfileReportRemoving(false)
+  }
+
   const avatarContent = (
     <UserAvatar
       name={visibleFullName}
@@ -1203,6 +1418,21 @@ export function ProfilePage() {
                           {followButtonLabel}
                         </button>
                       )}
+
+                      {canReportProfile ? (
+                        <button
+                          type="button"
+                          className={`profile-report-button${currentProfileReport ? ' is-reported' : ''}`}
+                          onClick={handleOpenProfileReportModal}
+                          disabled={
+                            profileReportLoading || profileReportSubmitting || profileReportRemoving
+                          }
+                          aria-label={profileReportButtonLabel}
+                          title={profileReportButtonLabel}
+                        >
+                          {iconFlag(Boolean(currentProfileReport))}
+                        </button>
+                      ) : null}
                     </div>
                   )}
                 </div>
@@ -1446,6 +1676,20 @@ export function ProfilePage() {
             </div>
           </section>
         </div>
+
+        {isProfileReportModalOpen && canReportProfile ? (
+          <ProfileReportModal
+            key={`${activeProfile.id}-${currentProfileReport?.id || 'new'}`}
+            currentReport={currentProfileReport}
+            feedback={profileReportFeedback}
+            isSubmitting={profileReportSubmitting}
+            isRemoving={profileReportRemoving}
+            reportedUserLabel={profileReportTargetLabel}
+            onClose={handleCloseProfileReportModal}
+            onSubmit={handleSubmitProfileReport}
+            onRemove={handleRemoveProfileReport}
+          />
+        ) : null}
 
         {isConnectionsModalOpen ? (
           <ProfileConnectionsModal

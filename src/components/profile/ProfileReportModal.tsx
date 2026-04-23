@@ -1,13 +1,12 @@
 import { useEffect, useId, useState, type FormEvent } from 'react'
 import {
-  REPORT_REASON_LABELS,
-  REPORT_REASON_OPTIONS,
-  REPORT_STATUS_LABELS,
-  type CurrentUserReportSummary,
-  type ReportReason,
-  type ReportTargetType,
-} from '../../services/reviewInteractionsService'
-import './ContentReportModal.css'
+  PROFILE_REPORT_REASON_LABELS,
+  PROFILE_REPORT_REASON_OPTIONS,
+  PROFILE_REPORT_STATUS_LABELS,
+  type CurrentUserProfileReportSummary,
+  type ProfileReportReason,
+} from '../../services/profileReportService'
+import '../reviews/ContentReportModal.css'
 
 type FeedbackTone = 'success' | 'error' | 'info'
 
@@ -16,19 +15,18 @@ interface ModalFeedback {
   message: string
 }
 
-interface ContentReportModalProps {
-  currentReport: CurrentUserReportSummary | null
+interface ProfileReportModalProps {
+  currentReport: CurrentUserProfileReportSummary | null
   feedback: ModalFeedback | null
   isSubmitting: boolean
   isRemoving: boolean
-  targetLabel: string
-  targetType: ReportTargetType
+  reportedUserLabel: string
   onClose: () => void
-  onSubmit: (payload: { reason: ReportReason; description: string }) => void | Promise<void>
+  onSubmit: (payload: { reason: ProfileReportReason; description: string }) => void | Promise<void>
   onRemove: () => void | Promise<void>
 }
 
-const DEFAULT_REPORT_REASON: ReportReason = 'spam'
+const DEFAULT_PROFILE_REPORT_REASON: ProfileReportReason = 'foto_ofensiva'
 
 function formatReportDate(value: string | null | undefined) {
   if (!value) return 'Data indisponivel'
@@ -43,21 +41,22 @@ function formatReportDate(value: string | null | undefined) {
   })
 }
 
-export function ContentReportModal({
+export function ProfileReportModal({
   currentReport,
   feedback,
   isSubmitting,
   isRemoving,
-  targetLabel,
-  targetType,
+  reportedUserLabel,
   onClose,
   onSubmit,
   onRemove,
-}: ContentReportModalProps) {
+}: ProfileReportModalProps) {
   const titleId = useId()
   const descriptionId = useId()
-  const [reason, setReason] = useState<ReportReason>(currentReport?.reason || DEFAULT_REPORT_REASON)
-  const [description, setDescription] = useState(currentReport?.description || '')
+  const [reason, setReason] = useState<ProfileReportReason>(() =>
+    currentReport?.reason || DEFAULT_PROFILE_REPORT_REASON
+  )
+  const [description, setDescription] = useState(() => currentReport?.description || '')
   const isBusy = isSubmitting || isRemoving
 
   useEffect(() => {
@@ -87,10 +86,10 @@ export function ContentReportModal({
     })
   }
 
-  const titleText = currentReport ? 'Denuncia registrada' : 'Denunciar conteudo'
+  const titleText = currentReport ? 'Denuncia registrada' : 'Denunciar perfil'
   const descriptionText = currentReport
-    ? `Voce ja denunciou ${targetLabel}. Aqui esta o status atual da sua denuncia.`
-    : `Explique rapidamente o motivo da denuncia de ${targetLabel}.`
+    ? `Voce ja denunciou ${reportedUserLabel}. Aqui esta o status atual da sua denuncia.`
+    : `Explique rapidamente o motivo da denuncia de ${reportedUserLabel}.`
 
   return (
     <div
@@ -115,9 +114,7 @@ export function ContentReportModal({
         <div className="content-report-modal-content">
           <header className="content-report-modal-header">
             <div className="content-report-modal-copy">
-              <span className="content-report-modal-kicker">
-                {targetType === 'review' ? 'Review' : 'Comentario'}
-              </span>
+              <span className="content-report-modal-kicker">Perfil</span>
               <h2 id={titleId}>{titleText}</h2>
               <p id={descriptionId}>{descriptionText}</p>
             </div>
@@ -127,7 +124,7 @@ export function ContentReportModal({
               className="content-report-modal-close-button"
               onClick={onClose}
               disabled={isBusy}
-              aria-label="Fechar modal de denuncia"
+              aria-label="Fechar modal de denuncia de perfil"
             >
               <span aria-hidden="true">&times;</span>
             </button>
@@ -141,10 +138,10 @@ export function ContentReportModal({
             <div className="content-report-modal-summary">
               <div className="content-report-modal-pill-row">
                 <span className="content-report-modal-pill">
-                  Motivo: {REPORT_REASON_LABELS[currentReport.reason]}
+                  Motivo: {PROFILE_REPORT_REASON_LABELS[currentReport.reason]}
                 </span>
                 <span className="content-report-modal-pill">
-                  Status: {REPORT_STATUS_LABELS[currentReport.status]}
+                  Status: {PROFILE_REPORT_STATUS_LABELS[currentReport.status]}
                 </span>
                 <span className="content-report-modal-pill">
                   Enviada em {formatReportDate(currentReport.createdAt)}
@@ -159,7 +156,7 @@ export function ContentReportModal({
               ) : (
                 <div className="content-report-modal-note">
                   <strong>Sem detalhes extras</strong>
-                  <p>Voce enviou apenas o motivo principal da denuncia.</p>
+                  <p>Voce enviou apenas o motivo principal da denuncia deste perfil.</p>
                 </div>
               )}
 
@@ -189,10 +186,10 @@ export function ContentReportModal({
                 <select
                   className="content-report-modal-select"
                   value={reason}
-                  onChange={event => setReason(event.target.value as ReportReason)}
+                  onChange={event => setReason(event.target.value as ProfileReportReason)}
                   disabled={isSubmitting}
                 >
-                  {REPORT_REASON_OPTIONS.map(option => (
+                  {PROFILE_REPORT_REASON_OPTIONS.map(option => (
                     <option key={option.value} value={option.value}>
                       {option.label}
                     </option>

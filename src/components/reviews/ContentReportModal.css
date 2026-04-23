@@ -238,6 +238,17 @@
   color: #eef2ff;
 }
 
+.content-report-modal-danger-action {
+  border: 1px solid rgba(255, 169, 169, 0.24);
+  background: rgba(255, 113, 113, 0.08);
+  color: #ffe3e3;
+}
+
+.content-report-modal-danger-action:hover:not(:disabled) {
+  border-color: rgba(255, 169, 169, 0.38);
+  background: rgba(255, 113, 113, 0.14);
+}
+
 @media (max-width: 640px) {
   .content-report-modal-backdrop {
     padding: 0.85rem;

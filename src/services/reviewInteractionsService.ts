@@ -133,6 +133,16 @@ interface SubmitContentReportResult {
   error: ReviewError | null
 }
 
+interface DeleteContentReportParams {
+  userId: string
+  reportId: string
+}
+
+interface DeleteContentReportResult {
+  status: 'deleted' | 'error'
+  error: ReviewError | null
+}
+
 interface ContentReportMaps {
   reportsByReviewId: Map<string, CurrentUserReportSummary>
   reportsByCommentId: Map<string, CurrentUserReportSummary>
@@ -1129,6 +1139,56 @@ export async function submitContentReport({
       status: 'error',
       data: null,
       error: normalizeReviewError(error, 'Erro inesperado ao registrar esta denuncia.'),
+    }
+  }
+}
+
+export async function deleteContentReport({
+  userId,
+  reportId,
+}: DeleteContentReportParams): Promise<DeleteContentReportResult> {
+  if (!userId || !reportId) {
+    return {
+      status: 'error',
+      error: {
+        message: 'Nao foi possivel identificar a denuncia que voce deseja remover.',
+      },
+    }
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('denuncias_conteudo')
+      .delete()
+      .eq('id', reportId)
+      .eq('denunciante_id', userId)
+      .select('id')
+      .maybeSingle()
+
+    if (error) {
+      return {
+        status: 'error',
+        error: normalizeReviewError(error, 'Nao foi possivel remover esta denuncia.'),
+      }
+    }
+
+    if (!data) {
+      return {
+        status: 'error',
+        error: {
+          message: 'Esta denuncia nao foi encontrada ou ja foi removida.',
+        },
+      }
+    }
+
+    return {
+      status: 'deleted',
+      error: null,
+    }
+  } catch (error) {
+    return {
+      status: 'error',
+      error: normalizeReviewError(error, 'Erro inesperado ao remover esta denuncia.'),
     }
   }
 }
