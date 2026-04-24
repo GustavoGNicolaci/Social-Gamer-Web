@@ -273,6 +273,182 @@ body.light {
   border-color: #667eea;
 }
 
+.auth-password-layout-shell {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  max-width: 1440px;
+  display: grid;
+  grid-template-columns: minmax(220px, 300px) minmax(0, 860px) minmax(220px, 300px);
+  gap: 2rem;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+}
+
+.auth-password-panel-slot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+  grid-column: 1;
+}
+
+.auth-flow-box,
+.auth-password-box {
+  position: relative;
+  z-index: 2;
+}
+
+.auth-password-box {
+  max-width: 800px;
+  width: 100%;
+  grid-column: 2;
+  justify-self: center;
+}
+
+.register-auth-password-box {
+  max-width: 860px;
+}
+
+.register-password-panel-slot {
+  align-self: start;
+  padding-top: 24rem;
+}
+
+.password-requirements-panel {
+  width: 100%;
+  max-width: 320px;
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateX(-24px);
+  transition:
+    opacity 0.28s ease,
+    transform 0.28s ease,
+    max-height 0.28s ease,
+    visibility 0.28s ease;
+}
+
+.password-requirements-panel.is-visible {
+  max-height: 360px;
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateX(0);
+}
+
+.password-requirements-card {
+  background: rgba(15, 23, 42, 0.45);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 10px;
+  padding: 0.95rem 1rem;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 18px 36px rgba(2, 6, 23, 0.24);
+}
+
+.password-requirements-title {
+  display: block;
+  margin-bottom: 0.75rem;
+  color: var(--text-color);
+  font-size: 0.92rem;
+  font-weight: 600;
+  text-align: left;
+}
+
+.password-requirements-list {
+  list-style: none;
+  display: grid;
+  gap: 0.65rem;
+  margin: 0;
+  padding: 0;
+}
+
+.password-requirement-item {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  color: #94a3b8;
+  font-size: 0.9rem;
+  line-height: 1.35;
+}
+
+.password-requirement-indicator {
+  width: 1.4rem;
+  min-width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  background: rgba(148, 163, 184, 0.15);
+  color: #cbd5ff;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.password-requirement-item.is-valid {
+  color: #86efac;
+}
+
+.password-requirement-item.is-valid .password-requirement-indicator {
+  background: rgba(34, 197, 94, 0.16);
+  border-color: rgba(34, 197, 94, 0.4);
+  color: #4ade80;
+}
+
+.password-requirement-item.is-invalid {
+  color: #fca5a5;
+}
+
+.password-requirement-item.is-invalid .password-requirement-indicator {
+  background: rgba(239, 68, 68, 0.14);
+  border-color: rgba(239, 68, 68, 0.35);
+  color: #f87171;
+}
+
+.password-requirement-item.is-pending {
+  color: #94a3b8;
+}
+
+.password-requirement-item.is-pending .password-requirement-indicator {
+  border-color: rgba(148, 163, 184, 0.18);
+  color: #94a3b8;
+}
+
+body.light .password-requirements-card {
+  background: rgba(255, 255, 255, 0.82);
+  border-color: rgba(148, 163, 184, 0.35);
+}
+
+body.light .password-requirement-item.is-pending {
+  color: #475569;
+}
+
+body.light .password-requirement-item.is-pending .password-requirement-indicator {
+  background: rgba(148, 163, 184, 0.14);
+  color: #475569;
+}
+
+body.light .password-requirement-item.is-invalid {
+  color: #b91c1c;
+}
+
+body.light .password-requirement-item.is-invalid .password-requirement-indicator {
+  color: #dc2626;
+}
+
+body.light .password-requirement-item.is-valid {
+  color: #166534;
+}
+
+body.light .password-requirement-item.is-valid .password-requirement-indicator {
+  color: #16a34a;
+}
+
 .login-submit-btn {
   width: 100%;
   padding: 0.8rem;
@@ -620,6 +796,34 @@ body.light {
 @media (max-width: 1100px) {
 }
 
+@media (max-width: 1240px) {
+  .register-password-layout-shell {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1rem;
+    max-width: 860px;
+  }
+
+  .register-password-panel-slot {
+    order: 2;
+    padding-top: 0;
+    justify-content: flex-start;
+  }
+
+  .register-auth-password-box {
+    order: 1;
+    max-width: 100%;
+  }
+
+  .register-password-panel-slot .password-requirements-panel {
+    max-width: 100%;
+    transform: translateY(-10px);
+  }
+
+  .register-password-panel-slot .password-requirements-panel.is-visible {
+    transform: translateY(0);
+  }
+}
+
 @media (max-width: 768px) {
   .page-container {
     padding: 1rem;
@@ -632,6 +836,38 @@ body.light {
 
   .login-box {
     padding: 2rem;
+  }
+
+  .register-box {
+    padding: 2rem;
+  }
+
+  .auth-password-layout-shell {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1rem;
+    max-width: 800px;
+  }
+
+  .auth-password-panel-slot {
+    order: 2;
+  }
+
+  .auth-password-box {
+    order: 1;
+    max-width: 100%;
+  }
+
+  .register-password-panel-slot {
+    padding-top: 0;
+  }
+
+  .password-requirements-panel {
+    max-width: 100%;
+    transform: translateY(-10px);
+  }
+
+  .password-requirements-panel.is-visible {
+    transform: translateY(0);
   }
 }
 
@@ -652,6 +888,10 @@ body.light {
   .register-box {
     padding: 1.5rem;
     max-width: 100%;
+  }
+
+  .password-requirements-card {
+    padding: 0.85rem 0.9rem;
   }
 
   .avatar-selection {

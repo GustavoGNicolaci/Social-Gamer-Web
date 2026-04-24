@@ -1,10 +1,17 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
-import type { AuthError, Session, User } from '@supabase/supabase-js'
+import type { Session, User } from '@supabase/supabase-js'
 import { supabase } from '../supabase-client'
+import { getPasswordValidationError } from '../utils/passwordValidation'
+import {
+  INVALID_EMAIL_MESSAGE,
+  REGISTER_GENERIC_ERROR_MESSAGE,
+  REQUIRED_EMAIL_MESSAGE,
+  REQUIRED_LOGIN_PASSWORD_MESSAGE,
+  isValidEmailAddress,
+  logUnexpectedAuthError,
+  mapFriendlyAuthError,
+} from '../utils/authErrorMessages'
 
-const GENERIC_REGISTER_ERROR_MESSAGE = 'Nao foi possivel concluir o cadastro agora. Tente novamente.'
-const GENERIC_REGISTER_IDENTITY_MESSAGE =
-  'Nao foi possivel concluir o cadastro com os dados informados.'
 const USERNAME_TAKEN_MESSAGE = 'Esse nome de usuario ja esta em uso.'
 const USER_PROFILE_SELECT =
   'id, username, nome_completo, avatar_path, avatar_url, bio, data_cadastro, configuracoes_privacidade'
@@ -71,9 +78,11 @@ interface AuthContextValue {
   user: User | null
   profile: UserProfile | null
   loading: boolean
-  login: (email: string, password: string) => Promise<{ error: AuthError | null }>
+  login: (email: string, password: string) => Promise<{ error: string | null }>
   logout: () => Promise<void>
   register: (input: RegisterInput) => Promise<RegisterResult>
+  requestPasswordReset: (email: string) => Promise<{ error: string | null }>
+  updatePassword: (password: string) => Promise<{ error: string | null }>
   refreshProfile: () => Promise<UserProfile | null>
   updateOwnProfile: (
     updates: UserProfileUpdates
@@ -130,41 +139,31 @@ const buildValidationErrorResult = (fieldErrors: RegisterFieldErrors): RegisterR
   fieldErrors,
 })
 
-const getRegisterAuthErrorResult = (error: AuthError): RegisterResult => {
-  const fullMessage = error.message.toLowerCase()
+const getRegisterAuthErrorResult = (error: unknown): RegisterResult => {
+  const friendlyError = mapFriendlyAuthError(error, 'register')
 
-  if (
-    fullMessage.includes('already registered') ||
-    fullMessage.includes('already exists') ||
-    fullMessage.includes('already been registered')
-  ) {
-    return {
-      status: 'system_error',
-      message: GENERIC_REGISTER_IDENTITY_MESSAGE,
-    }
+  if (friendlyError.shouldLog) {
+    logUnexpectedAuthError('register', error)
   }
 
-  if (fullMessage.includes('invalid') && fullMessage.includes('email')) {
+  if (
+    friendlyError.reason === 'invalid_email' ||
+    friendlyError.reason === 'email_already_registered'
+  ) {
     return buildValidationErrorResult({
-      email: 'Digite um email valido.',
+      email: friendlyError.message,
     })
   }
 
-  if (
-    fullMessage.includes('password') &&
-    (fullMessage.includes('weak') ||
-      fullMessage.includes('least') ||
-      fullMessage.includes('short') ||
-      fullMessage.includes('6'))
-  ) {
+  if (friendlyError.reason === 'weak_password') {
     return buildValidationErrorResult({
-      password: 'A senha nao atende aos requisitos de seguranca.',
+      password: friendlyError.message,
     })
   }
 
   return {
     status: 'system_error',
-    message: GENERIC_REGISTER_ERROR_MESSAGE,
+    message: friendlyError.message,
   }
 }
 
@@ -375,13 +374,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       if (!normalizedInput.email) {
         return buildValidationErrorResult({
-          email: 'Email e obrigatorio.',
+          email: REQUIRED_EMAIL_MESSAGE,
         })
       }
 
-      if (!normalizedInput.password) {
+      if (!isValidEmailAddress(normalizedInput.email)) {
         return buildValidationErrorResult({
-          password: 'Senha e obrigatoria.',
+          email: INVALID_EMAIL_MESSAGE,
+        })
+      }
+
+      const passwordError = getPasswordValidationError(normalizedInput.password)
+
+      if (passwordError) {
+        return buildValidationErrorResult({
+          password: passwordError,
         })
       }
 
@@ -393,9 +400,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           .limit(1)
 
         if (usernameLookupError) {
+          console.error('Erro ao verificar disponibilidade do nome de usuario:', usernameLookupError)
           return {
             status: 'system_error',
-            message: GENERIC_REGISTER_ERROR_MESSAGE,
+            message: REGISTER_GENERIC_ERROR_MESSAGE,
           }
         }
 
@@ -423,9 +431,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const nextUser = data.user
 
         if (!nextUser) {
+          console.error('Cadastro concluido sem usuario retornado pelo Supabase.', {
+            email: normalizedInput.email,
+          })
+
           return {
             status: 'system_error',
-            message: GENERIC_REGISTER_ERROR_MESSAGE,
+            message: REGISTER_GENERIC_ERROR_MESSAGE,
           }
         }
 
@@ -440,7 +452,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
             return {
               status: 'system_error',
-              message: GENERIC_REGISTER_ERROR_MESSAGE,
+              message: REGISTER_GENERIC_ERROR_MESSAGE,
             }
           }
 
@@ -461,12 +473,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         return {
           status: 'system_error',
-          message: GENERIC_REGISTER_IDENTITY_MESSAGE,
+          message: REGISTER_GENERIC_ERROR_MESSAGE,
         }
-      } catch {
+      } catch (error) {
+        console.error('Erro inesperado ao registrar usuario:', error)
+
         return {
           status: 'system_error',
-          message: GENERIC_REGISTER_ERROR_MESSAGE,
+          message: REGISTER_GENERIC_ERROR_MESSAGE,
         }
       }
     },
@@ -578,12 +592,128 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [syncAuthState])
 
   const login = useCallback(async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
+    const normalizedEmail = email.trim().toLowerCase()
 
-    return { error }
+    if (!normalizedEmail) {
+      return { error: REQUIRED_EMAIL_MESSAGE }
+    }
+
+    if (!isValidEmailAddress(normalizedEmail)) {
+      return { error: INVALID_EMAIL_MESSAGE }
+    }
+
+    if (!password) {
+      return { error: REQUIRED_LOGIN_PASSWORD_MESSAGE }
+    }
+
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: normalizedEmail,
+        password,
+      })
+
+      if (error) {
+        const friendlyError = mapFriendlyAuthError(error, 'login')
+
+        if (friendlyError.shouldLog) {
+          logUnexpectedAuthError('login', error)
+        }
+
+        return { error: friendlyError.message }
+      }
+
+      return { error: null }
+    } catch (error) {
+      const friendlyError = mapFriendlyAuthError(error, 'login')
+
+      if (friendlyError.shouldLog) {
+        logUnexpectedAuthError('login', error)
+      }
+
+      return { error: friendlyError.message }
+    }
+  }, [])
+
+  const requestPasswordReset = useCallback(async (email: string) => {
+    const normalizedEmail = email.trim().toLowerCase()
+
+    if (!normalizedEmail) {
+      return {
+        error: REQUIRED_EMAIL_MESSAGE,
+      }
+    }
+
+    if (!isValidEmailAddress(normalizedEmail)) {
+      return {
+        error: INVALID_EMAIL_MESSAGE,
+      }
+    }
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
+        redirectTo: `${window.location.origin}/resetar-senha`,
+      })
+
+      if (error) {
+        const friendlyError = mapFriendlyAuthError(error, 'password_reset_request')
+
+        if (friendlyError.shouldLog) {
+          logUnexpectedAuthError('password_reset_request', error)
+        }
+
+        return {
+          error: friendlyError.message,
+        }
+      }
+
+      return { error: null }
+    } catch (error) {
+      const friendlyError = mapFriendlyAuthError(error, 'password_reset_request')
+
+      if (friendlyError.shouldLog) {
+        logUnexpectedAuthError('password_reset_request', error)
+      }
+
+      return {
+        error: friendlyError.message,
+      }
+    }
+  }, [])
+
+  const updatePassword = useCallback(async (password: string) => {
+    const passwordError = getPasswordValidationError(password)
+
+    if (passwordError) {
+      return {
+        error: passwordError,
+      }
+    }
+
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password,
+      })
+
+      if (error) {
+        const friendlyError = mapFriendlyAuthError(error, 'password_update')
+
+        return {
+          error: friendlyError.message,
+        }
+      }
+
+      return { error: null }
+    } catch (error) {
+      const friendlyError = mapFriendlyAuthError(error, 'password_update')
+
+      if (friendlyError.shouldLog) {
+        logUnexpectedAuthError('password_update', error)
+      }
+
+      return {
+        error: friendlyError.message,
+      }
+    }
   }, [])
 
   const logout = useCallback(async () => {
@@ -593,7 +723,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   return (
     <AuthContext.Provider
-      value={{ session, user, profile, loading, login, logout, register, refreshProfile, updateOwnProfile }}
+      value={{
+        session,
+        user,
+        profile,
+        loading,
+        login,
+        logout,
+        register,
+        requestPasswordReset,
+        updatePassword,
+        refreshProfile,
+        updateOwnProfile,
+      }}
     >
       {children}
     </AuthContext.Provider>
