@@ -652,13 +652,23 @@ body.light .password-requirement-indicator {
 }
 
 @media (max-width: 1080px) {
+  .auth-page {
+    align-items: start;
+  }
+
   .auth-shell,
   .auth-shell--auth,
   .auth-shell--wide {
     grid-template-columns: minmax(0, 1fr);
+    gap: 1.25rem;
+  }
+
+  .auth-card {
+    order: 1;
   }
 
   .auth-hero {
+    order: 2;
     min-height: auto;
   }
 
