@@ -5,13 +5,12 @@ import {
   type ProfileUpdateError,
 } from '../contexts/AuthContext'
 import {
-  isProfilePrivate,
-  mergeProfilePrivateIntoPrivacySettings,
+  getProfilePrivacyMode,
+  mergeProfilePrivacyModeIntoPrivacySettings,
+  type ProfilePrivacyMode,
 } from '../utils/profilePrivacy'
 import { getPublicProfilePath } from '../utils/profileRoutes'
 import './AccountSettingsPage.css'
-
-const DELETE_CONFIRMATION_TEXT = 'EXCLUIR'
 
 type FeedbackTone = 'success' | 'error' | 'info'
 
@@ -21,13 +20,38 @@ interface FeedbackState {
 }
 
 interface AccountDeletionModalProps {
-  confirmation: string
+  expectedUsername: string
   feedback: FeedbackState | null
+  password: string
   isSubmitting: boolean
-  onChangeConfirmation: (value: string) => void
+  username: string
+  onChangePassword: (value: string) => void
+  onChangeUsername: (value: string) => void
   onClose: () => void
   onConfirm: () => void
 }
+
+const PRIVACY_OPTIONS: Array<{
+  value: ProfilePrivacyMode
+  label: string
+  description: string
+}> = [
+  {
+    value: 'public',
+    label: 'Publico',
+    description: 'Qualquer usuario pode ver seu perfil completo.',
+  },
+  {
+    value: 'friends',
+    label: 'Somente amigos',
+    description: 'Apenas amigos mutuos veem bio, listas, Top 5 e reviews.',
+  },
+  {
+    value: 'private',
+    label: 'Privado',
+    description: 'Somente voce ve as informacoes restritas do perfil.',
+  },
+]
 
 function getSettingsUpdateErrorMessage(_error: ProfileUpdateError | null) {
   void _error
@@ -45,14 +69,17 @@ function SettingsFeedback({ feedback }: { feedback: FeedbackState | null }) {
 }
 
 function AccountDeletionModal({
-  confirmation,
+  expectedUsername,
   feedback,
+  password,
   isSubmitting,
-  onChangeConfirmation,
+  username,
+  onChangePassword,
+  onChangeUsername,
   onClose,
   onConfirm,
 }: AccountDeletionModalProps) {
-  const canConfirm = confirmation.trim() === DELETE_CONFIRMATION_TEXT && !isSubmitting
+  const canConfirm = username === expectedUsername && password.length > 0 && !isSubmitting
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow
@@ -100,18 +127,31 @@ function AccountDeletionModal({
         <span className="account-settings-kicker is-danger">Exclusao definitiva</span>
         <h2 id="account-delete-title">Excluir conta</h2>
         <p id="account-delete-description">
-          Esta acao remove sua conta, perfil e dados relacionados. Depois de confirmada, ela nao
-          podera ser desfeita pela aplicacao.
+          Esta acao remove sua conta, perfil e dados relacionados. Confirme seu username e senha
+          atual antes de continuar.
         </p>
 
         <label className="account-settings-field">
-          <span>Digite EXCLUIR para confirmar</span>
+          <span>Username</span>
           <input
             type="text"
-            value={confirmation}
-            onChange={event => onChangeConfirmation(event.target.value)}
+            value={username}
+            onChange={event => onChangeUsername(event.target.value)}
             disabled={isSubmitting}
+            placeholder={expectedUsername}
             autoComplete="off"
+          />
+        </label>
+
+        <label className="account-settings-field">
+          <span>Senha atual</span>
+          <input
+            type="password"
+            value={password}
+            onChange={event => onChangePassword(event.target.value)}
+            disabled={isSubmitting}
+            placeholder="Sua senha atual"
+            autoComplete="current-password"
           />
         </label>
 
@@ -157,25 +197,25 @@ function AccountSettingsPage() {
   const [passwordSubmitting, setPasswordSubmitting] = useState(false)
   const [passwordFeedback, setPasswordFeedback] = useState<FeedbackState | null>(null)
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
-  const [deleteConfirmation, setDeleteConfirmation] = useState('')
+  const [deleteUsername, setDeleteUsername] = useState('')
+  const [deletePassword, setDeletePassword] = useState('')
   const [deleteSubmitting, setDeleteSubmitting] = useState(false)
   const [deleteFeedback, setDeleteFeedback] = useState<FeedbackState | null>(null)
 
-  const profileIsPrivate = isProfilePrivate(profile?.configuracoes_privacidade)
+  const privacyMode = getProfilePrivacyMode(profile?.configuracoes_privacidade)
   const profilePath = profile?.username ? getPublicProfilePath(profile.username) : '/profile'
 
-  const handleTogglePrivacy = async () => {
+  const handleChangePrivacyMode = async (nextPrivacyMode: ProfilePrivacyMode) => {
     if (!profile || privacySaving) return
-
-    const nextPrivacyValue = !profileIsPrivate
+    if (nextPrivacyMode === privacyMode) return
 
     setPrivacySaving(true)
     setPrivacyFeedback(null)
 
     const { error } = await updateOwnProfile({
-      configuracoes_privacidade: mergeProfilePrivateIntoPrivacySettings(
+      configuracoes_privacidade: mergeProfilePrivacyModeIntoPrivacySettings(
         profile.configuracoes_privacidade,
-        nextPrivacyValue
+        nextPrivacyMode
       ),
     })
 
@@ -190,9 +230,12 @@ function AccountSettingsPage() {
 
     setPrivacyFeedback({
       tone: 'success',
-      message: nextPrivacyValue
-        ? 'Seu perfil agora esta privado.'
-        : 'Seu perfil agora esta publico.',
+      message:
+        nextPrivacyMode === 'public'
+          ? 'Seu perfil agora esta publico.'
+          : nextPrivacyMode === 'friends'
+            ? 'Seu perfil agora esta visivel apenas para amigos.'
+            : 'Seu perfil agora esta privado.',
     })
     setPrivacySaving(false)
   }
@@ -233,7 +276,8 @@ function AccountSettingsPage() {
   }
 
   const handleOpenDeleteModal = () => {
-    setDeleteConfirmation('')
+    setDeleteUsername('')
+    setDeletePassword('')
     setDeleteFeedback(null)
     setIsDeleteModalOpen(true)
   }
@@ -242,17 +286,37 @@ function AccountSettingsPage() {
     if (deleteSubmitting) return
 
     setIsDeleteModalOpen(false)
-    setDeleteConfirmation('')
+    setDeleteUsername('')
+    setDeletePassword('')
     setDeleteFeedback(null)
   }
 
   const handleDeleteAccount = async () => {
-    if (deleteConfirmation.trim() !== DELETE_CONFIRMATION_TEXT || deleteSubmitting) return
+    if (!profile || deleteSubmitting) return
+
+    if (deleteUsername !== profile.username) {
+      setDeleteFeedback({
+        tone: 'error',
+        message: 'O username informado nao corresponde a esta conta.',
+      })
+      return
+    }
+
+    if (!deletePassword) {
+      setDeleteFeedback({
+        tone: 'error',
+        message: 'Informe sua senha atual para excluir a conta.',
+      })
+      return
+    }
 
     setDeleteSubmitting(true)
     setDeleteFeedback(null)
 
-    const { error } = await deleteOwnAccount()
+    const { error } = await deleteOwnAccount({
+      username: deleteUsername,
+      currentPassword: deletePassword,
+    })
 
     if (error) {
       setDeleteFeedback({
@@ -329,28 +393,42 @@ function AccountSettingsPage() {
                   <h2>Visibilidade do perfil</h2>
                 </div>
 
-                <span className={`account-settings-status${profileIsPrivate ? ' is-private' : ''}`}>
-                  {profileIsPrivate ? 'Privado' : 'Publico'}
+                <span className={`account-settings-status is-${privacyMode}`}>
+                  {privacyMode === 'public'
+                    ? 'Publico'
+                    : privacyMode === 'friends'
+                      ? 'Somente amigos'
+                      : 'Privado'}
                 </span>
               </div>
 
               <p>
-                Quando o perfil esta privado, visitantes veem apenas sua identidade basica. Bio,
-                Top 5, conexoes, listas e reviews ficam ocultos da experiencia publica.
+                Escolha quem pode ver bio, Top 5, conexoes, listas, status dos jogos e reviews no
+                seu perfil.
               </p>
 
-              <button
-                type="button"
-                className={`account-settings-toggle${profileIsPrivate ? ' is-on' : ''}`}
-                onClick={() => void handleTogglePrivacy()}
-                disabled={privacySaving}
-                aria-pressed={profileIsPrivate}
+              <div
+                className="account-settings-privacy-options"
+                role="radiogroup"
+                aria-label="Visibilidade do perfil"
               >
-                <span className="account-settings-toggle-track" aria-hidden="true">
-                  <span className="account-settings-toggle-thumb" />
-                </span>
-                <span>{privacySaving ? 'Salvando...' : 'Perfil privado'}</span>
-              </button>
+                {PRIVACY_OPTIONS.map(option => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={`account-settings-privacy-option${
+                      privacyMode === option.value ? ' is-selected' : ''
+                    }`}
+                    role="radio"
+                    aria-checked={privacyMode === option.value}
+                    onClick={() => void handleChangePrivacyMode(option.value)}
+                    disabled={privacySaving}
+                  >
+                    <strong>{option.label}</strong>
+                    <span>{option.description}</span>
+                  </button>
+                ))}
+              </div>
 
               <SettingsFeedback feedback={privacyFeedback} />
             </article>
@@ -422,11 +500,17 @@ function AccountSettingsPage() {
 
         {isDeleteModalOpen ? (
           <AccountDeletionModal
-            confirmation={deleteConfirmation}
+            expectedUsername={profile.username}
             feedback={deleteFeedback}
+            password={deletePassword}
             isSubmitting={deleteSubmitting}
-            onChangeConfirmation={value => {
-              setDeleteConfirmation(value)
+            username={deleteUsername}
+            onChangePassword={value => {
+              setDeletePassword(value)
+              setDeleteFeedback(null)
+            }}
+            onChangeUsername={value => {
+              setDeleteUsername(value)
               setDeleteFeedback(null)
             }}
             onClose={handleCloseDeleteModal}

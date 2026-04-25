@@ -1,6 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
-import { deleteAllUserFiles } from '../services/storageService'
 import { createStatelessSupabaseClient, supabase } from '../supabase-client'
 import { getPasswordValidationError } from '../utils/passwordValidation'
 import {
@@ -18,10 +17,12 @@ const CURRENT_PASSWORD_REQUIRED_MESSAGE = 'Informe sua senha atual.'
 const CURRENT_PASSWORD_INVALID_MESSAGE = 'A senha atual informada nao esta correta.'
 const DELETE_ACCOUNT_ERROR_MESSAGE =
   'Nao foi possivel excluir sua conta agora. Tente novamente em alguns instantes.'
-const DELETE_ACCOUNT_STORAGE_ERROR_MESSAGE =
-  'Nao foi possivel remover seus arquivos agora. Tente novamente em alguns instantes.'
 const USER_PROFILE_SELECT =
   'id, username, nome_completo, avatar_path, avatar_url, bio, data_cadastro, configuracoes_privacidade'
+
+interface FunctionErrorPayload {
+  error?: string
+}
 
 export interface UserProfile {
   id: string
@@ -48,6 +49,11 @@ export interface RegisterFieldErrors {
   password?: string
   confirmPassword?: string
   submit?: string
+}
+
+export interface DeleteOwnAccountInput {
+  username: string
+  currentPassword: string
 }
 
 export type RegisterResult =
@@ -91,7 +97,7 @@ interface AuthContextValue {
   requestPasswordReset: (email: string) => Promise<{ error: string | null }>
   requestAuthenticatedPasswordReset: (currentPassword: string) => Promise<{ error: string | null }>
   updatePassword: (password: string) => Promise<{ error: string | null }>
-  deleteOwnAccount: () => Promise<{ error: string | null }>
+  deleteOwnAccount: (input: DeleteOwnAccountInput) => Promise<{ error: string | null }>
   refreshProfile: () => Promise<UserProfile | null>
   updateOwnProfile: (
     updates: UserProfileUpdates
@@ -141,6 +147,54 @@ const normalizeProfileUpdateError = (
   }
 
   return { message: fallbackMessage }
+}
+
+async function getFunctionErrorPayload(error: unknown): Promise<FunctionErrorPayload | null> {
+  if (!error || typeof error !== 'object' || !('context' in error)) {
+    return null
+  }
+
+  const context = error.context
+
+  if (!context || typeof context !== 'object' || !('clone' in context)) {
+    return null
+  }
+
+  const clone = context.clone
+
+  if (typeof clone !== 'function') {
+    return null
+  }
+
+  try {
+    const response = clone.call(context) as Response
+    const payload = await response.json()
+
+    return payload && typeof payload === 'object' ? payload as FunctionErrorPayload : null
+  } catch {
+    return null
+  }
+}
+
+function getDeleteAccountErrorMessage(errorCode: string | null | undefined) {
+  switch (errorCode) {
+    case 'invalid_password':
+      return CURRENT_PASSWORD_INVALID_MESSAGE
+    case 'username_mismatch':
+      return 'O username informado nao corresponde a esta conta.'
+    case 'not_authenticated':
+      return 'Sua sessao expirou. Faca login novamente para excluir a conta.'
+    case 'missing_confirmation':
+      return 'Confirme seu username e senha atual para excluir a conta.'
+    case 'storage_cleanup_failed':
+      return 'Nao foi possivel remover seus arquivos agora. Tente novamente em alguns instantes.'
+    case 'data_cleanup_failed':
+      return 'Nao foi possivel remover os dados vinculados a conta agora. Verifique os logs da Edge Function.'
+    case 'auth_delete_failed':
+      return 'Os dados foram limpos, mas nao foi possivel finalizar a exclusao do login. Verifique os logs da Edge Function.'
+    default:
+      return DELETE_ACCOUNT_ERROR_MESSAGE
+  }
 }
 
 const buildValidationErrorResult = (fieldErrors: RegisterFieldErrors): RegisterResult => ({
@@ -790,28 +844,70 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [])
 
-  const deleteOwnAccount = useCallback(async () => {
-    if (!user) {
+  const deleteOwnAccount = useCallback(async ({ username, currentPassword }: DeleteOwnAccountInput) => {
+    if (!user?.email || !profile) {
       return {
         error: 'Voce precisa estar logado para excluir sua conta.',
       }
     }
 
-    const storageCleanupResult = await deleteAllUserFiles(user.id)
-
-    if (!storageCleanupResult.ok) {
+    if (username !== profile.username) {
       return {
-        error: DELETE_ACCOUNT_STORAGE_ERROR_MESSAGE,
+        error: 'O username informado nao corresponde a esta conta.',
       }
     }
 
-    try {
-      const { error } = await supabase.rpc('delete_own_account')
+    if (!currentPassword) {
+      return {
+        error: CURRENT_PASSWORD_REQUIRED_MESSAGE,
+      }
+    }
 
-      if (error) {
-        console.error('Erro ao excluir a propria conta:', error)
+    const validationClient = createStatelessSupabaseClient()
+
+    try {
+      const { error: validationError } = await validationClient.auth.signInWithPassword({
+        email: user.email.trim().toLowerCase(),
+        password: currentPassword,
+      })
+
+      if (validationError) {
+        const friendlyError = mapFriendlyAuthError(validationError, 'login')
+
+        if (friendlyError.shouldLog) {
+          logUnexpectedAuthError('login', validationError)
+        }
+
         return {
-          error: DELETE_ACCOUNT_ERROR_MESSAGE,
+          error:
+            friendlyError.reason === 'invalid_credentials'
+              ? CURRENT_PASSWORD_INVALID_MESSAGE
+              : friendlyError.message,
+        }
+      }
+
+      const { data, error } = await supabase.functions.invoke('delete-own-account', {
+        body: {
+          username,
+          currentPassword,
+        },
+      })
+
+      if (error || (data && typeof data === 'object' && 'error' in data)) {
+        const payload = error
+          ? await getFunctionErrorPayload(error)
+          : data as FunctionErrorPayload
+        const errorCode = payload?.error
+
+        console.error('Erro real ao excluir a propria conta:', {
+          error,
+          data,
+          errorCode,
+          payload,
+        })
+
+        return {
+          error: getDeleteAccountErrorMessage(errorCode),
         }
       }
 
@@ -832,7 +928,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         error: DELETE_ACCOUNT_ERROR_MESSAGE,
       }
     }
-  }, [clearAuthState, user])
+  }, [clearAuthState, profile, user])
 
   const logout = useCallback(async () => {
     await supabase.auth.signOut()

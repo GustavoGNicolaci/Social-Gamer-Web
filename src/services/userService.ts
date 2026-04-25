@@ -1,6 +1,11 @@
 import { supabase } from '../supabase-client'
 import { getTopFiveEntriesFromPrivacySettings, type TopFiveStoredEntry } from '../utils/profileTopFive'
-import { isProfilePrivate } from '../utils/profilePrivacy'
+import {
+  canViewRestrictedProfile,
+  getProfilePrivacyMode,
+  getRestrictedProfileMessage,
+  type ProfilePrivacyMode,
+} from '../utils/profilePrivacy'
 
 export interface UserServiceError {
   code?: string
@@ -38,6 +43,9 @@ export interface PublicUserProfile {
   followersCount: number
   followingCount: number
   isPrivate: boolean
+  privacyMode: ProfilePrivacyMode
+  canViewRestrictedContent: boolean
+  restrictedContentMessage: string | null
 }
 
 export interface UserFollowState {
@@ -141,23 +149,107 @@ function compareUsersAlphabetically(leftUser: UserSearchRow, rightUser: UserSear
 function buildPublicProfileResult(
   publicProfileRow: PublicUserRow,
   followersCount: number,
-  followingCount: number
+  followingCount: number,
+  viewerId?: string | null,
+  isMutualFriend = false
 ): PublicUserProfile {
-  const isPrivate = isProfilePrivate(publicProfileRow.configuracoes_privacidade)
+  const privacyMode = getProfilePrivacyMode(publicProfileRow.configuracoes_privacidade)
+  const canViewRestrictedContent = canViewRestrictedProfile({
+    ownerId: publicProfileRow.id,
+    viewerId,
+    privacyMode,
+    isMutualFriend,
+  })
 
   return {
     id: publicProfileRow.id,
     username: publicProfileRow.username,
     nome_completo: publicProfileRow.nome_completo,
     avatar_path: publicProfileRow.avatar_path,
-    bio: isPrivate ? null : publicProfileRow.bio,
+    bio: canViewRestrictedContent ? publicProfileRow.bio : null,
     data_cadastro: publicProfileRow.data_cadastro,
-    topFiveEntries: isPrivate
-      ? []
-      : getTopFiveEntriesFromPrivacySettings(publicProfileRow.configuracoes_privacidade),
+    topFiveEntries: canViewRestrictedContent
+      ? getTopFiveEntriesFromPrivacySettings(publicProfileRow.configuracoes_privacidade)
+      : [],
     followersCount,
     followingCount,
-    isPrivate,
+    isPrivate: privacyMode === 'private',
+    privacyMode,
+    canViewRestrictedContent,
+    restrictedContentMessage: canViewRestrictedContent
+      ? null
+      : getRestrictedProfileMessage(privacyMode),
+  }
+}
+
+export async function getMutualFriendMap(
+  viewerId: string | null | undefined,
+  userIds: string[]
+): Promise<ServiceResult<Map<string, boolean>>> {
+  const uniqueUserIds = Array.from(
+    new Set(userIds.filter(userId => userId && userId !== viewerId))
+  )
+  const mutualFriendMap = new Map<string, boolean>()
+
+  uniqueUserIds.forEach(userId => {
+    mutualFriendMap.set(userId, false)
+  })
+
+  if (!viewerId || uniqueUserIds.length === 0) {
+    return {
+      data: mutualFriendMap,
+      error: null,
+    }
+  }
+
+  try {
+    const [viewerFollowingResponse, followingViewerResponse] = await Promise.all([
+      supabase
+        .from('seguidores')
+        .select('seguido_id')
+        .eq('seguidor_id', viewerId)
+        .in('seguido_id', uniqueUserIds),
+      supabase
+        .from('seguidores')
+        .select('seguidor_id')
+        .eq('seguido_id', viewerId)
+        .in('seguidor_id', uniqueUserIds),
+    ])
+
+    if (viewerFollowingResponse.error || followingViewerResponse.error) {
+      return {
+        data: mutualFriendMap,
+        error: normalizeUserServiceError(
+          viewerFollowingResponse.error || followingViewerResponse.error,
+          'Nao foi possivel verificar amizade mutua.'
+        ),
+      }
+    }
+
+    const viewerFollows = new Set(
+      ((viewerFollowingResponse.data || []) as Array<{ seguido_id: string }>).map(
+        row => row.seguido_id
+      )
+    )
+    const followsViewer = new Set(
+      ((followingViewerResponse.data || []) as Array<{ seguidor_id: string }>).map(
+        row => row.seguidor_id
+      )
+    )
+
+    uniqueUserIds.forEach(userId => {
+      mutualFriendMap.set(userId, viewerFollows.has(userId) && followsViewer.has(userId))
+    })
+
+    return {
+      data: mutualFriendMap,
+      error: null,
+    }
+  } catch (error) {
+    return {
+      data: mutualFriendMap,
+      error: normalizeUserServiceError(error, 'Erro inesperado ao verificar amizade mutua.'),
+    }
   }
 }
 
@@ -461,7 +553,8 @@ export async function searchUsers(
 }
 
 export async function getPublicProfileByUsername(
-  username: string
+  username: string,
+  viewerId?: string | null
 ): Promise<ServiceResult<PublicUserProfile | null>> {
   const normalizedUsername = username.trim()
 
@@ -494,13 +587,26 @@ export async function getPublicProfileByUsername(
     }
 
     const publicProfileRow = data as PublicUserRow
-    const followCountsResult = await getFollowCounts(publicProfileRow.id)
+    const [followCountsResult, mutualFriendResult] = await Promise.all([
+      getFollowCounts(publicProfileRow.id),
+      getMutualFriendMap(viewerId, [publicProfileRow.id]),
+    ])
+
+    if (followCountsResult.error) {
+      console.error('Erro ao carregar contagens do perfil publico:', followCountsResult.error)
+    }
+
+    if (mutualFriendResult.error) {
+      console.error('Erro ao verificar amizade mutua do perfil publico:', mutualFriendResult.error)
+    }
 
     return {
       data: buildPublicProfileResult(
         publicProfileRow,
         followCountsResult.data.followersCount,
-        followCountsResult.data.followingCount
+        followCountsResult.data.followingCount,
+        viewerId,
+        Boolean(mutualFriendResult.data.get(publicProfileRow.id))
       ),
       error: null,
     }

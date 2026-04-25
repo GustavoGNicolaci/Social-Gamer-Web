@@ -1,6 +1,10 @@
 import { supabase } from '../supabase-client'
-import { isProfilePrivate } from '../utils/profilePrivacy'
+import {
+  canViewRestrictedProfile,
+  getProfilePrivacyMode,
+} from '../utils/profilePrivacy'
 import type { CatalogGamePreview } from './gameCatalogService'
+import { getMutualFriendMap } from './userService'
 import {
   getCommentLikeStates,
   getCommentDislikeStates,
@@ -22,6 +26,7 @@ export interface ReviewError {
 }
 
 export interface ReviewAuthor {
+  id?: string
   username: string
   avatar_path: string | null
 }
@@ -117,10 +122,12 @@ interface DeleteReviewParams {
 }
 
 interface GetProfileReviewsOptions {
-  includePrivateAuthorReviews?: boolean
+  currentUserId?: string | null
+  includeRestrictedAuthorReviews?: boolean
 }
 
 interface ReviewAuthorRow {
+  id?: string
   username: string
   avatar_path: string | null
   configuracoes_privacidade?: Record<string, unknown> | null
@@ -186,7 +193,7 @@ const GAME_REVIEW_SELECT = `
   curtidas,
   data_publicacao,
   editado_em,
-  usuario:usuarios(username, avatar_path, configuracoes_privacidade),
+  usuario:usuarios(id, username, avatar_path, configuracoes_privacidade),
   comentarios(
     id,
     usuario_id,
@@ -207,7 +214,7 @@ const PROFILE_REVIEW_SELECT = `
   curtidas,
   data_publicacao,
   editado_em,
-  usuario:usuarios(username, avatar_path, configuracoes_privacidade),
+  usuario:usuarios(id, username, avatar_path, configuracoes_privacidade),
   jogo:jogos(id, titulo, capa_url)
 `
 
@@ -216,7 +223,7 @@ const RECENT_REVIEW_ACTIVITY_SELECT = `
   nota,
   data_publicacao,
   jogos!inner(titulo),
-  usuarios!inner(username, avatar_path, configuracoes_privacidade)
+  usuarios!inner(id, username, avatar_path, configuracoes_privacidade)
 `
 
 function normalizeReviewError(error: unknown, fallbackMessage: string): ReviewError {
@@ -239,8 +246,38 @@ function resolveSingleRelation<T>(value: T | T[] | null | undefined) {
   return value || null
 }
 
-function shouldHideReviewByPrivacy(authorRelation: ReviewAuthorRelation) {
-  return isProfilePrivate(resolveSingleRelation(authorRelation)?.configuracoes_privacidade)
+function canViewReviewAuthor(
+  author: ReviewAuthorRow | null,
+  currentUserId: string | null | undefined,
+  mutualFriendMap: Map<string, boolean>
+) {
+  const privacyMode = getProfilePrivacyMode(author?.configuracoes_privacidade)
+
+  return canViewRestrictedProfile({
+    ownerId: author?.id,
+    viewerId: currentUserId,
+    privacyMode,
+    isMutualFriend: Boolean(author?.id && mutualFriendMap.get(author.id)),
+  })
+}
+
+async function filterReviewRowsByPrivacy<T extends { usuario?: ReviewAuthorRelation; usuarios?: ReviewAuthorRelation }>(
+  rows: T[],
+  currentUserId?: string | null
+) {
+  const authorIds = rows
+    .map(row => resolveSingleRelation(row.usuario || row.usuarios)?.id)
+    .filter((authorId): authorId is string => Boolean(authorId))
+  const mutualFriendMapResult = await getMutualFriendMap(currentUserId, authorIds)
+
+  if (mutualFriendMapResult.error) {
+    console.error('Erro ao verificar amizade mutua para reviews:', mutualFriendMapResult.error)
+  }
+
+  return rows.filter(row => {
+    const author = resolveSingleRelation(row.usuario || row.usuarios)
+    return canViewReviewAuthor(author, currentUserId, mutualFriendMapResult.data)
+  })
 }
 
 function normalizeOptionalText(value: string | null | undefined) {
@@ -377,9 +414,7 @@ export async function getReviewsByGameId(
       }
     }
 
-    const visibleReviewRows = ((data || []) as ReviewRow[]).filter(
-      row => !shouldHideReviewByPrivacy(row.usuario)
-    )
+    const visibleReviewRows = await filterReviewRowsByPrivacy((data || []) as ReviewRow[], currentUserId)
     const visibleReviews = visibleReviewRows.map(row => normalizeReviewItem(row, currentUserId))
 
     if (visibleReviews.length === 0) {
@@ -485,9 +520,9 @@ export async function getReviewsByUserId(
       }
     }
 
-    const reviewRows = ((data || []) as ReviewRow[]).filter(row =>
-      options.includePrivateAuthorReviews ? true : !shouldHideReviewByPrivacy(row.usuario)
-    )
+    const reviewRows = options.includeRestrictedAuthorReviews
+      ? ((data || []) as ReviewRow[])
+      : await filterReviewRowsByPrivacy((data || []) as ReviewRow[], options.currentUserId)
 
     return {
       data: reviewRows.map(normalizeProfileReviewItem),
@@ -502,14 +537,15 @@ export async function getReviewsByUserId(
 }
 
 export async function getRecentPublicReviewActivities(
-  limit = 6
+  limit = 6,
+  currentUserId?: string | null
 ): Promise<ServiceResult<RecentReviewActivity[]>> {
   try {
     const { data, error } = await supabase
       .from('avaliacoes')
       .select(RECENT_REVIEW_ACTIVITY_SELECT)
       .order('data_publicacao', { ascending: false })
-      .limit(limit)
+      .limit(Math.max(limit * 3, limit))
 
     if (error) {
       return {
@@ -518,9 +554,13 @@ export async function getRecentPublicReviewActivities(
       }
     }
 
-    const visibleActivities = ((data || []) as RecentReviewActivityRow[])
-      .filter(row => !shouldHideReviewByPrivacy(row.usuarios))
+    const visibleRows = await filterReviewRowsByPrivacy(
+      (data || []) as RecentReviewActivityRow[],
+      currentUserId
+    )
+    const visibleActivities = visibleRows
       .map(normalizeRecentReviewActivity)
+      .slice(0, limit)
 
     return {
       data: visibleActivities,

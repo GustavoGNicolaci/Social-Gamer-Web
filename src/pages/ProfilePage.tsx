@@ -440,6 +440,7 @@ export function ProfilePage() {
   const [publicProfile, setPublicProfile] = useState<PublicUserProfile | null>(null)
   const [publicProfileLoading, setPublicProfileLoading] = useState(false)
   const [publicProfileError, setPublicProfileError] = useState<string | null>(null)
+  const [publicProfileRefreshKey, setPublicProfileRefreshKey] = useState(0)
   const [draftProfile, setDraftProfile] = useState<ProfileDraft>(() => createProfileDraft(null))
   const [activeTab, setActiveTab] = useState<ProfileTab>('status')
   const [isEditing, setIsEditing] = useState(false)
@@ -494,7 +495,7 @@ export function ProfilePage() {
       setPublicProfileError(null)
       setFollowFeedback(null)
 
-      const result = await getPublicProfileByUsername(requestedUsername)
+      const result = await getPublicProfileByUsername(requestedUsername, user?.id)
 
       if (!isMounted) return
 
@@ -514,7 +515,7 @@ export function ProfilePage() {
     return () => {
       isMounted = false
     }
-  }, [isUsernameRoute, requestedUsername])
+  }, [isUsernameRoute, publicProfileRefreshKey, requestedUsername, user?.id])
 
   const resolvedProfile = useMemo<ResolvedProfile | null>(() => {
     if (!isUsernameRoute) {
@@ -547,7 +548,9 @@ export function ProfilePage() {
   const activeProfile = resolvedProfile?.data || null
   const editableProfile = resolvedProfile?.kind === 'own' ? resolvedProfile.data : null
   const isOwnerView = resolvedProfile?.kind === 'own'
-  const isPrivatePublicView = Boolean(resolvedProfile?.kind === 'public' && resolvedProfile.data.isPrivate)
+  const isRestrictedPublicView = Boolean(
+    resolvedProfile?.kind === 'public' && !resolvedProfile.data.canViewRestrictedContent
+  )
   const topFiveEntries = resolvedProfile?.topFiveEntries || []
 
   useEffect(() => {
@@ -583,7 +586,7 @@ export function ProfilePage() {
     let isMounted = true
 
     const loadProfileCollections = async () => {
-      if (!activeProfile || isPrivatePublicView) {
+      if (!activeProfile || isRestrictedPublicView) {
         if (isMounted) {
           setStatusGames([])
           setStatusError(null)
@@ -609,7 +612,8 @@ export function ProfilePage() {
         loadStatusGames(activeProfile.id),
         getWishlistGamesByUserId(activeProfile.id),
         getReviewsByUserId(activeProfile.id, {
-          includePrivateAuthorReviews: Boolean(isOwnerView),
+          currentUserId: user?.id,
+          includeRestrictedAuthorReviews: Boolean(isOwnerView),
         }),
       ])
 
@@ -648,7 +652,7 @@ export function ProfilePage() {
     return () => {
       isMounted = false
     }
-  }, [activeProfile, isOwnerView, isPrivatePublicView, loadStatusGames])
+  }, [activeProfile, isOwnerView, isRestrictedPublicView, loadStatusGames, user?.id])
 
   useEffect(() => {
     let isMounted = true
@@ -850,15 +854,23 @@ export function ProfilePage() {
     : followState.isFollowing
       ? 'Deixar de seguir'
       : 'Seguir'
-  const sectionEyebrow = isPrivatePublicView
-    ? 'Perfil privado'
+  const restrictedProfileTitle =
+    resolvedProfile?.kind === 'public' && resolvedProfile.data.privacyMode === 'friends'
+      ? 'Somente para amigos'
+      : 'Perfil privado'
+  const restrictedProfileMessage =
+    resolvedProfile?.kind === 'public'
+      ? resolvedProfile.data.restrictedContentMessage
+      : null
+  const sectionEyebrow = isRestrictedPublicView
+    ? restrictedProfileTitle
     : isOwnerView
       ? 'Perfil'
       : 'Perfil publico'
   const canOpenFollowersModal =
-    !isPrivatePublicView && !followLoading && followState.followersCount > 0
+    !isRestrictedPublicView && !followLoading && followState.followersCount > 0
   const canOpenFollowingModal =
-    !isPrivatePublicView && !followLoading && followState.followingCount > 0
+    !isRestrictedPublicView && !followLoading && followState.followingCount > 0
   const canReportProfile = Boolean(user && activeProfile && !isOwnerView)
   const profileReportButtonLabel = profileReportLoading
     ? 'Carregando denuncia do perfil'
@@ -1194,7 +1206,7 @@ export function ProfilePage() {
   const handleOpenConnectionsModal = (kind: FollowListKind) => {
     const totalItems = kind === 'followers' ? followState.followersCount : followState.followingCount
 
-    if (isPrivatePublicView || followLoading || totalItems <= 0) return
+    if (isRestrictedPublicView || followLoading || totalItems <= 0) return
 
     setConnectionsInitialTab(kind)
     setIsConnectionsModalOpen(true)
@@ -1221,6 +1233,7 @@ export function ProfilePage() {
 
     setFollowState(result.data)
     setFollowersRefreshKey(currentKey => currentKey + 1)
+    setPublicProfileRefreshKey(currentKey => currentKey + 1)
     setFollowSubmitting(false)
   }
 
@@ -1446,7 +1459,7 @@ export function ProfilePage() {
                   )}
                 </div>
 
-                {!isPrivatePublicView ? (
+                {!isRestrictedPublicView ? (
                   <div className={`profile-meta${!isOwnerView ? ' public-profile-meta' : ''}`}>
                     <div className="profile-meta-item">
                       <span>Membro desde</span>
@@ -1489,13 +1502,13 @@ export function ProfilePage() {
                   </div>
                 ) : null}
 
-                {isPrivatePublicView ? (
+                {isRestrictedPublicView ? (
                   <div className="profile-private-notice" role="status">
                     <span className="profile-section-label">Privacidade</span>
-                    <h2>Perfil privado</h2>
+                    <h2>{restrictedProfileTitle}</h2>
                     <p>
-                      Este usuario escolheu manter bio, jogos, reviews e conexoes visiveis apenas
-                      para si.
+                      {restrictedProfileMessage ||
+                        'Este usuario escolheu limitar a visibilidade das informacoes do perfil.'}
                     </p>
                   </div>
                 ) : isEditing && isOwnerView ? (
@@ -1585,7 +1598,7 @@ export function ProfilePage() {
               </div>
             </div>
 
-            {!isPrivatePublicView ? (
+            {!isRestrictedPublicView ? (
               <ProfileTopFiveSection
                 isOwnerView={Boolean(isOwnerView)}
                 entries={topFiveEntries}
@@ -1594,7 +1607,7 @@ export function ProfilePage() {
             ) : null}
           </section>
 
-          {!isPrivatePublicView ? (
+          {!isRestrictedPublicView ? (
             <section className="profile-tabs-shell" aria-label="Conteudo do perfil">
               <div className="profile-tabs" role="tablist" aria-label="Navegacao interna do perfil">
                 <button
@@ -1715,7 +1728,7 @@ export function ProfilePage() {
           />
         ) : null}
 
-        {isConnectionsModalOpen && !isPrivatePublicView ? (
+        {isConnectionsModalOpen && !isRestrictedPublicView ? (
           <ProfileConnectionsModal
             initialTab={connectionsInitialTab}
             profileId={activeProfile.id}

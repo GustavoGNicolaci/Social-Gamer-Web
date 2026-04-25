@@ -120,7 +120,7 @@ function HomePage() {
           gameCountResponse,
           reviewCountResponse,
         ] = await Promise.all([
-          getRecentPublicReviewActivities(6),
+          getRecentPublicReviewActivities(6, user?.id),
           supabase
             .from('jogos')
             .select('id, titulo, capa_url, generos')
@@ -168,7 +168,7 @@ function HomePage() {
     return () => {
       isMounted = false
     }
-  }, [])
+  }, [user?.id])
 
   if (loading) {
     return (

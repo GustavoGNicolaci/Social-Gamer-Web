@@ -11,6 +11,8 @@ supabase/*
 !supabase/
 !supabase/migrations/
 !supabase/migrations/*.sql
+!supabase/functions/
+!supabase/functions/**
 node_modules
 dist
 dist-ssr
