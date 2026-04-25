@@ -1,0 +1,69 @@
+.rating-circle {
+  --rating-circle-size: 54px;
+  width: var(--rating-circle-size);
+  height: var(--rating-circle-size);
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 35% 25%, rgba(167, 139, 250, 0.22), transparent 34%),
+    rgba(17, 12, 34, 0.82);
+  color: #fff;
+  box-shadow:
+    0 14px 26px rgba(0, 0, 0, 0.36),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(10px);
+}
+
+.rating-circle-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  transform: rotate(-90deg);
+}
+
+.rating-circle-track,
+.rating-circle-progress {
+  fill: none;
+}
+
+.rating-circle-track {
+  stroke: rgba(255, 255, 255, 0.2);
+}
+
+.rating-circle-progress {
+  stroke: #a78bfa;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 5px rgba(167, 139, 250, 0.44));
+  transition: stroke-dashoffset 0.24s ease;
+}
+
+.rating-circle-value {
+  position: relative;
+  z-index: 1;
+  font-size: 0.82rem;
+  font-weight: 900;
+  line-height: 1;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.72);
+}
+
+.rating-circle.is-empty .rating-circle-progress {
+  stroke: transparent;
+}
+
+.rating-circle.is-empty .rating-circle-value {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+body.light .rating-circle {
+  background:
+    radial-gradient(circle at 35% 25%, rgba(221, 214, 254, 0.88), transparent 34%),
+    rgba(49, 34, 83, 0.84);
+  box-shadow:
+    0 14px 24px rgba(15, 23, 42, 0.22),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.22);
+}

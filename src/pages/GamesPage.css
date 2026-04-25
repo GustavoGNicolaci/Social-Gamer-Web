@@ -26,13 +26,15 @@
 }
 
 .games-page button,
-.games-page input {
+.games-page input,
+.games-page select {
   font: inherit;
 }
 
 .games-page button:focus-visible,
 .games-page a:focus-visible,
-.games-page input:focus-visible {
+.games-page input:focus-visible,
+.games-page select:focus-visible {
   outline: none;
   box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.24);
 }
@@ -117,7 +119,39 @@
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 0.7rem;
-  align-items: flex-start;
+  align-items: flex-end;
+}
+
+.gp-sort-control {
+  display: grid;
+  gap: 0.38rem;
+  min-width: 268px;
+}
+
+.gp-sort-control span {
+  color: rgba(216, 225, 255, 0.72);
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.gp-sort-control select {
+  width: 100%;
+  min-height: 48px;
+  padding: 0.78rem 2.2rem 0.78rem 0.9rem;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.04)),
+    rgba(255, 255, 255, 0.06);
+  color: var(--text-color);
+  cursor: pointer;
+}
+
+.gp-sort-control option {
+  background: #111827;
+  color: #fff;
 }
 
 .gp-panel-stat {
@@ -230,6 +264,10 @@
   color: rgba(216, 225, 255, 0.72);
   font-size: 0.86rem;
   line-height: 1.55;
+}
+
+.gp-panel-footnote.is-warning {
+  color: #ffe4a3;
 }
 
 .gp-search-dropdown {
@@ -582,6 +620,14 @@
   justify-content: flex-end;
 }
 
+.gp-cover-rating {
+  position: absolute;
+  right: 0.72rem;
+  bottom: 0.72rem;
+  z-index: 2;
+  pointer-events: none;
+}
+
 .gp-date {
   padding: 0.42rem 0.7rem;
   border-radius: 999px;
@@ -846,7 +892,8 @@ body.light .gp-modal-section,
 body.light .gp-meta,
 body.light .gp-pagination,
 body.light .gp-btn--secondary,
-body.light .gp-modal-search {
+body.light .gp-modal-search,
+body.light .gp-sort-control select {
   border-color: rgba(148, 163, 184, 0.18);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(241, 245, 255, 0.86)),
@@ -860,6 +907,7 @@ body.light .gp-modal-search input::placeholder {
 
 body.light .gp-search-helper,
 body.light .gp-panel-footnote,
+body.light .gp-sort-control span,
 body.light .gp-panel-stat span,
 body.light .gp-filter-group-head p,
 body.light .gp-meta-row span,
@@ -879,7 +927,13 @@ body.light .gp-search-dropdown {
 }
 
 body.light .gp-search-state,
-body.light .gp-search-option {
+body.light .gp-search-option,
+body.light .gp-sort-control select {
+  color: #17233d;
+}
+
+body.light .gp-sort-control option {
+  background: #fff;
   color: #17233d;
 }
 
@@ -943,6 +997,11 @@ body.light .gp-date {
     display: grid;
   }
 
+  .gp-sort-control {
+    width: 100%;
+    min-width: 0;
+  }
+
   .gp-search-field,
   .gp-modal-search {
     min-height: 54px;
@@ -989,5 +1048,10 @@ body.light .gp-date {
 
   .gp-cover-top {
     inset: 0.75rem 0.75rem auto auto;
+  }
+
+  .gp-cover-rating {
+    right: 0.65rem;
+    bottom: 0.65rem;
   }
 }

@@ -83,6 +83,12 @@ export interface RecentReviewActivity {
   publishedAt: string
 }
 
+export interface GameRatingSummary {
+  gameId: number
+  averageRating: number | null
+  reviewCount: number
+}
+
 interface ServiceResult<T> {
   data: T
   error: ReviewError | null
@@ -168,6 +174,12 @@ interface RecentReviewActivityRow {
   usuarios: ReviewAuthorRelation
 }
 
+interface GameRatingSummaryRow {
+  jogo_id: number
+  nota: number | string | null
+  usuario: ReviewAuthorRelation
+}
+
 interface SaveReviewResult {
   status: 'created' | 'updated' | 'error'
   error: ReviewError | null
@@ -224,6 +236,12 @@ const RECENT_REVIEW_ACTIVITY_SELECT = `
   data_publicacao,
   jogos!inner(titulo),
   usuarios!inner(id, username, avatar_path, configuracoes_privacidade)
+`
+
+const GAME_RATING_SUMMARY_SELECT = `
+  jogo_id,
+  nota,
+  usuario:usuarios(id, username, avatar_path, configuracoes_privacidade)
 `
 
 function normalizeReviewError(error: unknown, fallbackMessage: string): ReviewError {
@@ -570,6 +588,75 @@ export async function getRecentPublicReviewActivities(
     return {
       data: [],
       error: normalizeReviewError(error, 'Erro inesperado ao carregar as reviews recentes.'),
+    }
+  }
+}
+
+export async function getVisibleGameRatingSummaries(
+  gameIds: number[],
+  currentUserId?: string | null
+): Promise<ServiceResult<GameRatingSummary[]>> {
+  const normalizedGameIds = Array.from(
+    new Set(gameIds.filter(gameId => Number.isInteger(gameId) && gameId > 0))
+  )
+
+  if (normalizedGameIds.length === 0) {
+    return {
+      data: [],
+      error: null,
+    }
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('avaliacoes')
+      .select(GAME_RATING_SUMMARY_SELECT)
+      .in('jogo_id', normalizedGameIds)
+
+    if (error) {
+      return {
+        data: [],
+        error: normalizeReviewError(error, 'Nao foi possivel carregar as notas do catalogo.'),
+      }
+    }
+
+    const visibleRows = await filterReviewRowsByPrivacy(
+      (data || []) as GameRatingSummaryRow[],
+      currentUserId
+    )
+    const ratingStatsByGameId = new Map<number, { count: number; total: number }>()
+
+    visibleRows.forEach(row => {
+      const gameId = Number(row.jogo_id)
+      const score = Number(row.nota)
+
+      if (!Number.isInteger(gameId) || !Number.isFinite(score)) {
+        return
+      }
+
+      const currentStats = ratingStatsByGameId.get(gameId) || { count: 0, total: 0 }
+      ratingStatsByGameId.set(gameId, {
+        count: currentStats.count + 1,
+        total: currentStats.total + score,
+      })
+    })
+
+    return {
+      data: normalizedGameIds.map(gameId => {
+        const stats = ratingStatsByGameId.get(gameId)
+
+        return {
+          gameId,
+          averageRating: stats && stats.count > 0 ? stats.total / stats.count : null,
+          reviewCount: stats?.count || 0,
+        }
+      }),
+      error: null,
+    }
+  } catch (error) {
+    return {
+      data: [],
+      error: normalizeReviewError(error, 'Erro inesperado ao carregar as notas do catalogo.'),
     }
   }
 }

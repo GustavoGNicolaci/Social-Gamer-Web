@@ -4,6 +4,12 @@ import {
   type CSSProperties,
 } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import RatingCircle from '../components/RatingCircle'
+import { useAuth } from '../contexts/AuthContext'
+import {
+  getVisibleGameRatingSummaries,
+  type GameRatingSummary,
+} from '../services/reviewService'
 import { supabase } from '../supabase-client'
 import './GamesPage.css'
 
@@ -25,6 +31,7 @@ interface ActiveChipProps {
 
 interface GameCardProps {
   game: Game
+  ratingSummary: GameRatingSummary | null
   onShowGenres: (genres: string[]) => void
 }
 
@@ -36,6 +43,7 @@ interface PaginationProps {
 
 type CatalogFilterCategory = 'title' | 'game' | 'genre' | 'platform' | 'developer'
 type FacetCategory = Extract<CatalogFilterCategory, 'genre' | 'platform' | 'developer'>
+type CatalogSortOption = 'release-desc' | 'release-asc' | 'rating-desc' | 'rating-asc'
 
 interface CatalogFilterToken {
   key: string
@@ -44,6 +52,18 @@ interface CatalogFilterToken {
   label: string
   gameId?: number
 }
+
+const DEFAULT_CATALOG_SORT: CatalogSortOption = 'release-desc'
+
+const CATALOG_SORT_OPTIONS: Array<{
+  value: CatalogSortOption
+  label: string
+}> = [
+  { value: 'release-desc', label: 'Lancamento: mais novos primeiro' },
+  { value: 'release-asc', label: 'Lancamento: mais antigos primeiro' },
+  { value: 'rating-desc', label: 'Nota: maior nota primeiro' },
+  { value: 'rating-asc', label: 'Nota: menor nota primeiro' },
+]
 
 function normalizeList(value: string[] | string | null | undefined) {
   if (!value) return []
@@ -62,6 +82,13 @@ function formatDate(value: string | null | undefined, fallback = 'Nao informada'
   if (Number.isNaN(date.getTime())) return fallback
 
   return date.toLocaleDateString('pt-BR')
+}
+
+function formatCatalogRating(value: number) {
+  return value.toLocaleString('pt-BR', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 1,
+  })
 }
 
 function initial(value: string) {
@@ -85,6 +112,99 @@ function getFacetLabelPrefix(category: FacetCategory) {
 
 function sortAlphabetically(values: string[]) {
   return values.sort((left, right) => left.localeCompare(right, 'pt-BR'))
+}
+
+function getCatalogSortOption(value: string | null): CatalogSortOption {
+  return CATALOG_SORT_OPTIONS.some(option => option.value === value)
+    ? (value as CatalogSortOption)
+    : DEFAULT_CATALOG_SORT
+}
+
+function getSortableTimestamp(value: string | null | undefined) {
+  if (!value) return null
+
+  const timestamp = new Date(value).getTime()
+  return Number.isNaN(timestamp) ? null : timestamp
+}
+
+function compareGamesByTitle(leftGame: Game, rightGame: Game) {
+  const titleDelta = leftGame.titulo.localeCompare(rightGame.titulo, 'pt-BR')
+  if (titleDelta !== 0) return titleDelta
+
+  return leftGame.id - rightGame.id
+}
+
+function compareGamesByRelease(
+  leftGame: Game,
+  rightGame: Game,
+  direction: 'asc' | 'desc'
+) {
+  const leftTimestamp = getSortableTimestamp(leftGame.data_lancamento)
+  const rightTimestamp = getSortableTimestamp(rightGame.data_lancamento)
+
+  if (leftTimestamp !== null && rightTimestamp !== null && leftTimestamp !== rightTimestamp) {
+    return direction === 'desc'
+      ? rightTimestamp - leftTimestamp
+      : leftTimestamp - rightTimestamp
+  }
+
+  if (leftTimestamp !== null && rightTimestamp === null) return -1
+  if (leftTimestamp === null && rightTimestamp !== null) return 1
+
+  return compareGamesByTitle(leftGame, rightGame)
+}
+
+function getGameAverageRating(
+  ratingSummariesByGameId: ReadonlyMap<number, GameRatingSummary>,
+  gameId: number
+) {
+  const rating = ratingSummariesByGameId.get(gameId)?.averageRating
+  return typeof rating === 'number' && Number.isFinite(rating) ? rating : null
+}
+
+function compareGamesByRating(
+  leftGame: Game,
+  rightGame: Game,
+  direction: 'asc' | 'desc',
+  ratingSummariesByGameId: ReadonlyMap<number, GameRatingSummary>
+) {
+  const leftRating = getGameAverageRating(ratingSummariesByGameId, leftGame.id)
+  const rightRating = getGameAverageRating(ratingSummariesByGameId, rightGame.id)
+
+  if (leftRating !== null && rightRating !== null && leftRating !== rightRating) {
+    return direction === 'desc' ? rightRating - leftRating : leftRating - rightRating
+  }
+
+  if (leftRating !== null && rightRating === null) return -1
+  if (leftRating === null && rightRating !== null) return 1
+
+  return compareGamesByRelease(leftGame, rightGame, 'desc')
+}
+
+function sortCatalogGames(
+  games: Game[],
+  sortOption: CatalogSortOption,
+  ratingSummariesByGameId: ReadonlyMap<number, GameRatingSummary>
+) {
+  return [...games].sort((leftGame, rightGame) => {
+    if (sortOption === 'release-asc') {
+      return compareGamesByRelease(leftGame, rightGame, 'asc')
+    }
+
+    if (sortOption === 'rating-desc') {
+      return compareGamesByRating(leftGame, rightGame, 'desc', ratingSummariesByGameId)
+    }
+
+    if (sortOption === 'rating-asc') {
+      return compareGamesByRating(leftGame, rightGame, 'asc', ratingSummariesByGameId)
+    }
+
+    return compareGamesByRelease(leftGame, rightGame, 'desc')
+  })
+}
+
+function buildRatingSummaryMap(summaries: GameRatingSummary[]) {
+  return new Map(summaries.map(summary => [summary.gameId, summary]))
 }
 
 function buildFacetToken(category: FacetCategory, value: string): CatalogFilterToken {
@@ -121,10 +241,15 @@ function StaticChip({ label }: { label: string }) {
   return <span className="gp-chip gp-chip--static">{label}</span>
 }
 
-function GameCard({ game, onShowGenres }: GameCardProps) {
+function GameCard({ game, ratingSummary, onShowGenres }: GameCardProps) {
   const genres = normalizeList(game.generos)
   const displayedGenres = genres.slice(0, 2)
   const hasMoreGenres = genres.length > 2
+  const averageRating = ratingSummary?.averageRating ?? null
+  const ratingAriaLabel =
+    averageRating === null
+      ? `Sem nota para ${game.titulo}`
+      : `Media ${formatCatalogRating(averageRating)} de 10 para ${game.titulo}`
 
   return (
     <article className="gp-game">
@@ -137,6 +262,10 @@ function GameCard({ game, onShowGenres }: GameCardProps) {
 
         <div className="gp-cover-top">
           <span className="gp-date">{formatDate(game.data_lancamento)}</span>
+        </div>
+
+        <div className="gp-cover-rating">
+          <RatingCircle value={averageRating} size={52} ariaLabel={ratingAriaLabel} />
         </div>
       </Link>
 
@@ -223,9 +352,14 @@ function PaginationControls({ currentPage, totalPages, onChangePage }: Paginatio
 }
 
 function GamesPage() {
+  const { user } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
   const [games, setGames] = useState<Game[]>([])
+  const [ratingSummariesByGameId, setRatingSummariesByGameId] = useState<Map<number, GameRatingSummary>>(
+    () => new Map()
+  )
   const [loading, setLoading] = useState(true)
+  const [ratingsError, setRatingsError] = useState<string | null>(null)
   const [facetFilters, setFacetFilters] = useState<CatalogFilterToken[]>([])
   const [currentPage, setCurrentPage] = useState(1)
   const [gridColumns, setGridColumns] = useState(() =>
@@ -237,6 +371,7 @@ function GamesPage() {
   const [filtersModalSearch, setFiltersModalSearch] = useState('')
 
   const navbarQuery = searchParams.get('q')?.trim() || ''
+  const catalogSort = getCatalogSortOption(searchParams.get('sort'))
   const trimmedModalSearch = filtersModalSearch.trim()
   const normalizedNavbarQuery = navbarQuery.toLowerCase()
   const itemsPerPage = gridColumns * 4
@@ -245,6 +380,9 @@ function GamesPage() {
     let isMounted = true
 
     const fetchGames = async () => {
+      setLoading(true)
+      setRatingsError(null)
+
       const { data, error } = await supabase.from('jogos').select('*')
 
       if (!isMounted) return
@@ -252,8 +390,27 @@ function GamesPage() {
       if (error) {
         console.error('Erro ao buscar jogos:', error)
         setGames([])
+        setRatingSummariesByGameId(new Map())
+        setLoading(false)
+        return
+      }
+
+      const nextGames = (data || []) as Game[]
+      setGames(nextGames)
+
+      const ratingSummariesResult = await getVisibleGameRatingSummaries(
+        nextGames.map(game => game.id),
+        user?.id
+      )
+
+      if (!isMounted) return
+
+      if (ratingSummariesResult.error) {
+        console.error('Erro ao buscar notas do catalogo:', ratingSummariesResult.error)
+        setRatingSummariesByGameId(new Map())
+        setRatingsError('Nao foi possivel carregar as notas do catalogo agora.')
       } else {
-        setGames((data || []) as Game[])
+        setRatingSummariesByGameId(buildRatingSummaryMap(ratingSummariesResult.data))
       }
 
       setLoading(false)
@@ -264,7 +421,7 @@ function GamesPage() {
     return () => {
       isMounted = false
     }
-  }, [])
+  }, [user?.id])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -308,7 +465,7 @@ function GamesPage() {
     return () => {
       window.clearTimeout(timeoutId)
     }
-  }, [facetFilters, navbarQuery])
+  }, [catalogSort, facetFilters, navbarQuery])
 
   useEffect(() => {
     if (showFiltersModal) return
@@ -334,6 +491,18 @@ function GamesPage() {
         } else {
           nextParams.delete('q')
         }
+
+        return nextParams
+      },
+      { replace: true }
+    )
+  }
+
+  const updateCatalogSort = (nextSort: CatalogSortOption) => {
+    setSearchParams(
+      currentParams => {
+        const nextParams = new URLSearchParams(currentParams)
+        nextParams.set('sort', nextSort)
 
         return nextParams
       },
@@ -447,17 +616,18 @@ function GamesPage() {
   const modalPlatformOptions = buildVisibleFacetOptions(allPlatforms, trimmedModalSearch)
   const modalDeveloperOptions = buildVisibleFacetOptions(allDevelopers, trimmedModalSearch)
 
-  const totalPages = Math.ceil(filteredGames.length / itemsPerPage)
+  const sortedGames = sortCatalogGames(filteredGames, catalogSort, ratingSummariesByGameId)
+  const totalPages = Math.ceil(sortedGames.length / itemsPerPage)
   const safeCurrentPage = totalPages === 0 ? 1 : Math.min(currentPage, totalPages)
   const startIndex = (safeCurrentPage - 1) * itemsPerPage
   const endIndex = startIndex + itemsPerPage
-  const gamesToDisplay = filteredGames.slice(startIndex, endIndex)
-  const visibleStart = filteredGames.length === 0 ? 0 : startIndex + 1
-  const visibleEnd = Math.min(endIndex, filteredGames.length)
+  const gamesToDisplay = sortedGames.slice(startIndex, endIndex)
+  const visibleStart = sortedGames.length === 0 ? 0 : startIndex + 1
+  const visibleEnd = Math.min(endIndex, sortedGames.length)
   const rangeLabel =
-    filteredGames.length === 0
+    sortedGames.length === 0
       ? 'Nenhum item para exibir'
-      : `Mostrando ${visibleStart}-${visibleEnd} de ${filteredGames.length}`
+      : `Mostrando ${visibleStart}-${visibleEnd} de ${sortedGames.length}`
 
   const gridStyle = {
     '--gp-grid-columns': String(gridColumns),
@@ -516,6 +686,21 @@ function GamesPage() {
             </div>
 
             <div className="gp-panel-summary">
+              <label className="gp-sort-control">
+                <span>Ordenar por</span>
+                <select
+                  value={catalogSort}
+                  onChange={event => updateCatalogSort(event.target.value as CatalogSortOption)}
+                  aria-label="Ordenar catalogo de jogos"
+                >
+                  {CATALOG_SORT_OPTIONS.map(option => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
               <button
                 type="button"
                 className="game-button gp-btn--secondary"
@@ -540,6 +725,8 @@ function GamesPage() {
                 ? `Busca global ativa: "${navbarQuery}". ${rangeLabel}`
                 : rangeLabel}
             </p>
+
+            {ratingsError ? <p className="gp-panel-footnote is-warning">{ratingsError}</p> : null}
           </div>
         </section>
 
@@ -566,6 +753,7 @@ function GamesPage() {
                 <GameCard
                   key={game.id}
                   game={game}
+                  ratingSummary={ratingSummariesByGameId.get(game.id) || null}
                   onShowGenres={genres => {
                     setSelectedGameGenres(genres)
                     setShowGenresModal(true)
