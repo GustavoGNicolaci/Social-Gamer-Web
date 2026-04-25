@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
-import { supabase } from '../supabase-client'
+import { deleteAllUserFiles } from '../services/storageService'
+import { createStatelessSupabaseClient, supabase } from '../supabase-client'
 import { getPasswordValidationError } from '../utils/passwordValidation'
 import {
   INVALID_EMAIL_MESSAGE,
@@ -13,6 +14,12 @@ import {
 } from '../utils/authErrorMessages'
 
 const USERNAME_TAKEN_MESSAGE = 'Esse nome de usuario ja esta em uso.'
+const CURRENT_PASSWORD_REQUIRED_MESSAGE = 'Informe sua senha atual.'
+const CURRENT_PASSWORD_INVALID_MESSAGE = 'A senha atual informada nao esta correta.'
+const DELETE_ACCOUNT_ERROR_MESSAGE =
+  'Nao foi possivel excluir sua conta agora. Tente novamente em alguns instantes.'
+const DELETE_ACCOUNT_STORAGE_ERROR_MESSAGE =
+  'Nao foi possivel remover seus arquivos agora. Tente novamente em alguns instantes.'
 const USER_PROFILE_SELECT =
   'id, username, nome_completo, avatar_path, avatar_url, bio, data_cadastro, configuracoes_privacidade'
 
@@ -82,7 +89,9 @@ interface AuthContextValue {
   logout: () => Promise<void>
   register: (input: RegisterInput) => Promise<RegisterResult>
   requestPasswordReset: (email: string) => Promise<{ error: string | null }>
+  requestAuthenticatedPasswordReset: (currentPassword: string) => Promise<{ error: string | null }>
   updatePassword: (password: string) => Promise<{ error: string | null }>
+  deleteOwnAccount: () => Promise<{ error: string | null }>
   refreshProfile: () => Promise<UserProfile | null>
   updateOwnProfile: (
     updates: UserProfileUpdates
@@ -188,6 +197,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState<boolean>(true)
+
+  const clearAuthState = useCallback(() => {
+    setSession(null)
+    setUser(null)
+    setProfile(null)
+  }, [])
 
   const fetchProfile = useCallback(async (userId: string) => {
     try {
@@ -446,9 +461,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
           if (!nextProfile) {
             await supabase.auth.signOut()
-            setSession(null)
-            setUser(null)
-            setProfile(null)
+            clearAuthState()
 
             return {
               status: 'system_error',
@@ -484,7 +497,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
       }
     },
-    [fetchOrCreateProfile]
+    [clearAuthState, fetchOrCreateProfile]
   )
 
   const updateOwnProfile = useCallback(
@@ -680,6 +693,67 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [])
 
+  const requestAuthenticatedPasswordReset = useCallback(
+    async (currentPassword: string) => {
+      if (!user?.email) {
+        return {
+          error: 'Voce precisa estar logado para alterar a senha.',
+        }
+      }
+
+      if (!currentPassword) {
+        return {
+          error: CURRENT_PASSWORD_REQUIRED_MESSAGE,
+        }
+      }
+
+      const validationClient = createStatelessSupabaseClient()
+
+      try {
+        const { error: validationError } = await validationClient.auth.signInWithPassword({
+          email: user.email.trim().toLowerCase(),
+          password: currentPassword,
+        })
+
+        if (validationError) {
+          const friendlyError = mapFriendlyAuthError(validationError, 'login')
+
+          if (friendlyError.shouldLog) {
+            logUnexpectedAuthError('login', validationError)
+          }
+
+          return {
+            error:
+              friendlyError.reason === 'invalid_credentials'
+                ? CURRENT_PASSWORD_INVALID_MESSAGE
+                : friendlyError.message,
+          }
+        }
+
+        const resetResult = await requestPasswordReset(user.email)
+
+        if (resetResult.error) {
+          return resetResult
+        }
+
+        return {
+          error: null,
+        }
+      } catch (error) {
+        const friendlyError = mapFriendlyAuthError(error, 'login')
+
+        if (friendlyError.shouldLog) {
+          logUnexpectedAuthError('login', error)
+        }
+
+        return {
+          error: friendlyError.message,
+        }
+      }
+    },
+    [requestPasswordReset, user]
+  )
+
   const updatePassword = useCallback(async (password: string) => {
     const passwordError = getPasswordValidationError(password)
 
@@ -716,10 +790,54 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [])
 
+  const deleteOwnAccount = useCallback(async () => {
+    if (!user) {
+      return {
+        error: 'Voce precisa estar logado para excluir sua conta.',
+      }
+    }
+
+    const storageCleanupResult = await deleteAllUserFiles(user.id)
+
+    if (!storageCleanupResult.ok) {
+      return {
+        error: DELETE_ACCOUNT_STORAGE_ERROR_MESSAGE,
+      }
+    }
+
+    try {
+      const { error } = await supabase.rpc('delete_own_account')
+
+      if (error) {
+        console.error('Erro ao excluir a propria conta:', error)
+        return {
+          error: DELETE_ACCOUNT_ERROR_MESSAGE,
+        }
+      }
+
+      try {
+        await supabase.auth.signOut({ scope: 'local' })
+      } catch (signOutError) {
+        console.error('Erro ao encerrar sessao local apos excluir conta:', signOutError)
+      }
+
+      clearAuthState()
+
+      return {
+        error: null,
+      }
+    } catch (error) {
+      console.error('Erro inesperado ao excluir a propria conta:', error)
+      return {
+        error: DELETE_ACCOUNT_ERROR_MESSAGE,
+      }
+    }
+  }, [clearAuthState, user])
+
   const logout = useCallback(async () => {
     await supabase.auth.signOut()
-    setProfile(null)
-  }, [])
+    clearAuthState()
+  }, [clearAuthState])
 
   return (
     <AuthContext.Provider
@@ -732,7 +850,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         logout,
         register,
         requestPasswordReset,
+        requestAuthenticatedPasswordReset,
         updatePassword,
+        deleteOwnAccount,
         refreshProfile,
         updateOwnProfile,
       }}

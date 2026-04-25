@@ -7,7 +7,10 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-supabase
+supabase/*
+!supabase/
+!supabase/migrations/
+!supabase/migrations/*.sql
 node_modules
 dist
 dist-ssr

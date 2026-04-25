@@ -11,6 +11,16 @@ export interface StorageUploadResult {
   url: string
 }
 
+interface StorageCleanupResult {
+  ok: boolean
+  deletedPaths: string[]
+}
+
+interface StorageListEntry {
+  name: string
+  id?: string | null
+}
+
 function sanitizeFileName(fileName: string) {
   const trimmedFileName = fileName.trim().toLowerCase()
   const extensionIndex = trimmedFileName.lastIndexOf('.')
@@ -88,6 +98,57 @@ export function extractAvatarPathFromPublicUrl(avatarUrl: string | null | undefi
 
 function buildStoragePath(userId: string, folder: string, fileName: string) {
   return `${userId}/${folder}/${Date.now()}-${sanitizeFileName(fileName)}`
+}
+
+async function listAllFilePathsByPrefix(prefix: string) {
+  const normalizedPrefix = normalizeStoragePath(prefix)
+
+  if (!normalizedPrefix) {
+    return {
+      data: [] as string[],
+      error: null,
+    }
+  }
+
+  const pendingPrefixes = [normalizedPrefix]
+  const discoveredPaths: string[] = []
+
+  while (pendingPrefixes.length > 0) {
+    const currentPrefix = pendingPrefixes.shift()
+
+    if (!currentPrefix) {
+      continue
+    }
+
+    const { data, error } = await supabase.storage.from(BUCKET_NAME).list(currentPrefix, {
+      limit: 100,
+      offset: 0,
+    })
+
+    if (error) {
+      console.error('List error:', error)
+      return {
+        data: discoveredPaths,
+        error,
+      }
+    }
+
+    for (const item of (data || []) as StorageListEntry[]) {
+      const nestedPath = `${currentPrefix}/${item.name}`
+
+      if (item.id) {
+        discoveredPaths.push(nestedPath)
+        continue
+      }
+
+      pendingPrefixes.push(nestedPath)
+    }
+  }
+
+  return {
+    data: discoveredPaths,
+    error: null,
+  }
 }
 
 async function uploadValidatedFile(
@@ -169,6 +230,55 @@ export async function listUserFiles(
   } catch (error) {
     console.error('List exception:', error)
     return null
+  }
+}
+
+export async function deleteAllUserFiles(userId: string): Promise<StorageCleanupResult> {
+  const listResult = await listAllFilePathsByPrefix(userId)
+
+  if (listResult.error) {
+    return {
+      ok: false,
+      deletedPaths: listResult.data,
+    }
+  }
+
+  if (listResult.data.length === 0) {
+    return {
+      ok: true,
+      deletedPaths: [],
+    }
+  }
+
+  const deletedPaths: string[] = []
+
+  for (let startIndex = 0; startIndex < listResult.data.length; startIndex += 1000) {
+    const currentChunk = listResult.data.slice(startIndex, startIndex + 1000)
+
+    try {
+      const { error } = await supabase.storage.from(BUCKET_NAME).remove(currentChunk)
+
+      if (error) {
+        console.error('Bulk delete error:', error)
+        return {
+          ok: false,
+          deletedPaths,
+        }
+      }
+
+      deletedPaths.push(...currentChunk)
+    } catch (error) {
+      console.error('Bulk delete exception:', error)
+      return {
+        ok: false,
+        deletedPaths,
+      }
+    }
+  }
+
+  return {
+    ok: true,
+    deletedPaths,
   }
 }
 

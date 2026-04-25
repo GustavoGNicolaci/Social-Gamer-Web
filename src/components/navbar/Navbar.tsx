@@ -36,6 +36,116 @@ function getGameMetaLine(game: CatalogGamePreview) {
   return [studio || primaryPlatform || 'Ver detalhes do jogo', year].filter(Boolean).join(' - ')
 }
 
+function iconMenuUser() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none">
+      <path
+        d="M12 12C14.7614 12 17 9.76142 17 7C17 4.23858 14.7614 2 12 2C9.23858 2 7 4.23858 7 7C7 9.76142 9.23858 12 12 12Z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      />
+      <path
+        d="M4 20C4.9 16.8 7.9 14.5 12 14.5C16.1 14.5 19.1 16.8 20 20"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
+function iconMenuSettings() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none">
+      <path
+        d="M12 8.5C10.067 8.5 8.5 10.067 8.5 12C8.5 13.933 10.067 15.5 12 15.5C13.933 15.5 15.5 13.933 15.5 12C15.5 10.067 13.933 8.5 12 8.5Z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      />
+      <path
+        d="M19.4 13.5C19.46 13.01 19.5 12.51 19.5 12C19.5 11.49 19.46 10.99 19.4 10.5L21.2 9.1L19.4 5.9L17.2 6.5C16.43 5.84 15.53 5.33 14.55 5.03L14 2.8H10L9.45 5.03C8.47 5.33 7.57 5.84 6.8 6.5L4.6 5.9L2.8 9.1L4.6 10.5C4.54 10.99 4.5 11.49 4.5 12C4.5 12.51 4.54 13.01 4.6 13.5L2.8 14.9L4.6 18.1L6.8 17.5C7.57 18.16 8.47 18.67 9.45 18.97L10 21.2H14L14.55 18.97C15.53 18.67 16.43 18.16 17.2 17.5L19.4 18.1L21.2 14.9L19.4 13.5Z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function iconMenuTheme() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none">
+      <path
+        d="M21 12.79C20.13 13.15 19.17 13.35 18.17 13.35C14.21 13.35 11 10.14 11 6.18C11 5.18 11.2 4.22 11.56 3.35C7.34 3.55 4 7.03 4 11.3C4 15.7 7.58 19.28 11.98 19.28C16.25 19.28 19.73 15.94 21 12.79Z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function iconMenuLogout() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none">
+      <path
+        d="M14 16L18 12L14 8"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M9 12H18"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+      <path
+        d="M10 4H7C5.9 4 5 4.9 5 6V18C5 19.1 5.9 20 7 20H10"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function iconAvatarBadge() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M12 13C14.2091 13 16 11.2091 16 9C16 6.79086 14.2091 5 12 5C9.79086 5 8 6.79086 8 9C8 11.2091 9.79086 13 12 13Z"
+        stroke="currentColor"
+        strokeWidth="2"
+      />
+      <path
+        d="M6.5 19C7.5 16.7 9.5 15.3 12 15.3C14.5 15.3 16.5 16.7 17.5 19"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
+function iconChevron() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M7 10L12 15L17 10"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
 function getCatalogSearchErrorMessage(error: { code?: string; message: string; details?: string | null; hint?: string | null } | null) {
   if (!error) return 'Nao foi possivel buscar jogos agora.'
   const fullMessage = [error.message, error.details, error.hint].filter(Boolean).join(' ').toLowerCase()
@@ -98,6 +208,7 @@ function Navbar() {
 
   const displayName = profile?.username || user?.email || 'Perfil'
   const profileLabel = profile?.nome_completo || displayName
+  const ownProfilePath = profile?.username ? getPublicProfilePath(profile.username) : '/profile'
   const themeToggleLabel = theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'
   const themeStatusLabel = `Tema atual: ${theme === 'dark' ? 'escuro' : 'claro'}`
   const searchResultsId = 'navbar-search-results'
@@ -442,16 +553,19 @@ function Navbar() {
               <button type="button" className={`navbar-profile-trigger${showMenu ? ' is-open' : ''}`} aria-expanded={showMenu} aria-haspopup="menu" aria-label={showMenu ? 'Fechar menu do perfil' : 'Abrir menu do perfil'} onClick={() => { clearMenuCloseTimeout(); setShowMenu(currentValue => !currentValue) }}>
                 <span className="navbar-avatar-shell">
                   <UserAvatar name={profileLabel} avatarPath={profile?.avatar_path} imageClassName="navbar-avatar-img" fallbackClassName="navbar-avatar-placeholder" alt={`Foto de perfil de ${profileLabel}`} />
-                  <span className="navbar-avatar-badge" aria-hidden="true">U</span>
+                  <span className="navbar-avatar-badge" aria-hidden="true">
+                    <span className="navbar-avatar-badge-icon">{iconAvatarBadge()}</span>
+                  </span>
                 </span>
                 <span className="navbar-profile-copy"><span className="navbar-profile-eyebrow">Seu perfil</span><span className="navbar-profile-name">{displayName}</span></span>
-                <span className="navbar-profile-chevron" aria-hidden="true">v</span>
+                <span className="navbar-profile-chevron" aria-hidden="true">{iconChevron()}</span>
               </button>
               {showMenu ? (
                 <div className="navbar-dropdown" role="menu" aria-label="Menu do perfil">
-                  <Link to="/profile" className="navbar-dropdown-item" role="menuitem" onClick={closeMenu}><span className="navbar-dropdown-icon" aria-hidden="true">P</span><span className="navbar-dropdown-copy"><span className="navbar-dropdown-title">Ver Perfil</span><span className="navbar-dropdown-hint">Abrir sua pagina de perfil e editar dados permitidos</span></span></Link>
-                  <button className="navbar-dropdown-item" type="button" role="menuitem" onClick={() => { setTheme(prev => (prev === 'dark' ? 'light' : 'dark')); closeMenu() }}><span className="navbar-dropdown-icon" aria-hidden="true">T</span><span className="navbar-dropdown-copy"><span className="navbar-dropdown-title">{themeToggleLabel}</span><span className="navbar-dropdown-hint">{themeStatusLabel}</span></span></button>
-                  <button className="navbar-dropdown-item is-danger" type="button" role="menuitem" onClick={async () => { await logout(); closeMenu(); navigate('/') }}><span className="navbar-dropdown-icon" aria-hidden="true">S</span><span className="navbar-dropdown-copy"><span className="navbar-dropdown-title">Sair</span><span className="navbar-dropdown-hint">Encerrar sessao atual</span></span></button>
+                  <Link to={ownProfilePath} className="navbar-dropdown-item" role="menuitem" onClick={closeMenu}><span className="navbar-dropdown-icon" aria-hidden="true">{iconMenuUser()}</span><span className="navbar-dropdown-copy"><span className="navbar-dropdown-title">Perfil</span><span className="navbar-dropdown-hint">Abrir seu perfil pela rota publica da aplicacao</span></span></Link>
+                  <Link to="/configuracoes/conta" className="navbar-dropdown-item" role="menuitem" onClick={closeMenu}><span className="navbar-dropdown-icon" aria-hidden="true">{iconMenuSettings()}</span><span className="navbar-dropdown-copy"><span className="navbar-dropdown-title">Configuracoes</span><span className="navbar-dropdown-hint">Privacidade, senha e exclusao da conta</span></span></Link>
+                  <button className="navbar-dropdown-item" type="button" role="menuitem" onClick={() => { setTheme(prev => (prev === 'dark' ? 'light' : 'dark')); closeMenu() }}><span className="navbar-dropdown-icon" aria-hidden="true">{iconMenuTheme()}</span><span className="navbar-dropdown-copy"><span className="navbar-dropdown-title">{themeToggleLabel}</span><span className="navbar-dropdown-hint">{themeStatusLabel}</span></span></button>
+                  <button className="navbar-dropdown-item is-danger" type="button" role="menuitem" onClick={async () => { await logout(); closeMenu(); navigate('/') }}><span className="navbar-dropdown-icon" aria-hidden="true">{iconMenuLogout()}</span><span className="navbar-dropdown-copy"><span className="navbar-dropdown-title">Sair</span><span className="navbar-dropdown-hint">Encerrar sessao atual</span></span></button>
                 </div>
               ) : null}
             </div>

@@ -1,4 +1,5 @@
 import { supabase } from '../supabase-client'
+import { isProfilePrivate } from '../utils/profilePrivacy'
 import type { CatalogGamePreview } from './gameCatalogService'
 import {
   getCommentLikeStates,
@@ -67,6 +68,16 @@ export interface ProfileReviewItem extends ReviewItem {
   jogo: ReviewGamePreview | null
 }
 
+export interface RecentReviewActivity {
+  id: string
+  authorName: string
+  authorAvatar: string | null
+  gameTitle: string
+  summary: string
+  score: number | null
+  publishedAt: string
+}
+
 interface ServiceResult<T> {
   data: T
   error: ReviewError | null
@@ -105,9 +116,14 @@ interface DeleteReviewParams {
   reviewId: string
 }
 
+interface GetProfileReviewsOptions {
+  includePrivateAuthorReviews?: boolean
+}
+
 interface ReviewAuthorRow {
   username: string
   avatar_path: string | null
+  configuracoes_privacidade?: Record<string, unknown> | null
 }
 
 type ReviewAuthorRelation = ReviewAuthorRow | ReviewAuthorRow[] | null
@@ -137,6 +153,14 @@ interface ReviewRow {
   jogo?: ReviewGameRelation
 }
 
+interface RecentReviewActivityRow {
+  id: string
+  nota: number | null
+  data_publicacao: string
+  jogos: { titulo: string } | { titulo: string }[] | null
+  usuarios: ReviewAuthorRelation
+}
+
 interface SaveReviewResult {
   status: 'created' | 'updated' | 'error'
   error: ReviewError | null
@@ -162,7 +186,7 @@ const GAME_REVIEW_SELECT = `
   curtidas,
   data_publicacao,
   editado_em,
-  usuario:usuarios(username, avatar_path),
+  usuario:usuarios(username, avatar_path, configuracoes_privacidade),
   comentarios(
     id,
     usuario_id,
@@ -183,8 +207,16 @@ const PROFILE_REVIEW_SELECT = `
   curtidas,
   data_publicacao,
   editado_em,
-  usuario:usuarios(username, avatar_path),
+  usuario:usuarios(username, avatar_path, configuracoes_privacidade),
   jogo:jogos(id, titulo, capa_url)
+`
+
+const RECENT_REVIEW_ACTIVITY_SELECT = `
+  id,
+  nota,
+  data_publicacao,
+  jogos!inner(titulo),
+  usuarios!inner(username, avatar_path, configuracoes_privacidade)
 `
 
 function normalizeReviewError(error: unknown, fallbackMessage: string): ReviewError {
@@ -205,6 +237,10 @@ function normalizeReviewError(error: unknown, fallbackMessage: string): ReviewEr
 function resolveSingleRelation<T>(value: T | T[] | null | undefined) {
   if (Array.isArray(value)) return value[0] || null
   return value || null
+}
+
+function shouldHideReviewByPrivacy(authorRelation: ReviewAuthorRelation) {
+  return isProfilePrivate(resolveSingleRelation(authorRelation)?.configuracoes_privacidade)
 }
 
 function normalizeOptionalText(value: string | null | undefined) {
@@ -308,6 +344,21 @@ function normalizeProfileReviewItem(row: ReviewRow): ProfileReviewItem {
   }
 }
 
+function normalizeRecentReviewActivity(row: RecentReviewActivityRow): RecentReviewActivity {
+  const reviewGame = resolveSingleRelation(row.jogos)
+  const reviewUser = resolveSingleRelation(row.usuarios)
+
+  return {
+    id: row.id,
+    authorName: reviewUser?.username || 'Usuario',
+    authorAvatar: reviewUser?.avatar_path || null,
+    gameTitle: reviewGame?.titulo || 'Jogo desconhecido',
+    summary: 'Publicou uma review na comunidade.',
+    score: row.nota ?? null,
+    publishedAt: row.data_publicacao,
+  }
+}
+
 export async function getReviewsByGameId(
   gameId: number,
   currentUserId?: string | null
@@ -326,19 +377,20 @@ export async function getReviewsByGameId(
       }
     }
 
-    const normalizedReviews = ((data || []) as ReviewRow[]).map(row =>
-      normalizeReviewItem(row, currentUserId)
+    const visibleReviewRows = ((data || []) as ReviewRow[]).filter(
+      row => !shouldHideReviewByPrivacy(row.usuario)
     )
+    const visibleReviews = visibleReviewRows.map(row => normalizeReviewItem(row, currentUserId))
 
-    if (normalizedReviews.length === 0) {
+    if (visibleReviews.length === 0) {
       return {
-        data: normalizedReviews,
+        data: visibleReviews,
         error: null,
       }
     }
 
-    const reviewIds = normalizedReviews.map(review => review.id)
-    const commentIds = normalizedReviews.flatMap(review => review.comentarios.map(comment => comment.id))
+    const reviewIds = visibleReviews.map(review => review.id)
+    const commentIds = visibleReviews.flatMap(review => review.comentarios.map(comment => comment.id))
 
     const [
       likeStatesResult,
@@ -355,7 +407,7 @@ export async function getReviewsByGameId(
         getCurrentUserContentReports(reviewIds, commentIds, currentUserId),
       ])
 
-    const reviewsWithInteractionState = sortReviewsByRelevance(normalizedReviews.map(review => {
+    const reviewsWithInteractionState = sortReviewsByRelevance(visibleReviews.map(review => {
       const likeState = likeStatesResult.data.get(review.id)
       const dislikeState = dislikeStatesResult.data.get(review.id)
 
@@ -415,7 +467,10 @@ export async function getReviewsByGameId(
   }
 }
 
-export async function getReviewsByUserId(userId: string): Promise<ServiceResult<ProfileReviewItem[]>> {
+export async function getReviewsByUserId(
+  userId: string,
+  options: GetProfileReviewsOptions = {}
+): Promise<ServiceResult<ProfileReviewItem[]>> {
   try {
     const { data, error } = await supabase
       .from('avaliacoes')
@@ -430,14 +485,51 @@ export async function getReviewsByUserId(userId: string): Promise<ServiceResult<
       }
     }
 
+    const reviewRows = ((data || []) as ReviewRow[]).filter(row =>
+      options.includePrivateAuthorReviews ? true : !shouldHideReviewByPrivacy(row.usuario)
+    )
+
     return {
-      data: ((data || []) as ReviewRow[]).map(normalizeProfileReviewItem),
+      data: reviewRows.map(normalizeProfileReviewItem),
       error: null,
     }
   } catch (error) {
     return {
       data: [],
       error: normalizeReviewError(error, 'Erro inesperado ao carregar as reviews do perfil.'),
+    }
+  }
+}
+
+export async function getRecentPublicReviewActivities(
+  limit = 6
+): Promise<ServiceResult<RecentReviewActivity[]>> {
+  try {
+    const { data, error } = await supabase
+      .from('avaliacoes')
+      .select(RECENT_REVIEW_ACTIVITY_SELECT)
+      .order('data_publicacao', { ascending: false })
+      .limit(limit)
+
+    if (error) {
+      return {
+        data: [],
+        error: normalizeReviewError(error, 'Nao foi possivel carregar as reviews recentes.'),
+      }
+    }
+
+    const visibleActivities = ((data || []) as RecentReviewActivityRow[])
+      .filter(row => !shouldHideReviewByPrivacy(row.usuarios))
+      .map(normalizeRecentReviewActivity)
+
+    return {
+      data: visibleActivities,
+      error: null,
+    }
+  } catch (error) {
+    return {
+      data: [],
+      error: normalizeReviewError(error, 'Erro inesperado ao carregar as reviews recentes.'),
     }
   }
 }

@@ -4,6 +4,7 @@ import HomePage from './pages/HomePage'
 import GamesPage from './pages/GamesPage'
 import GameDetailsPage from './pages/GameDetailsPage'
 import { ProfilePage } from './pages/ProfilePage'
+import AccountSettingsPage from './pages/AccountSettingsPage'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
@@ -20,6 +21,7 @@ function App() {
         <Route path="/games/:id" element={<GameDetailsPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/u/:username" element={<ProfilePage />} />
+        <Route path="/configuracoes/conta" element={<AccountSettingsPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/esqueci-a-senha" element={<ForgotPasswordPage />} />

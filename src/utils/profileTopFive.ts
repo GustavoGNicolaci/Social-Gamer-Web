@@ -1,3 +1,5 @@
+import { normalizePrivacySettings } from './profilePrivacy'
+
 export type TopFivePosition = 1 | 2 | 3 | 4 | 5
 
 export interface TopFiveStoredEntry {
@@ -59,16 +61,14 @@ export function normalizeTopFiveEntries(value: unknown): TopFiveStoredEntry[] {
 export function getTopFiveEntriesFromPrivacySettings(
   value: Record<string, unknown> | null | undefined
 ) {
-  if (!isPlainObject(value)) return []
-
-  return normalizeTopFiveEntries(value.top5_jogos)
+  return normalizeTopFiveEntries(normalizePrivacySettings(value).top5_jogos)
 }
 
 export function mergeTopFiveEntriesIntoPrivacySettings(
   currentSettings: Record<string, unknown> | null | undefined,
   nextEntries: TopFiveStoredEntry[]
 ) {
-  const baseSettings = isPlainObject(currentSettings) ? currentSettings : {}
+  const baseSettings = normalizePrivacySettings(currentSettings)
 
   return {
     ...baseSettings,

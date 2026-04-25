@@ -2,7 +2,9 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { UserAvatar } from '../components/UserAvatar'
+import { getRecentPublicReviewActivities } from '../services/reviewService'
 import { supabase } from '../supabase-client'
+import { getPublicProfilePath } from '../utils/profileRoutes'
 import './HomePage.css'
 
 interface Game {
@@ -25,28 +27,6 @@ interface Activity {
 interface SiteStats {
   games: number
   reviews: number
-}
-
-interface UserSummary {
-  username: string
-  avatar_path: string | null
-}
-
-interface GameTitleRelation {
-  titulo: string
-}
-
-interface ReviewRow {
-  id: string
-  nota: number | null
-  data_publicacao: string
-  jogos: GameTitleRelation | GameTitleRelation[] | null
-  usuarios: UserSummary | UserSummary[] | null
-}
-
-function resolveRelation<T>(value: T | T[] | null | undefined) {
-  if (Array.isArray(value)) return value[0] || null
-  return value || null
 }
 
 function normalizeList(value: string[] | string | null | undefined) {
@@ -140,17 +120,7 @@ function HomePage() {
           gameCountResponse,
           reviewCountResponse,
         ] = await Promise.all([
-          supabase
-            .from('avaliacoes')
-            .select(`
-              id,
-              nota,
-              data_publicacao,
-              jogos!inner(titulo),
-              usuarios!inner(username, avatar_path)
-            `)
-            .order('data_publicacao', { ascending: false })
-            .limit(6),
+          getRecentPublicReviewActivities(6),
           supabase
             .from('jogos')
             .select('id, titulo, capa_url, generos')
@@ -170,22 +140,7 @@ function HomePage() {
           console.error('Erro ao buscar jogos em destaque:', featuredGamesResponse.error)
         }
 
-        const reviewActivities = ((reviewsResponse.data || []) as ReviewRow[]).map(review => {
-          const reviewGame = resolveRelation(review.jogos)
-          const reviewUser = resolveRelation(review.usuarios)
-
-          return {
-            id: review.id,
-            authorName: reviewUser?.username || 'Usuario',
-            authorAvatar: reviewUser?.avatar_path || null,
-            gameTitle: reviewGame?.titulo || 'Jogo desconhecido',
-            summary: 'Publicou uma review na comunidade.',
-            score: review.nota ?? null,
-            publishedAt: review.data_publicacao,
-          }
-        })
-
-        const mergedActivities = reviewActivities
+        const mergedActivities = reviewsResponse.data
           .sort(
             (leftActivity, rightActivity) =>
               new Date(rightActivity.publishedAt).getTime() -
@@ -231,7 +186,10 @@ function HomePage() {
 
   const heroEyebrow = user && profile?.username ? `Bem-vindo, @${profile.username}` : 'Social Gamer'
   const secondaryAction = user
-    ? { to: '/profile', label: 'Meu perfil' }
+    ? {
+        to: profile?.username ? getPublicProfilePath(profile.username) : '/profile',
+        label: 'Meu perfil',
+      }
     : { to: '/register', label: 'Criar conta' }
   const featuredGame = trendingGames[0] || null
   const featuredGenres = normalizeList(featuredGame?.generos).slice(0, 2).join(', ')
@@ -266,7 +224,7 @@ function HomePage() {
       title: 'Salvar favoritos',
       description: 'Monte sua wishlist e deixe seu perfil pronto para voltar depois.',
       ctaLabel: user ? 'Abrir perfil' : 'Entrar agora',
-      ctaTo: user ? '/profile' : '/login',
+      ctaTo: user ? (profile?.username ? getPublicProfilePath(profile.username) : '/profile') : '/login',
       icon: iconWishlist(),
     },
   ]

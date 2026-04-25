@@ -1,5 +1,6 @@
 import { supabase } from '../supabase-client'
 import { getTopFiveEntriesFromPrivacySettings, type TopFiveStoredEntry } from '../utils/profileTopFive'
+import { isProfilePrivate } from '../utils/profilePrivacy'
 
 export interface UserServiceError {
   code?: string
@@ -36,6 +37,7 @@ export interface PublicUserProfile {
   topFiveEntries: TopFiveStoredEntry[]
   followersCount: number
   followingCount: number
+  isPrivate: boolean
 }
 
 export interface UserFollowState {
@@ -134,6 +136,29 @@ function compareUsersAlphabetically(leftUser: UserSearchRow, rightUser: UserSear
   if (usernameDelta !== 0) return usernameDelta
 
   return leftUser.nome_completo.localeCompare(rightUser.nome_completo, 'pt-BR')
+}
+
+function buildPublicProfileResult(
+  publicProfileRow: PublicUserRow,
+  followersCount: number,
+  followingCount: number
+): PublicUserProfile {
+  const isPrivate = isProfilePrivate(publicProfileRow.configuracoes_privacidade)
+
+  return {
+    id: publicProfileRow.id,
+    username: publicProfileRow.username,
+    nome_completo: publicProfileRow.nome_completo,
+    avatar_path: publicProfileRow.avatar_path,
+    bio: isPrivate ? null : publicProfileRow.bio,
+    data_cadastro: publicProfileRow.data_cadastro,
+    topFiveEntries: isPrivate
+      ? []
+      : getTopFiveEntriesFromPrivacySettings(publicProfileRow.configuracoes_privacidade),
+    followersCount,
+    followingCount,
+    isPrivate,
+  }
 }
 
 async function getFollowingMap(
@@ -472,19 +497,11 @@ export async function getPublicProfileByUsername(
     const followCountsResult = await getFollowCounts(publicProfileRow.id)
 
     return {
-      data: {
-        id: publicProfileRow.id,
-        username: publicProfileRow.username,
-        nome_completo: publicProfileRow.nome_completo,
-        avatar_path: publicProfileRow.avatar_path,
-        bio: publicProfileRow.bio,
-        data_cadastro: publicProfileRow.data_cadastro,
-        topFiveEntries: getTopFiveEntriesFromPrivacySettings(
-          publicProfileRow.configuracoes_privacidade
-        ),
-        followersCount: followCountsResult.data.followersCount,
-        followingCount: followCountsResult.data.followingCount,
-      },
+      data: buildPublicProfileResult(
+        publicProfileRow,
+        followCountsResult.data.followersCount,
+        followCountsResult.data.followingCount
+      ),
       error: null,
     }
   } catch (error) {

@@ -1,0 +1,386 @@
+.account-settings-page {
+  display: grid;
+  gap: 1.35rem;
+}
+
+.account-settings-header,
+.account-settings-state,
+.account-settings-card,
+.account-settings-modal {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at top left, rgba(102, 126, 234, 0.18), transparent 34%),
+    linear-gradient(180deg, rgba(15, 18, 32, 0.95), rgba(9, 12, 24, 0.95));
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
+}
+
+.account-settings-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.25rem;
+  padding: 1.5rem;
+}
+
+.account-settings-header h1,
+.account-settings-state h1,
+.account-settings-card h2,
+.account-settings-modal h2 {
+  margin: 0;
+  color: #fff;
+}
+
+.account-settings-header p,
+.account-settings-state p,
+.account-settings-card p,
+.account-settings-modal p {
+  margin: 0;
+  color: rgba(238, 242, 255, 0.82);
+  line-height: 1.65;
+}
+
+.account-settings-header h1 {
+  margin-top: 0.6rem;
+  margin-bottom: 0.45rem;
+}
+
+.account-settings-state {
+  display: grid;
+  justify-items: center;
+  gap: 0.9rem;
+  padding: 2.5rem;
+  text-align: center;
+}
+
+.account-settings-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: fit-content;
+  border: 1px solid rgba(160, 177, 255, 0.24);
+  border-radius: 999px;
+  padding: 0.42rem 0.8rem;
+  background: rgba(126, 143, 255, 0.1);
+  color: #dbe4ff;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.account-settings-kicker.is-danger {
+  border-color: rgba(255, 154, 154, 0.28);
+  background: rgba(255, 113, 113, 0.1);
+  color: #ffe1e1;
+}
+
+.account-settings-layout {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.account-settings-card {
+  display: grid;
+  align-content: start;
+  gap: 1rem;
+  padding: 1.35rem;
+}
+
+.account-settings-card::after,
+.account-settings-header::after {
+  content: '';
+  position: absolute;
+  right: -96px;
+  bottom: -116px;
+  width: 240px;
+  height: 240px;
+  border-radius: 50%;
+  background: rgba(84, 211, 194, 0.14);
+  filter: blur(20px);
+  pointer-events: none;
+}
+
+.account-settings-card > *,
+.account-settings-header > * {
+  position: relative;
+  z-index: 1;
+}
+
+.account-settings-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.account-settings-card-header h2 {
+  margin-top: 0.55rem;
+  font-size: 1.35rem;
+}
+
+.account-settings-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  border: 1px solid rgba(134, 239, 172, 0.24);
+  border-radius: 999px;
+  padding: 0.45rem 0.75rem;
+  background: rgba(34, 197, 94, 0.1);
+  color: #d9ffe7;
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.account-settings-status.is-private {
+  border-color: rgba(255, 216, 128, 0.28);
+  background: rgba(255, 216, 128, 0.1);
+  color: #ffe8b0;
+}
+
+.account-settings-form {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.account-settings-field {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.account-settings-field > span {
+  color: rgba(200, 210, 255, 0.76);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.account-settings-field input {
+  width: 100%;
+  min-height: 52px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+  padding: 0.85rem 1rem;
+  font: inherit;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease;
+}
+
+.account-settings-field input::placeholder {
+  color: rgba(238, 242, 255, 0.42);
+}
+
+.account-settings-field input:focus {
+  outline: none;
+  border-color: rgba(126, 143, 255, 0.6);
+  background: rgba(255, 255, 255, 0.07);
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.18);
+}
+
+.account-settings-button {
+  min-height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  width: fit-content;
+  border-radius: 14px;
+  padding: 0.78rem 1rem;
+  color: #fff;
+  font: inherit;
+  font-weight: 800;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    transform 0.2s ease,
+    opacity 0.2s ease,
+    border-color 0.2s ease,
+    background 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.account-settings-button.is-primary {
+  border: none;
+  background: var(--primary-gradient);
+}
+
+.account-settings-button.is-secondary {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.account-settings-button.is-danger {
+  border: 1px solid rgba(255, 154, 154, 0.32);
+  background: rgba(255, 90, 90, 0.16);
+  color: #ffe1e1;
+}
+
+.account-settings-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: rgba(191, 219, 254, 0.34);
+  opacity: 0.96;
+  box-shadow: 0 12px 24px rgba(9, 12, 24, 0.22);
+}
+
+.account-settings-button:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.account-settings-button:focus-visible,
+.account-settings-toggle:focus-visible,
+.account-settings-field input:focus-visible {
+  outline: 2px solid rgba(191, 219, 254, 0.85);
+  outline-offset: 2px;
+}
+
+.account-settings-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: fit-content;
+  min-height: 52px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  padding: 0.6rem 0.9rem;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease,
+    background 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.account-settings-toggle:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: rgba(191, 219, 254, 0.34);
+}
+
+.account-settings-toggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.account-settings-toggle-track {
+  position: relative;
+  width: 46px;
+  height: 26px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: rgba(238, 242, 255, 0.2);
+  transition: background 0.2s ease;
+}
+
+.account-settings-toggle-thumb {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.22);
+  transition: transform 0.2s ease;
+}
+
+.account-settings-toggle.is-on .account-settings-toggle-track {
+  background: linear-gradient(135deg, #f59e0b, #ef4444);
+}
+
+.account-settings-toggle.is-on .account-settings-toggle-thumb {
+  transform: translateX(20px);
+}
+
+.account-settings-feedback {
+  margin: 0;
+  font-size: 0.94rem;
+  line-height: 1.55;
+}
+
+.account-settings-feedback.is-success {
+  color: #c9ffe0;
+}
+
+.account-settings-feedback.is-error {
+  color: #ffd7d7;
+}
+
+.account-settings-feedback.is-info {
+  color: #dbe7ff;
+}
+
+.account-settings-card.is-danger-zone {
+  border-color: rgba(255, 154, 154, 0.18);
+}
+
+.account-settings-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 1.25rem;
+  background: rgba(5, 7, 16, 0.74);
+  backdrop-filter: blur(8px);
+}
+
+.account-settings-modal {
+  display: grid;
+  gap: 1rem;
+  width: min(100%, 520px);
+  padding: 1.5rem;
+}
+
+.account-settings-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 980px) {
+  .account-settings-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .account-settings-header {
+    display: grid;
+  }
+
+  .account-settings-header,
+  .account-settings-card,
+  .account-settings-state,
+  .account-settings-modal {
+    padding: 1.15rem;
+  }
+
+  .account-settings-card-header {
+    display: grid;
+  }
+
+  .account-settings-button,
+  .account-settings-toggle,
+  .account-settings-modal-actions .account-settings-button {
+    width: 100%;
+  }
+
+  .account-settings-modal-actions {
+    display: grid;
+  }
+}

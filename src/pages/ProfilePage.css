@@ -530,6 +530,28 @@
   color: rgba(200, 210, 255, 0.72);
 }
 
+.profile-private-notice {
+  display: grid;
+  gap: 0.8rem;
+  padding: 1rem 1.1rem;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 216, 128, 0.18);
+  background:
+    radial-gradient(circle at top left, rgba(255, 216, 128, 0.12), transparent 36%),
+    rgba(255, 255, 255, 0.05);
+}
+
+.profile-private-notice h2 {
+  margin: 0;
+  color: #fff;
+  font-size: 1.35rem;
+}
+
+.profile-private-notice p {
+  color: rgba(238, 242, 255, 0.84);
+  line-height: 1.7;
+}
+
 .profile-secondary-button,
 .profile-save-button {
   border-radius: 14px;

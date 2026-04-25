@@ -547,6 +547,7 @@ export function ProfilePage() {
   const activeProfile = resolvedProfile?.data || null
   const editableProfile = resolvedProfile?.kind === 'own' ? resolvedProfile.data : null
   const isOwnerView = resolvedProfile?.kind === 'own'
+  const isPrivatePublicView = Boolean(resolvedProfile?.kind === 'public' && resolvedProfile.data.isPrivate)
   const topFiveEntries = resolvedProfile?.topFiveEntries || []
 
   useEffect(() => {
@@ -582,7 +583,7 @@ export function ProfilePage() {
     let isMounted = true
 
     const loadProfileCollections = async () => {
-      if (!activeProfile) {
+      if (!activeProfile || isPrivatePublicView) {
         if (isMounted) {
           setStatusGames([])
           setStatusError(null)
@@ -607,7 +608,9 @@ export function ProfilePage() {
       const [statusResult, wishlistResult, reviewsResult] = await Promise.all([
         loadStatusGames(activeProfile.id),
         getWishlistGamesByUserId(activeProfile.id),
-        getReviewsByUserId(activeProfile.id),
+        getReviewsByUserId(activeProfile.id, {
+          includePrivateAuthorReviews: Boolean(isOwnerView),
+        }),
       ])
 
       if (!isMounted) return
@@ -645,7 +648,7 @@ export function ProfilePage() {
     return () => {
       isMounted = false
     }
-  }, [activeProfile, isOwnerView, loadStatusGames])
+  }, [activeProfile, isOwnerView, isPrivatePublicView, loadStatusGames])
 
   useEffect(() => {
     let isMounted = true
@@ -847,9 +850,15 @@ export function ProfilePage() {
     : followState.isFollowing
       ? 'Deixar de seguir'
       : 'Seguir'
-  const sectionEyebrow = isOwnerView ? 'Perfil' : 'Perfil publico'
-  const canOpenFollowersModal = !followLoading && followState.followersCount > 0
-  const canOpenFollowingModal = !followLoading && followState.followingCount > 0
+  const sectionEyebrow = isPrivatePublicView
+    ? 'Perfil privado'
+    : isOwnerView
+      ? 'Perfil'
+      : 'Perfil publico'
+  const canOpenFollowersModal =
+    !isPrivatePublicView && !followLoading && followState.followersCount > 0
+  const canOpenFollowingModal =
+    !isPrivatePublicView && !followLoading && followState.followingCount > 0
   const canReportProfile = Boolean(user && activeProfile && !isOwnerView)
   const profileReportButtonLabel = profileReportLoading
     ? 'Carregando denuncia do perfil'
@@ -1185,7 +1194,7 @@ export function ProfilePage() {
   const handleOpenConnectionsModal = (kind: FollowListKind) => {
     const totalItems = kind === 'followers' ? followState.followersCount : followState.followingCount
 
-    if (followLoading || totalItems <= 0) return
+    if (isPrivatePublicView || followLoading || totalItems <= 0) return
 
     setConnectionsInitialTab(kind)
     setIsConnectionsModalOpen(true)
@@ -1437,48 +1446,59 @@ export function ProfilePage() {
                   )}
                 </div>
 
-                <div className={`profile-meta${!isOwnerView ? ' public-profile-meta' : ''}`}>
-                  <div className="profile-meta-item">
-                    <span>Membro desde</span>
-                    <strong>{joinedDate}</strong>
+                {!isPrivatePublicView ? (
+                  <div className={`profile-meta${!isOwnerView ? ' public-profile-meta' : ''}`}>
+                    <div className="profile-meta-item">
+                      <span>Membro desde</span>
+                      <strong>{joinedDate}</strong>
+                    </div>
+
+                    {canOpenFollowersModal ? (
+                      <button
+                        type="button"
+                        className="profile-meta-item profile-meta-item-button is-interactive"
+                        onClick={() => handleOpenConnectionsModal('followers')}
+                        aria-label={`Abrir lista de seguidores. ${followState.followersCount} seguidores.`}
+                      >
+                        <span>Seguidores</span>
+                        <strong>{followState.followersCount}</strong>
+                      </button>
+                    ) : (
+                      <div className="profile-meta-item profile-meta-item-button is-disabled">
+                        <span>Seguidores</span>
+                        <strong>{followLoading ? '...' : followState.followersCount}</strong>
+                      </div>
+                    )}
+
+                    {canOpenFollowingModal ? (
+                      <button
+                        type="button"
+                        className="profile-meta-item profile-meta-item-button is-interactive"
+                        onClick={() => handleOpenConnectionsModal('following')}
+                        aria-label={`Abrir lista de perfis seguidos. ${followState.followingCount} perfis seguidos.`}
+                      >
+                        <span>Seguindo</span>
+                        <strong>{followState.followingCount}</strong>
+                      </button>
+                    ) : (
+                      <div className="profile-meta-item profile-meta-item-button is-disabled">
+                        <span>Seguindo</span>
+                        <strong>{followLoading ? '...' : followState.followingCount}</strong>
+                      </div>
+                    )}
                   </div>
+                ) : null}
 
-                  {canOpenFollowersModal ? (
-                    <button
-                      type="button"
-                      className="profile-meta-item profile-meta-item-button is-interactive"
-                      onClick={() => handleOpenConnectionsModal('followers')}
-                      aria-label={`Abrir lista de seguidores. ${followState.followersCount} seguidores.`}
-                    >
-                      <span>Seguidores</span>
-                      <strong>{followState.followersCount}</strong>
-                    </button>
-                  ) : (
-                    <div className="profile-meta-item profile-meta-item-button is-disabled">
-                      <span>Seguidores</span>
-                      <strong>{followLoading ? '...' : followState.followersCount}</strong>
-                    </div>
-                  )}
-
-                  {canOpenFollowingModal ? (
-                    <button
-                      type="button"
-                      className="profile-meta-item profile-meta-item-button is-interactive"
-                      onClick={() => handleOpenConnectionsModal('following')}
-                      aria-label={`Abrir lista de perfis seguidos. ${followState.followingCount} perfis seguidos.`}
-                    >
-                      <span>Seguindo</span>
-                      <strong>{followState.followingCount}</strong>
-                    </button>
-                  ) : (
-                    <div className="profile-meta-item profile-meta-item-button is-disabled">
-                      <span>Seguindo</span>
-                      <strong>{followLoading ? '...' : followState.followingCount}</strong>
-                    </div>
-                  )}
-                </div>
-
-                {isEditing && isOwnerView ? (
+                {isPrivatePublicView ? (
+                  <div className="profile-private-notice" role="status">
+                    <span className="profile-section-label">Privacidade</span>
+                    <h2>Perfil privado</h2>
+                    <p>
+                      Este usuario escolheu manter bio, jogos, reviews e conexoes visiveis apenas
+                      para si.
+                    </p>
+                  </div>
+                ) : isEditing && isOwnerView ? (
                   <form
                     className="profile-form"
                     onSubmit={event => {
@@ -1565,116 +1585,120 @@ export function ProfilePage() {
               </div>
             </div>
 
-            <ProfileTopFiveSection
-              isOwnerView={Boolean(isOwnerView)}
-              entries={topFiveEntries}
-              onSaveTopFive={isOwnerView ? handleSaveTopFive : readOnlySaveTopFive}
-            />
+            {!isPrivatePublicView ? (
+              <ProfileTopFiveSection
+                isOwnerView={Boolean(isOwnerView)}
+                entries={topFiveEntries}
+                onSaveTopFive={isOwnerView ? handleSaveTopFive : readOnlySaveTopFive}
+              />
+            ) : null}
           </section>
 
-          <section className="profile-tabs-shell" aria-label="Conteudo do perfil">
-            <div className="profile-tabs" role="tablist" aria-label="Navegacao interna do perfil">
-              <button
-                id="profile-tab-status"
-                type="button"
-                role="tab"
-                className={`profile-tab-button${activeTab === 'status' ? ' is-active' : ''}`}
-                aria-selected={activeTab === 'status'}
-                aria-controls="profile-panel-status"
-                onClick={() => setActiveTab('status')}
+          {!isPrivatePublicView ? (
+            <section className="profile-tabs-shell" aria-label="Conteudo do perfil">
+              <div className="profile-tabs" role="tablist" aria-label="Navegacao interna do perfil">
+                <button
+                  id="profile-tab-status"
+                  type="button"
+                  role="tab"
+                  className={`profile-tab-button${activeTab === 'status' ? ' is-active' : ''}`}
+                  aria-selected={activeTab === 'status'}
+                  aria-controls="profile-panel-status"
+                  onClick={() => setActiveTab('status')}
+                >
+                  <span>Status dos jogos</span>
+                  <small>{statusCountLabel}</small>
+                </button>
+
+                <button
+                  id="profile-tab-wishlist"
+                  type="button"
+                  role="tab"
+                  className={`profile-tab-button${activeTab === 'wishlist' ? ' is-active' : ''}`}
+                  aria-selected={activeTab === 'wishlist'}
+                  aria-controls="profile-panel-wishlist"
+                  onClick={() => setActiveTab('wishlist')}
+                >
+                  <span>Jogos que quero jogar</span>
+                  <small>{wishlistCountLabel}</small>
+                </button>
+
+                <button
+                  id="profile-tab-reviews"
+                  type="button"
+                  role="tab"
+                  className={`profile-tab-button${activeTab === 'reviews' ? ' is-active' : ''}`}
+                  aria-selected={activeTab === 'reviews'}
+                  aria-controls="profile-panel-reviews"
+                  onClick={() => setActiveTab('reviews')}
+                >
+                  <span>Reviews</span>
+                  <small>{reviewsCountLabel}</small>
+                </button>
+              </div>
+
+              <div
+                id="profile-panel-status"
+                className="profile-tab-panel"
+                role="tabpanel"
+                aria-labelledby="profile-tab-status"
+                hidden={activeTab !== 'status'}
               >
-                <span>Status dos jogos</span>
-                <small>{statusCountLabel}</small>
-              </button>
+                {activeTab === 'status' ? (
+                  <ProfileGameStatusSection
+                    userId={activeProfile.id}
+                    items={statusGames}
+                    isLoading={statusLoading}
+                    errorMessage={statusError}
+                    countLabel={statusCountLabel}
+                    isOwnerView={Boolean(isOwnerView)}
+                    onSaveStatus={isOwnerView ? handleSaveGameStatus : readOnlySaveStatus}
+                    onDeleteStatus={isOwnerView ? handleDeleteStatus : readOnlyDeleteStatus}
+                    onRefresh={handleRefreshStatusGames}
+                  />
+                ) : null}
+              </div>
 
-              <button
-                id="profile-tab-wishlist"
-                type="button"
-                role="tab"
-                className={`profile-tab-button${activeTab === 'wishlist' ? ' is-active' : ''}`}
-                aria-selected={activeTab === 'wishlist'}
-                aria-controls="profile-panel-wishlist"
-                onClick={() => setActiveTab('wishlist')}
+              <div
+                id="profile-panel-wishlist"
+                className="profile-tab-panel"
+                role="tabpanel"
+                aria-labelledby="profile-tab-wishlist"
+                hidden={activeTab !== 'wishlist'}
               >
-                <span>Jogos que quero jogar</span>
-                <small>{wishlistCountLabel}</small>
-              </button>
+                {activeTab === 'wishlist' ? (
+                  <ProfileWishlistSection
+                    userId={activeProfile.id}
+                    items={wishlistGames}
+                    isLoading={wishlistLoading}
+                    errorMessage={wishlistError}
+                    countLabel={wishlistCountLabel}
+                    isOwnerView={Boolean(isOwnerView)}
+                    onDeleteWishlistItem={isOwnerView ? handleDeleteWishlistItem : readOnlyDeleteWishlist}
+                  />
+                ) : null}
+              </div>
 
-              <button
-                id="profile-tab-reviews"
-                type="button"
-                role="tab"
-                className={`profile-tab-button${activeTab === 'reviews' ? ' is-active' : ''}`}
-                aria-selected={activeTab === 'reviews'}
-                aria-controls="profile-panel-reviews"
-                onClick={() => setActiveTab('reviews')}
+              <div
+                id="profile-panel-reviews"
+                className="profile-tab-panel"
+                role="tabpanel"
+                aria-labelledby="profile-tab-reviews"
+                hidden={activeTab !== 'reviews'}
               >
-                <span>Reviews</span>
-                <small>{reviewsCountLabel}</small>
-              </button>
-            </div>
-
-            <div
-              id="profile-panel-status"
-              className="profile-tab-panel"
-              role="tabpanel"
-              aria-labelledby="profile-tab-status"
-              hidden={activeTab !== 'status'}
-            >
-              {activeTab === 'status' ? (
-                <ProfileGameStatusSection
-                  userId={activeProfile.id}
-                  items={statusGames}
-                  isLoading={statusLoading}
-                  errorMessage={statusError}
-                  countLabel={statusCountLabel}
-                  isOwnerView={Boolean(isOwnerView)}
-                  onSaveStatus={isOwnerView ? handleSaveGameStatus : readOnlySaveStatus}
-                  onDeleteStatus={isOwnerView ? handleDeleteStatus : readOnlyDeleteStatus}
-                  onRefresh={handleRefreshStatusGames}
-                />
-              ) : null}
-            </div>
-
-            <div
-              id="profile-panel-wishlist"
-              className="profile-tab-panel"
-              role="tabpanel"
-              aria-labelledby="profile-tab-wishlist"
-              hidden={activeTab !== 'wishlist'}
-            >
-              {activeTab === 'wishlist' ? (
-                <ProfileWishlistSection
-                  userId={activeProfile.id}
-                  items={wishlistGames}
-                  isLoading={wishlistLoading}
-                  errorMessage={wishlistError}
-                  countLabel={wishlistCountLabel}
-                  isOwnerView={Boolean(isOwnerView)}
-                  onDeleteWishlistItem={isOwnerView ? handleDeleteWishlistItem : readOnlyDeleteWishlist}
-                />
-              ) : null}
-            </div>
-
-            <div
-              id="profile-panel-reviews"
-              className="profile-tab-panel"
-              role="tabpanel"
-              aria-labelledby="profile-tab-reviews"
-              hidden={activeTab !== 'reviews'}
-            >
-              {activeTab === 'reviews' ? (
-                <ProfileReviewsSection
-                  items={userReviews}
-                  isLoading={reviewsLoading}
-                  errorMessage={reviewsError}
-                  countLabel={reviewsCountLabel}
-                  isOwnerView={Boolean(isOwnerView)}
-                  onDeleteReview={isOwnerView ? handleDeleteReview : undefined}
-                />
-              ) : null}
-            </div>
-          </section>
+                {activeTab === 'reviews' ? (
+                  <ProfileReviewsSection
+                    items={userReviews}
+                    isLoading={reviewsLoading}
+                    errorMessage={reviewsError}
+                    countLabel={reviewsCountLabel}
+                    isOwnerView={Boolean(isOwnerView)}
+                    onDeleteReview={isOwnerView ? handleDeleteReview : undefined}
+                  />
+                ) : null}
+              </div>
+            </section>
+          ) : null}
         </div>
 
         {isProfileReportModalOpen && canReportProfile ? (
@@ -1691,7 +1715,7 @@ export function ProfilePage() {
           />
         ) : null}
 
-        {isConnectionsModalOpen ? (
+        {isConnectionsModalOpen && !isPrivatePublicView ? (
           <ProfileConnectionsModal
             initialTab={connectionsInitialTab}
             profileId={activeProfile.id}
