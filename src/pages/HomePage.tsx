@@ -1,58 +1,38 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
+import { FeaturedRecentReviewedGames } from '../components/home/FeaturedRecentReviewedGames'
+import { NewReleasesCarousel } from '../components/home/NewReleasesCarousel'
+import { RecentFollowingActivity } from '../components/home/RecentFollowingActivity'
+import { TrendingReviews } from '../components/home/TrendingReviews'
+import { formatCompactDate, formatCount } from '../components/home/homeDisplayUtils'
 import { useAuth } from '../contexts/AuthContext'
-import { UserAvatar } from '../components/UserAvatar'
-import { getRecentPublicReviewActivities } from '../services/reviewService'
-import { supabase } from '../supabase-client'
+import {
+  getHomeFeaturedRecentReviewedGames,
+  getHomeFollowingActivities,
+  getHomeNewReleases,
+  getHomeSiteStats,
+  getHomeTrendingReviews,
+  type HomeFeaturedGame,
+  type HomeFollowingActivity,
+  type HomeGameSummary,
+  type HomeSiteStats,
+  type HomeTrendingReview,
+} from '../services/homeService'
 import { getPublicProfilePath } from '../utils/profileRoutes'
 import './HomePage.css'
 
-interface Game {
-  id: number
-  titulo: string
-  capa_url: string | null
-  generos: string[] | string | null
+interface HomeErrors {
+  following: string | null
+  trending: string | null
+  featured: string | null
+  releases: string | null
 }
 
-interface Activity {
-  id: string
-  authorName: string
-  authorAvatar: string | null
-  gameTitle: string
-  summary: string
-  score: number | null
-  publishedAt: string
-}
-
-interface SiteStats {
-  games: number
-  reviews: number
-}
-
-function normalizeList(value: string[] | string | null | undefined) {
-  if (!value) return []
-  return (Array.isArray(value) ? value : [value]).map(item => item.trim()).filter(Boolean)
-}
-
-function formatCompactDate(value: string | null | undefined, fallback = 'Agora') {
-  if (!value) return fallback
-
-  const parsedDate = new Date(value)
-  if (Number.isNaN(parsedDate.getTime())) return fallback
-
-  return parsedDate.toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: 'short',
-  })
-}
-
-function formatCount(value: number) {
-  return value.toLocaleString('pt-BR')
-}
-
-function getInitial(value: string) {
-  const firstCharacter = value.trim().charAt(0)
-  return firstCharacter ? firstCharacter.toUpperCase() : 'U'
+const EMPTY_HOME_ERRORS: HomeErrors = {
+  following: null,
+  trending: null,
+  featured: null,
+  releases: null,
 }
 
 function iconCatalog() {
@@ -101,61 +81,95 @@ function iconWishlist() {
 
 function HomePage() {
   const { user, profile } = useAuth()
-  const [recentActivities, setRecentActivities] = useState<Activity[]>([])
-  const [trendingGames, setTrendingGames] = useState<Game[]>([])
-  const [siteStats, setSiteStats] = useState<SiteStats>({
+  const [followingActivities, setFollowingActivities] = useState<HomeFollowingActivity[]>([])
+  const [trendingReviews, setTrendingReviews] = useState<HomeTrendingReview[]>([])
+  const [featuredGames, setFeaturedGames] = useState<HomeFeaturedGame[]>([])
+  const [newReleases, setNewReleases] = useState<HomeGameSummary[]>([])
+  const [siteStats, setSiteStats] = useState<HomeSiteStats>({
     games: 0,
     reviews: 0,
   })
+  const [homeErrors, setHomeErrors] = useState<HomeErrors>(EMPTY_HOME_ERRORS)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     let isMounted = true
 
     const fetchData = async () => {
+      setLoading(true)
+      setHomeErrors(EMPTY_HOME_ERRORS)
+
       try {
         const [
-          reviewsResponse,
+          followingResponse,
           featuredGamesResponse,
-          gameCountResponse,
-          reviewCountResponse,
+          releasesResponse,
+          statsResponse,
         ] = await Promise.all([
-          getRecentPublicReviewActivities(6, user?.id),
-          supabase
-            .from('jogos')
-            .select('id, titulo, capa_url, generos')
-            .order('id', { ascending: false })
-            .limit(3),
-          supabase.from('jogos').select('id', { count: 'exact', head: true }),
-          supabase.from('avaliacoes').select('id', { count: 'exact', head: true }),
+          getHomeFollowingActivities(8, user?.id),
+          getHomeFeaturedRecentReviewedGames({ daysWindow: 30, limit: 4 }),
+          getHomeNewReleases(36),
+          getHomeSiteStats(),
         ])
+
+        const excludedReviewIds = followingResponse.data
+          .map(activity => activity.reviewId)
+          .filter((reviewId): reviewId is string => Boolean(reviewId))
+
+        const trendingReviewsResponse = await getHomeTrendingReviews({
+          minLikes: 20,
+          limit: 6,
+          excludedReviewIds,
+        })
 
         if (!isMounted) return
 
-        if (reviewsResponse.error) {
-          console.error('Erro ao buscar avaliacoes recentes:', reviewsResponse.error)
+        if (followingResponse.error) {
+          console.error('Erro ao buscar atividades de quem voce segue:', followingResponse.error)
         }
 
         if (featuredGamesResponse.error) {
           console.error('Erro ao buscar jogos em destaque:', featuredGamesResponse.error)
         }
 
-        const mergedActivities = reviewsResponse.data
-          .sort(
-            (leftActivity, rightActivity) =>
-              new Date(rightActivity.publishedAt).getTime() -
-              new Date(leftActivity.publishedAt).getTime()
-          )
-          .slice(0, 4)
+        if (releasesResponse.error) {
+          console.error('Erro ao buscar lancamentos:', releasesResponse.error)
+        }
 
-        setRecentActivities(mergedActivities)
-        setTrendingGames(((featuredGamesResponse.data || []) as Game[]) || [])
-        setSiteStats({
-          games: gameCountResponse.count || 0,
-          reviews: reviewCountResponse.count || 0,
+        if (trendingReviewsResponse.error) {
+          console.error('Erro ao buscar reviews em alta:', trendingReviewsResponse.error)
+        }
+
+        if (statsResponse.error) {
+          console.error('Erro ao buscar numeros da plataforma:', statsResponse.error)
+        }
+
+        setFollowingActivities(followingResponse.data)
+        setFeaturedGames(featuredGamesResponse.data)
+        setNewReleases(releasesResponse.data)
+        setTrendingReviews(trendingReviewsResponse.data)
+        setSiteStats(statsResponse.data)
+        setHomeErrors({
+          following: followingResponse.error?.message || null,
+          featured: featuredGamesResponse.error?.message || null,
+          releases: releasesResponse.error?.message || null,
+          trending: trendingReviewsResponse.error?.message || null,
         })
       } catch (error) {
         console.error('Erro ao montar a Home:', error)
+
+        if (isMounted) {
+          setFollowingActivities([])
+          setFeaturedGames([])
+          setNewReleases([])
+          setTrendingReviews([])
+          setHomeErrors({
+            following: 'Nao foi possivel carregar atividades agora.',
+            featured: 'Nao foi possivel carregar jogos em destaque agora.',
+            releases: 'Nao foi possivel carregar lancamentos agora.',
+            trending: 'Nao foi possivel carregar reviews em alta agora.',
+          })
+        }
       } finally {
         if (isMounted) {
           setLoading(false)
@@ -170,33 +184,18 @@ function HomePage() {
     }
   }, [user?.id])
 
-  if (loading) {
-    return (
-      <div className="page-container">
-        <div className="page-content home-page">
-          <section className="home-state-card">
-            <span className="home-eyebrow">Home</span>
-            <h1>Carregando...</h1>
-            <p>Preparando seus destaques e atalhos principais.</p>
-          </section>
-        </div>
-      </div>
-    )
-  }
-
   const heroEyebrow = user && profile?.username ? `Bem-vindo, @${profile.username}` : 'Social Gamer'
+  const latestNetworkActivity = followingActivities[0] || null
   const secondaryAction = user
     ? {
         to: profile?.username ? getPublicProfilePath(profile.username) : '/profile',
         label: 'Meu perfil',
       }
     : { to: '/register', label: 'Criar conta' }
-  const featuredGame = trendingGames[0] || null
-  const featuredGenres = normalizeList(featuredGame?.generos).slice(0, 2).join(', ')
 
   const heroStats = [
-    { value: formatCount(siteStats.games), label: 'jogos' },
-    { value: formatCount(siteStats.reviews), label: 'reviews' },
+    { value: loading ? '...' : formatCount(siteStats.games), label: 'jogos' },
+    { value: loading ? '...' : formatCount(siteStats.reviews), label: 'reviews' },
   ]
 
   const featureCards: Array<{
@@ -222,7 +221,7 @@ function HomePage() {
     },
     {
       title: 'Salvar favoritos',
-      description: 'Monte sua wishlist e deixe seu perfil pronto para voltar depois.',
+      description: 'Monte sua lista e deixe seu perfil pronto para voltar depois.',
       ctaLabel: user ? 'Abrir perfil' : 'Entrar agora',
       ctaTo: user ? (profile?.username ? getPublicProfilePath(profile.username) : '/profile') : '/login',
       icon: iconWishlist(),
@@ -237,8 +236,8 @@ function HomePage() {
             <span className="home-eyebrow">{heroEyebrow}</span>
             <h1>Descubra jogos e guarde o que vale sua proxima jogatina.</h1>
             <p className="home-hero-text">
-              Explore o catalogo, veja o que a comunidade achou e organize sua lista com mais
-              clareza.
+              Explore o catalogo, acompanhe reviews relevantes e veja o que esta ganhando
+              movimento na comunidade.
             </p>
 
             <div className="home-hero-actions">
@@ -261,23 +260,46 @@ function HomePage() {
           </div>
 
           <div className="home-hero-side">
-            <article className="home-hero-card">
-              <span className="home-eyebrow">Destaque</span>
-              <h2>{featuredGame?.titulo || 'Catalogo pronto para explorar'}</h2>
-              <p>
-                {featuredGame
-                  ? featuredGenres || 'Veja detalhes, reviews e comentarios da comunidade.'
-                  : 'Entre no catalogo para encontrar seu proximo jogo.'}
-              </p>
+            <article className="home-hero-card home-network-card">
+              <span className="home-eyebrow">Sua rede agora</span>
 
-              {featuredGame ? (
-                <Link to={`/games/${featuredGame.id}`} className="home-inline-link">
-                  Ver pagina do jogo
-                </Link>
+              {loading ? (
+                <>
+                  <h2>Carregando sua rede...</h2>
+                  <p>Buscando as atividades mais recentes de quem voce segue.</p>
+                </>
+              ) : !user ? (
+                <>
+                  <h2>Entre para acompanhar sua rede</h2>
+                  <p>Siga outros jogadores para ver reviews, favoritos e jogos adicionados aqui.</p>
+                  <Link to="/login" className="home-inline-link">
+                    Fazer login
+                  </Link>
+                </>
+              ) : latestNetworkActivity ? (
+                <>
+                  <div className="home-network-meta">
+                    <Link to={getPublicProfilePath(latestNetworkActivity.author.username)}>
+                      {latestNetworkActivity.author.name}
+                    </Link>
+                    <span>{formatCompactDate(latestNetworkActivity.createdAt)}</span>
+                  </div>
+
+                  <h2>{latestNetworkActivity.game.title}</h2>
+                  <p>{latestNetworkActivity.summary}</p>
+
+                  <Link to={`/games/${latestNetworkActivity.game.id}`} className="home-inline-link">
+                    Ver jogo
+                  </Link>
+                </>
               ) : (
-                <Link to="/games" className="home-inline-link">
-                  Ir para o catalogo
-                </Link>
+                <>
+                  <h2>Sua rede ainda esta quieta</h2>
+                  <p>Siga jogadores ou explore o catalogo para encontrar novas conexoes e reviews.</p>
+                  <Link to="/games" className="home-inline-link">
+                    Explorar jogos
+                  </Link>
+                </>
               )}
             </article>
           </div>
@@ -305,84 +327,37 @@ function HomePage() {
           </div>
         </section>
 
+        <NewReleasesCarousel
+          items={newReleases}
+          isLoading={loading}
+          errorMessage={homeErrors.releases}
+        />
+
         <section className="home-section">
           <div className="home-section-head">
             <div>
               <span className="home-eyebrow">Agora na plataforma</span>
-              <h2>Jogos e atividade recente</h2>
+              <h2>Jogos e movimento recente</h2>
             </div>
           </div>
 
           <div className="home-grid">
-            <div className="home-panel">
-              <h3 className="home-panel-title">Jogos em destaque</h3>
-
-              {trendingGames.length === 0 ? (
-                <div className="home-empty-state">
-                  <p>Nenhum jogo disponivel no momento.</p>
-                </div>
-              ) : (
-                <div className="home-spotlight-list">
-                  {trendingGames.map(game => (
-                    <Link key={game.id} to={`/games/${game.id}`} className="home-spotlight-card">
-                      <div className="home-spotlight-cover">
-                        {game.capa_url ? (
-                          <img src={game.capa_url} alt={`Capa do jogo ${game.titulo}`} />
-                        ) : (
-                          <div className="home-spotlight-fallback">{getInitial(game.titulo)}</div>
-                        )}
-                      </div>
-
-                      <div className="home-spotlight-copy">
-                        <h3>{game.titulo}</h3>
-                        <p>{normalizeList(game.generos).slice(0, 2).join(', ') || 'Sem genero informado'}</p>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="home-panel">
-              <h3 className="home-panel-title">Movimento recente</h3>
-
-              {recentActivities.length === 0 ? (
-                <div className="home-empty-state">
-                  <p>As novas reviews vao aparecer aqui.</p>
-                </div>
-              ) : (
-                <div className="home-activity-list">
-                  {recentActivities.map(activity => (
-                    <article key={activity.id} className="home-activity-card">
-                      <div className="home-activity-top">
-                        <div className="home-user-chip">
-                          <UserAvatar
-                            name={activity.authorName}
-                            avatarPath={activity.authorAvatar}
-                            imageClassName="home-user-avatar"
-                            fallbackClassName="home-user-avatar-fallback"
-                          />
-
-                          <div>
-                            <strong>{activity.authorName}</strong>
-                            <span>{formatCompactDate(activity.publishedAt)}</span>
-                          </div>
-                        </div>
-
-                        {activity.score !== null ? (
-                          <span className="home-score-pill">{activity.score}/10</span>
-                        ) : (
-                          <span className="home-tag">Review</span>
-                        )}
-                      </div>
-
-                      <h4>{activity.gameTitle}</h4>
-                      <p>{activity.summary}</p>
-                    </article>
-                  ))}
-                </div>
-              )}
-            </div>
+            <FeaturedRecentReviewedGames
+              items={featuredGames}
+              isLoading={loading}
+              errorMessage={homeErrors.featured}
+            />
+            <RecentFollowingActivity
+              items={followingActivities}
+              isLoading={loading}
+              errorMessage={homeErrors.following}
+              isAuthenticated={Boolean(user)}
+            />
+            <TrendingReviews
+              items={trendingReviews}
+              isLoading={loading}
+              errorMessage={homeErrors.trending}
+            />
           </div>
         </section>
       </div>
