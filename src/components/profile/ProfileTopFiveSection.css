@@ -358,3 +358,57 @@
     display: grid;
   }
 }
+
+body.light .profile-top-five-section {
+  border-top-color: var(--border);
+}
+
+body.light .profile-top-five-slot,
+body.light .profile-top-five-picker,
+body.light .profile-top-five-picker-current,
+body.light .profile-top-five-search,
+body.light .profile-top-five-search-result {
+  border-color: var(--border);
+  background: var(--surface);
+  color: var(--foreground);
+  box-shadow: none;
+}
+
+body.light .profile-top-five-copy h2,
+body.light .profile-top-five-picker-copy h3,
+body.light .profile-top-five-slot-main strong,
+body.light .profile-top-five-search-result-copy strong {
+  color: var(--foreground);
+}
+
+body.light .profile-top-five-copy p,
+body.light .profile-top-five-picker-copy p,
+body.light .profile-top-five-status,
+body.light .profile-top-five-slot-kicker,
+body.light .profile-top-five-search-field > span,
+body.light .profile-top-five-slot-main span:last-child,
+body.light .profile-top-five-search-result-copy span,
+body.light .profile-top-five-picker-current span,
+body.light .profile-top-five-search-helper,
+body.light .profile-top-five-search-state {
+  color: var(--muted-foreground);
+}
+
+body.light .profile-top-five-slot:hover,
+body.light .profile-top-five-search-result:hover:not(:disabled),
+body.light .profile-top-five-slot.is-active-picker {
+  border-color: var(--ring);
+  background: var(--surface-hover);
+  box-shadow: 0 14px 28px var(--shadow-color);
+}
+
+body.light .profile-top-five-search-field,
+body.light .profile-top-five-search-input {
+  border-color: var(--border);
+  background: var(--input);
+  color: var(--foreground);
+}
+
+body.light .profile-top-five-search-input::placeholder {
+  color: color-mix(in srgb, var(--muted-foreground) 78%, transparent);
+}

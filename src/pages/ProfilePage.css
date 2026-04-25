@@ -828,3 +828,133 @@
     align-self: flex-start;
   }
 }
+
+body.light .profile-state-card,
+body.light .profile-card,
+body.light .profile-tab-button,
+body.light .profile-meta-item,
+body.light .profile-private-notice,
+body.light .profile-bio-block,
+body.light .profile-danger-zone {
+  border-color: var(--border);
+  background:
+    radial-gradient(circle at top left, rgba(79, 70, 229, 0.08), transparent 34%),
+    var(--card);
+  color: var(--card-foreground);
+  box-shadow: 0 18px 42px var(--shadow-color);
+}
+
+body.light .profile-state-card h1,
+body.light .profile-heading h1,
+body.light .profile-private-notice h2,
+body.light .profile-meta-item strong,
+body.light .profile-bio-block h2,
+body.light .profile-danger-zone h2,
+body.light .profile-tab-button,
+body.light .profile-form,
+body.light .profile-field {
+  color: var(--foreground);
+}
+
+body.light .profile-state-card p,
+body.light .profile-handle,
+body.light .profile-meta-item span,
+body.light .profile-tab-button small,
+body.light .profile-bio-copy,
+body.light .profile-bio-copy.is-empty,
+body.light .profile-private-notice p,
+body.light .profile-counter,
+body.light .profile-field > span {
+  color: var(--muted-foreground);
+}
+
+body.light .profile-state-badge,
+body.light .profile-eyebrow,
+body.light .profile-section-label {
+  border-color: var(--badge-border);
+  background: var(--badge);
+  color: var(--badge-foreground);
+}
+
+body.light .profile-card-glow-left,
+body.light .profile-card-glow-right {
+  opacity: 0.18;
+}
+
+body.light .profile-tab-button:hover,
+body.light .profile-meta-item-button.is-interactive:hover,
+body.light .profile-secondary-button:hover:not(:disabled),
+body.light .profile-report-button:hover:not(:disabled) {
+  border-color: var(--ring);
+  background: var(--surface-hover);
+  box-shadow: 0 14px 28px var(--shadow-color);
+}
+
+body.light .profile-tab-button.is-active,
+body.light .profile-edit-button.is-active {
+  border-color: var(--ring);
+  background: var(--surface-active);
+  box-shadow: 0 14px 28px var(--shadow-color);
+}
+
+body.light .profile-input,
+body.light .profile-input-wrap,
+body.light .profile-textarea {
+  border-color: var(--border);
+  background: var(--input);
+  color: var(--foreground);
+}
+
+body.light .profile-input::placeholder,
+body.light .profile-input-plain::placeholder,
+body.light .profile-textarea::placeholder {
+  color: color-mix(in srgb, var(--muted-foreground) 78%, transparent);
+}
+
+body.light .profile-input:focus,
+body.light .profile-input-wrap:focus-within,
+body.light .profile-textarea:focus {
+  border-color: var(--ring);
+  box-shadow: var(--focus-ring);
+}
+
+body.light .profile-edit-button,
+body.light .profile-secondary-button,
+body.light .profile-report-button,
+body.light .public-profile-follow-button.is-following {
+  border-color: var(--border);
+  background: var(--secondary);
+  color: var(--secondary-foreground);
+}
+
+body.light .profile-save-button {
+  background: var(--primary-gradient);
+  color: var(--primary-foreground);
+}
+
+body.light .profile-item-remove-button,
+body.light .profile-report-button.is-reported {
+  border-color: color-mix(in srgb, var(--warning) 30%, var(--border));
+  background: var(--warning-surface);
+  color: var(--warning);
+}
+
+body.light .profile-feedback.is-success,
+body.light .public-profile-follow-status {
+  color: var(--success);
+}
+
+body.light .profile-feedback.is-error {
+  color: var(--destructive);
+}
+
+body.light .avatar-img,
+body.light .profile-avatar-large {
+  border-color: var(--border);
+  box-shadow: 0 18px 34px var(--shadow-color);
+}
+
+body.light .profile-avatar-overlay {
+  background: rgba(17, 24, 39, 0.74);
+  color: #ffffff;
+}

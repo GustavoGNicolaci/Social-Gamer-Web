@@ -358,3 +358,38 @@
     right: 0.6rem;
   }
 }
+
+body.light .profile-wishlist-card,
+body.light .profile-wishlist-empty,
+body.light .profile-wishlist-summary,
+body.light .profile-wishlist-arrow,
+body.light .profile-wishlist-drag-handle {
+  border-color: var(--border);
+  background: var(--card);
+  color: var(--card-foreground);
+  box-shadow: 0 14px 28px var(--shadow-color);
+}
+
+body.light .profile-section-copy h2,
+body.light .profile-wishlist-card-title,
+body.light .profile-wishlist-empty h3 {
+  color: var(--foreground);
+}
+
+body.light .profile-section-copy p,
+body.light .profile-wishlist-card-meta,
+body.light .profile-wishlist-empty p,
+body.light .profile-wishlist-order-status.is-saving {
+  color: var(--muted-foreground);
+}
+
+body.light .profile-wishlist-arrow:hover,
+body.light .profile-wishlist-card:hover,
+body.light .profile-wishlist-drag-handle:hover:not(:disabled) {
+  border-color: var(--ring);
+  background: var(--surface-hover);
+}
+
+body.light .profile-wishlist-order-status.is-error {
+  color: var(--destructive);
+}

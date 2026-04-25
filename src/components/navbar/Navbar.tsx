@@ -207,7 +207,7 @@ function Navbar() {
   const searchRequestIdRef = useRef(0)
 
   const displayName = profile?.username || user?.email || 'Perfil'
-  const profileLabel = profile?.nome_completo || displayName
+  const profileLabel = profile?.nome_completo?.trim() || displayName
   const ownProfilePath = profile?.username ? getPublicProfilePath(profile.username) : '/profile'
   const themeToggleLabel = theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'
   const themeStatusLabel = `Tema atual: ${theme === 'dark' ? 'escuro' : 'claro'}`
@@ -527,12 +527,14 @@ function Navbar() {
                           const isOwnResult = Boolean(user && searchUser.id === user.id)
                           const isFollowPending = followPendingIds.includes(searchUser.id)
                           const followButtonLabel = isFollowPending ? (searchUser.isFollowing ? 'Atualizando...' : 'Seguindo...') : searchUser.isFollowing ? 'Deixar de seguir' : 'Seguir'
+                          const searchUserFullName = searchUser.nome_completo?.trim() || ''
+                          const searchUserDisplayName = searchUserFullName || searchUser.username
                           return (
                             <div key={searchUser.id} id={`navbar-search-option-user-${searchUser.id}`} role="option" aria-selected={resultIndex === activeResultIndex} className={`navbar-search-option navbar-search-option-user${resultIndex === activeResultIndex ? ' is-active' : ''}`} onMouseEnter={() => setActiveResultIndex(resultIndex)} onClick={() => handleSelectUser(searchUser)}>
                               <div className="navbar-search-option-cover">
-                                <UserAvatar name={searchUser.nome_completo || searchUser.username} avatarPath={searchUser.avatar_path} imageClassName="navbar-search-user-avatar" fallbackClassName="navbar-search-option-fallback navbar-search-user-avatar-fallback" alt={`Foto de perfil de ${searchUser.nome_completo || searchUser.username}`} />
+                                <UserAvatar name={searchUserDisplayName} avatarPath={searchUser.avatar_path} imageClassName="navbar-search-user-avatar" fallbackClassName="navbar-search-option-fallback navbar-search-user-avatar-fallback" alt={`Foto de perfil de ${searchUserDisplayName}`} />
                               </div>
-                              <div className="navbar-search-option-copy navbar-search-option-copy-user"><strong>@{searchUser.username}</strong><span>{searchUser.nome_completo || 'Nome nao informado'}</span></div>
+                              <div className="navbar-search-option-copy navbar-search-option-copy-user"><strong>@{searchUser.username}</strong>{searchUserFullName ? <span>{searchUserFullName}</span> : null}</div>
                               <div className="navbar-search-user-actions">
                                 {user && !isOwnResult ? <button type="button" className={`navbar-search-follow-button${searchUser.isFollowing ? ' is-following' : ''}`} onClick={event => { event.stopPropagation(); void handleToggleFollowFromSearch(searchUser) }} disabled={isFollowPending}>{followButtonLabel}</button> : <span className="navbar-search-user-link">{isOwnResult ? 'Seu perfil' : 'Ver perfil'}</span>}
                               </div>

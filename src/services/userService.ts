@@ -17,7 +17,7 @@ export interface UserServiceError {
 export interface UserSearchResult {
   id: string
   username: string
-  nome_completo: string
+  nome_completo: string | null
   avatar_path: string | null
   isFollowing: boolean
 }
@@ -27,7 +27,7 @@ export type FollowListKind = 'followers' | 'following'
 export interface FollowListUser {
   id: string
   username: string
-  nome_completo: string
+  nome_completo: string | null
   avatar_path: string | null
   isFollowing: boolean
 }
@@ -35,7 +35,7 @@ export interface FollowListUser {
 export interface PublicUserProfile {
   id: string
   username: string
-  nome_completo: string
+  nome_completo: string | null
   avatar_path: string | null
   bio: string | null
   data_cadastro: string
@@ -67,7 +67,7 @@ interface SearchUsersOptions {
 interface PublicUserRow {
   id: string
   username: string
-  nome_completo: string
+  nome_completo: string | null
   avatar_path: string | null
   bio: string | null
   data_cadastro: string
@@ -77,7 +77,7 @@ interface PublicUserRow {
 interface UserSearchRow {
   id: string
   username: string
-  nome_completo: string
+  nome_completo: string | null
   avatar_path: string | null
 }
 
@@ -108,14 +108,22 @@ function dedupeUsersById(users: UserSearchRow[]) {
   return Array.from(new Map(users.map(user => [user.id, user])).values())
 }
 
+function getSearchableFullName(user: UserSearchRow) {
+  return user.nome_completo?.trim().toLowerCase() || ''
+}
+
+function getAlphabeticalDisplayName(user: UserSearchRow) {
+  return user.nome_completo?.trim() || user.username
+}
+
 function sortUsersByRelevance(users: UserSearchRow[], normalizedQuery: string) {
   const lowerQuery = normalizedQuery.toLowerCase()
 
   return [...users].sort((leftUser, rightUser) => {
     const leftUsername = leftUser.username.toLowerCase()
     const rightUsername = rightUser.username.toLowerCase()
-    const leftName = leftUser.nome_completo.toLowerCase()
-    const rightName = rightUser.nome_completo.toLowerCase()
+    const leftName = getSearchableFullName(leftUser)
+    const rightName = getSearchableFullName(rightUser)
     const leftExactUsername = leftUsername === lowerQuery ? 1 : 0
     const rightExactUsername = rightUsername === lowerQuery ? 1 : 0
     const leftUsernamePrefix = leftUsername.startsWith(lowerQuery) ? 1 : 0
@@ -143,7 +151,10 @@ function compareUsersAlphabetically(leftUser: UserSearchRow, rightUser: UserSear
   const usernameDelta = leftUser.username.localeCompare(rightUser.username, 'pt-BR')
   if (usernameDelta !== 0) return usernameDelta
 
-  return leftUser.nome_completo.localeCompare(rightUser.nome_completo, 'pt-BR')
+  return getAlphabeticalDisplayName(leftUser).localeCompare(
+    getAlphabeticalDisplayName(rightUser),
+    'pt-BR'
+  )
 }
 
 function buildPublicProfileResult(

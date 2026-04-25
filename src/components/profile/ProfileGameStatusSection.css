@@ -818,3 +818,84 @@
     padding-inline: 0.7rem;
   }
 }
+
+body.light .profile-status-composer,
+body.light .profile-status-empty,
+body.light .profile-status-card,
+body.light .profile-status-autosuggest,
+body.light .profile-status-sort-menu,
+body.light .profile-status-pagination,
+body.light .profile-status-summary {
+  border-color: var(--border);
+  background: var(--card);
+  color: var(--card-foreground);
+  box-shadow: 0 14px 28px var(--shadow-color);
+}
+
+body.light .profile-status-empty h3,
+body.light .profile-status-card-title,
+body.light .profile-status-sort-trigger,
+body.light .profile-status-sort-option,
+body.light .profile-status-sort-filter-option,
+body.light .profile-status-autosuggest-item strong {
+  color: var(--foreground);
+}
+
+body.light .profile-status-empty p,
+body.light .profile-status-card-meta,
+body.light .profile-status-composer-copy p,
+body.light .profile-status-autosuggest-state,
+body.light .profile-status-autosuggest-item span,
+body.light .profile-status-sort-label,
+body.light .profile-status-search-badge,
+body.light .profile-status-toolbar-label,
+body.light .profile-status-search-field > span,
+body.light .profile-status-control-field > span,
+body.light .profile-status-search-helper,
+body.light .profile-status-list-head p,
+body.light .profile-status-list-head span,
+body.light .profile-status-date {
+  color: var(--muted-foreground);
+}
+
+body.light .profile-status-search-field,
+body.light .profile-status-select,
+body.light .profile-status-sort-trigger,
+body.light .profile-status-sort-option,
+body.light .profile-status-sort-filter-option,
+body.light .profile-status-favorite-toggle {
+  border-color: var(--border);
+  background: var(--input);
+  color: var(--foreground);
+}
+
+body.light .profile-status-search-input {
+  color: var(--foreground);
+}
+
+body.light .profile-status-search-input::placeholder {
+  color: color-mix(in srgb, var(--muted-foreground) 78%, transparent);
+}
+
+body.light .profile-status-autosuggest-item.is-actionable:hover,
+body.light .profile-status-sort-trigger:hover,
+body.light .profile-status-sort-option:hover,
+body.light .profile-status-sort-filter-option:hover,
+body.light .profile-status-favorite-toggle:hover:not(:disabled),
+body.light .profile-status-select:hover:not(:disabled),
+body.light .profile-status-card:hover {
+  border-color: var(--ring);
+  background: var(--surface-hover);
+}
+
+body.light .profile-status-sort-option.is-active,
+body.light .profile-status-sort-filter-option.is-active,
+body.light .profile-status-favorite-toggle.is-active {
+  border-color: var(--ring);
+  background: var(--surface-active);
+  color: var(--primary);
+}
+
+body.light .profile-status-autosuggest-state.is-error {
+  color: var(--destructive);
+}

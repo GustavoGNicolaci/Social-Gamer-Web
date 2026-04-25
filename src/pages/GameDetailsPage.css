@@ -1489,3 +1489,133 @@
     height: 42px;
   }
 }
+
+body.light .game-details-state-card,
+body.light .game-details-hero,
+body.light .game-details-highlight-card,
+body.light .game-details-panel,
+body.light .game-details-reviews,
+body.light .game-review-card,
+body.light .game-details-login-card,
+body.light .game-details-empty-card {
+  border-color: var(--border);
+  background:
+    radial-gradient(circle at top left, rgba(79, 70, 229, 0.08), transparent 34%),
+    var(--card);
+  color: var(--card-foreground);
+  box-shadow: 0 18px 42px var(--shadow-color);
+}
+
+body.light .game-details-state-card h1,
+body.light .game-details-empty-card h3,
+body.light .game-details-hero-copy h1,
+body.light .game-details-panel h2,
+body.light .game-details-reviews h2,
+body.light .game-review-user-copy strong,
+body.light .game-review-comment-author-link strong,
+body.light .game-review-card h3,
+body.light .game-details-rating-button,
+body.light .game-details-profile-status-button-label,
+body.light .game-review-comment-body,
+body.light .game-review-user-link {
+  color: var(--foreground);
+}
+
+body.light .game-details-state-card p,
+body.light .game-details-empty-card p,
+body.light .game-details-hero-description,
+body.light .game-details-chip-label,
+body.light .game-details-score-label,
+body.light .game-details-muted,
+body.light .game-details-panel p,
+body.light .game-review-user-copy span,
+body.light .game-review-comment-meta,
+body.light .game-review-comment-form-hint,
+body.light .game-review-comment-empty,
+body.light .game-details-profile-status-button-hint {
+  color: var(--muted-foreground);
+}
+
+body.light .game-details-state-badge,
+body.light .game-details-eyebrow,
+body.light .game-details-pill,
+body.light .game-details-panel-kicker,
+body.light .game-details-review-form-badge {
+  border-color: var(--badge-border);
+  background: var(--badge);
+  color: var(--badge-foreground);
+}
+
+body.light .game-details-cover-card,
+body.light .game-details-cover-date,
+body.light .game-details-score-chip,
+body.light .game-details-muted-chip,
+body.light .game-details-secondary-button,
+body.light .game-details-profile-status-button,
+body.light .game-details-rating-button,
+body.light .game-review-reaction-button,
+body.light .game-review-comment-reaction-button,
+body.light .game-review-report-button,
+body.light .game-review-comments-expand-button,
+body.light .game-details-reviews-expand-button {
+  border-color: var(--border);
+  background: var(--secondary);
+  color: var(--secondary-foreground);
+}
+
+body.light .game-details-primary-button,
+body.light .game-details-submit-button,
+body.light .game-review-comment-button,
+body.light .game-details-rating-button.is-selected {
+  background: var(--primary-gradient);
+  color: var(--primary-foreground);
+}
+
+body.light .game-details-textarea,
+body.light .game-review-comment-input {
+  border-color: var(--border);
+  background: var(--input);
+  color: var(--foreground);
+}
+
+body.light .game-details-textarea::placeholder,
+body.light .game-review-comment-input::placeholder {
+  color: color-mix(in srgb, var(--muted-foreground) 78%, transparent);
+}
+
+body.light .game-details-textarea:focus,
+body.light .game-review-comment-input:focus {
+  border-color: var(--ring);
+  box-shadow: var(--focus-ring);
+}
+
+body.light .game-details-secondary-button:hover,
+body.light .game-details-profile-status-button:hover:not(:disabled),
+body.light .game-details-rating-button:hover,
+body.light .game-review-card:hover,
+body.light .game-review-reaction-button:hover:not(:disabled),
+body.light .game-review-comment-reaction-button:hover:not(:disabled),
+body.light .game-review-report-button:hover,
+body.light .game-review-comments-expand-button:hover,
+body.light .game-details-reviews-expand-button:hover {
+  border-color: var(--ring);
+  background: var(--surface-hover);
+  box-shadow: 0 14px 28px var(--shadow-color);
+}
+
+body.light .game-details-profile-status-button.is-selected,
+body.light .game-review-reaction-button.is-active,
+body.light .game-review-comment-reaction-button.is-liked,
+body.light .game-review-comment-reaction-button.is-disliked {
+  border-color: var(--ring);
+  background: var(--surface-active);
+}
+
+body.light .game-details-feedback.is-success {
+  color: var(--success);
+}
+
+body.light .game-details-feedback.is-error,
+body.light .game-review-report-button.is-reported {
+  color: var(--destructive);
+}

@@ -382,3 +382,50 @@
     padding-bottom: 0.35rem;
   }
 }
+
+body.light .profile-connections-modal-backdrop {
+  background: var(--overlay);
+}
+
+body.light .profile-connections-modal,
+body.light .profile-connections-state-card,
+body.light .profile-connections-user-card,
+body.light .profile-connections-tab-button,
+body.light .profile-connections-close-button {
+  border-color: var(--border);
+  background: var(--card);
+  color: var(--card-foreground);
+  box-shadow: 0 18px 42px var(--shadow-color);
+}
+
+body.light .profile-connections-modal-copy h2,
+body.light .profile-connections-state-card h3,
+body.light .profile-connections-user-copy strong,
+body.light .profile-connections-tab-button {
+  color: var(--foreground);
+}
+
+body.light .profile-connections-modal-copy p,
+body.light .profile-connections-state-card p,
+body.light .profile-connections-user-copy span,
+body.light .profile-connections-tab-button span {
+  color: var(--muted-foreground);
+}
+
+body.light .profile-connections-close-button:hover,
+body.light .profile-connections-tab-button:hover,
+body.light .profile-connections-tab-button.is-active,
+body.light .profile-connections-user-card:hover {
+  border-color: var(--ring);
+  background: var(--surface-hover);
+}
+
+body.light .profile-connections-tab-button.is-active {
+  background: var(--surface-active);
+}
+
+body.light .profile-connections-user-chip {
+  border-color: var(--badge-border);
+  background: var(--badge);
+  color: var(--badge-foreground);
+}

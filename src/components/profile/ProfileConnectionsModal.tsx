@@ -503,8 +503,8 @@ export function ProfileConnectionsModal({
                       : listedUser.isFollowing
                         ? 'Deixar de seguir'
                         : 'Seguir'
-                    const visibleName = listedUser.nome_completo || listedUser.username
-                    const visibleFullName = listedUser.nome_completo || 'Nome nao informado'
+                    const visibleFullName = listedUser.nome_completo?.trim() || ''
+                    const visibleName = visibleFullName || listedUser.username
 
                     return (
                       <article key={listedUser.id} className="profile-connections-user-card">
@@ -523,7 +523,7 @@ export function ProfileConnectionsModal({
 
                           <div className="profile-connections-user-copy">
                             <strong>@{listedUser.username}</strong>
-                            <span>{visibleFullName}</span>
+                            {visibleFullName ? <span>{visibleFullName}</span> : null}
                           </div>
                         </Link>
 

@@ -220,3 +220,36 @@
     padding: 0 0.8rem 0.8rem;
   }
 }
+
+body.light .profile-reviews-card,
+body.light .profile-reviews-empty,
+body.light .profile-reviews-summary {
+  border-color: var(--border);
+  background: var(--card);
+  color: var(--card-foreground);
+  box-shadow: 0 14px 28px var(--shadow-color);
+}
+
+body.light .profile-reviews-card:hover {
+  border-color: var(--ring);
+  background: var(--surface-hover);
+}
+
+body.light .profile-reviews-score-pill {
+  border-color: var(--badge-border);
+  background: var(--badge);
+  color: var(--badge-foreground);
+}
+
+body.light .profile-reviews-card-body h3,
+body.light .profile-reviews-empty h3 {
+  color: var(--foreground);
+}
+
+body.light .profile-reviews-date,
+body.light .profile-reviews-comment,
+body.light .profile-reviews-comment.is-empty,
+body.light .profile-reviews-empty p,
+body.light .profile-reviews-cta {
+  color: var(--muted-foreground);
+}

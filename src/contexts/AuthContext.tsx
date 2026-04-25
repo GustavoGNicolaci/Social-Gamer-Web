@@ -27,7 +27,7 @@ interface FunctionErrorPayload {
 export interface UserProfile {
   id: string
   username: string
-  nome_completo: string
+  nome_completo: string | null
   avatar_path: string | null
   avatar_url: string | null
   bio: string | null
@@ -37,7 +37,7 @@ export interface UserProfile {
 
 export interface RegisterInput {
   username: string
-  name: string
+  name?: string | null
   email: string
   password: string
 }
@@ -106,13 +106,29 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 
+const normalizeWhitespace = (value: string) => value.trim().replace(/\s+/g, ' ')
+
+interface NormalizedRegisterInput {
+  username: string
+  name: string | null
+  email: string
+  password: string
+}
+
+const normalizeOptionalName = (value?: string | null) => {
+  const normalizedValue = typeof value === 'string' ? normalizeWhitespace(value) : ''
+  return normalizedValue || null
+}
+
 const getMetadataProfile = (user: User) => {
   const metadata = user.user_metadata as Record<string, unknown> | undefined
 
   return {
     username: typeof metadata?.username === 'string' ? metadata.username.trim() : '',
     nome_completo:
-      typeof metadata?.nome_completo === 'string' ? metadata.nome_completo.trim() : '',
+      typeof metadata?.nome_completo === 'string'
+        ? normalizeOptionalName(metadata.nome_completo)
+        : null,
   }
 }
 
@@ -123,11 +139,9 @@ const getEmailLocalPart = (email?: string) => {
   return localPart?.trim().toLowerCase() || ''
 }
 
-const normalizeWhitespace = (value: string) => value.trim().replace(/\s+/g, ' ')
-
-const normalizeRegisterInput = (input: RegisterInput): RegisterInput => ({
+const normalizeRegisterInput = (input: RegisterInput): NormalizedRegisterInput => ({
   username: input.username.trim(),
-  name: normalizeWhitespace(input.name),
+  name: normalizeOptionalName(input.name),
   email: input.email.trim().toLowerCase(),
   password: input.password,
 })
@@ -281,7 +295,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       try {
         const { username, nome_completo } = getMetadataProfile(nextUser)
 
-        if (!username || !nome_completo) {
+        if (!username) {
           return null
         }
 
@@ -324,7 +338,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const { username: metadataUsername, nome_completo: metadataNomeCompleto } =
         getMetadataProfile(nextUser)
 
-      if (!metadataUsername || !metadataNomeCompleto) {
+      if (!metadataUsername) {
         return currentProfile
       }
 
@@ -337,6 +351,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         normalizedProfileUsername === emailLocalPart && currentProfile.username !== metadataUsername
 
       const shouldRepairNomeCompleto =
+        Boolean(metadataNomeCompleto) &&
         normalizedProfileNomeCompleto === normalizedEmail &&
         currentProfile.nome_completo !== metadataNomeCompleto
 
@@ -435,12 +450,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         })
       }
 
-      if (!normalizedInput.name) {
-        return buildValidationErrorResult({
-          name: 'Nome completo e obrigatorio.',
-        })
-      }
-
       if (!normalizedInput.email) {
         return buildValidationErrorResult({
           email: REQUIRED_EMAIL_MESSAGE,
@@ -488,7 +497,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           options: {
             data: {
               username: normalizedInput.username,
-              nome_completo: normalizedInput.name,
+              ...(normalizedInput.name ? { nome_completo: normalizedInput.name } : {}),
             },
           },
         })

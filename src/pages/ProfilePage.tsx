@@ -835,9 +835,10 @@ export function ProfilePage() {
 
   const joinedDate = formatProfileDate(activeProfile.data_cadastro)
   const visibleFullName = isEditing
-    ? draftProfile.nome_completo || 'Nome nao informado'
-    : activeProfile.nome_completo || 'Nome nao informado'
+    ? draftProfile.nome_completo.trim()
+    : activeProfile.nome_completo?.trim() || ''
   const visibleUsername = isEditing ? draftProfile.username || 'usuario' : activeProfile.username || 'usuario'
+  const visibleProfileLabel = visibleFullName || visibleUsername
   const visibleBio = isEditing ? draftProfile.bio.trim() : activeProfile.bio?.trim() || ''
   const statusCountLabel =
     statusGames.length === 1 ? '1 jogo com status' : `${statusGames.length} jogos com status`
@@ -963,10 +964,10 @@ export function ProfilePage() {
     const currentUsername = editableProfile.username?.trim() || ''
     const currentBio = editableProfile.bio?.trim() || ''
 
-    if (!trimmedName || !trimmedUsername) {
+    if (!trimmedUsername) {
       setSaveFeedback({
         tone: 'error',
-        message: 'Nome exibido e username sao obrigatorios.',
+        message: 'Username e obrigatorio.',
       })
       return
     }
@@ -986,7 +987,7 @@ export function ProfilePage() {
 
     try {
       const { data, error } = await updateOwnProfile({
-        nome_completo: trimmedName,
+        nome_completo: trimmedName || null,
         username: trimmedUsername,
         bio: trimmedBio || null,
       })
@@ -1324,11 +1325,11 @@ export function ProfilePage() {
 
   const avatarContent = (
     <UserAvatar
-      name={visibleFullName}
+      name={visibleProfileLabel}
       avatarPath={activeProfile.avatar_path}
       imageClassName="avatar-img profile-avatar-large"
       fallbackClassName="avatar-placeholder-large profile-avatar-large"
-      alt={`Foto de perfil de ${visibleFullName}`}
+      alt={`Foto de perfil de ${visibleProfileLabel}`}
     />
   )
 
@@ -1380,7 +1381,9 @@ export function ProfilePage() {
                   <div className="profile-heading">
                     <span className="profile-eyebrow">{sectionEyebrow}</span>
                     <h1>@{visibleUsername}</h1>
-                    <p className="profile-handle">{visibleFullName}</p>
+                    {visibleFullName ? (
+                      <p className="profile-handle">{visibleFullName}</p>
+                    ) : null}
                   </div>
 
                   {isOwnerView ? (
@@ -1536,13 +1539,13 @@ export function ProfilePage() {
                       </label>
 
                       <label className="profile-field">
-                        <span>Nome completo</span>
+                        <span>Nome completo (opcional)</span>
                         <input
                           type="text"
                           className="profile-input"
                           value={draftProfile.nome_completo}
                           onChange={event => handleDraftChange('nome_completo', event.target.value)}
-                          placeholder="Como seu nome aparece no perfil"
+                          placeholder="Nome completo (opcional)"
                           disabled={isSaving}
                         />
                       </label>
@@ -1733,7 +1736,7 @@ export function ProfilePage() {
             initialTab={connectionsInitialTab}
             profileId={activeProfile.id}
             profileUsername={activeProfile.username || 'usuario'}
-            profileDisplayName={activeProfile.nome_completo || activeProfile.username || 'este perfil'}
+            profileDisplayName={activeProfile.nome_completo?.trim() || `@${activeProfile.username || 'usuario'}`}
             viewerId={user?.id}
             isOwnerView={Boolean(isOwnerView)}
             followersCount={followState.followersCount}

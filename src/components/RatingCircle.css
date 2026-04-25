@@ -61,9 +61,18 @@
 
 body.light .rating-circle {
   background:
-    radial-gradient(circle at 35% 25%, rgba(221, 214, 254, 0.88), transparent 34%),
-    rgba(49, 34, 83, 0.84);
+    radial-gradient(circle at 35% 25%, rgba(199, 210, 254, 0.9), transparent 34%),
+    var(--primary);
+  color: var(--primary-foreground);
   box-shadow:
-    0 14px 24px rgba(15, 23, 42, 0.22),
+    0 14px 24px var(--shadow-color),
     inset 0 0 0 1px rgba(255, 255, 255, 0.22);
+}
+
+body.light .rating-circle-track {
+  stroke: rgba(255, 255, 255, 0.44);
+}
+
+body.light .rating-circle-progress {
+  stroke: #c4b5fd;
 }

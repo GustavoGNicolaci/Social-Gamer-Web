@@ -1055,3 +1055,105 @@ body.light .gp-date {
     bottom: 0.65rem;
   }
 }
+
+body.light .gp-panel,
+body.light .gp-empty,
+body.light .gp-card,
+body.light .gp-modal-card,
+body.light .gp-game {
+  border-color: var(--border);
+  background:
+    radial-gradient(circle at top left, rgba(79, 70, 229, 0.08), transparent 34%),
+    var(--card);
+  color: var(--card-foreground);
+  box-shadow: 0 18px 42px var(--shadow-color);
+}
+
+body.light .gp-panel-copy h1,
+body.light .gp-panel-copy h2,
+body.light .gp-game h3,
+body.light .gp-modal-head h3,
+body.light .gp-modal-section-head h4,
+body.light .gp-search-option-copy strong,
+body.light .gp-panel-stat strong {
+  color: var(--foreground);
+}
+
+body.light .gp-muted,
+body.light .gp-search-helper,
+body.light .gp-panel-footnote,
+body.light .gp-sort-control span,
+body.light .gp-panel-stat span,
+body.light .gp-filter-group-head p,
+body.light .gp-meta-row span,
+body.light .gp-search-group-title,
+body.light .gp-search-option-copy span,
+body.light .gp-modal-section-head span,
+body.light .gp-filter-empty {
+  color: var(--muted-foreground);
+}
+
+body.light .gp-search-field,
+body.light .gp-panel-stat,
+body.light .gp-filter-group,
+body.light .gp-modal-section,
+body.light .gp-meta,
+body.light .gp-pagination,
+body.light .gp-btn--secondary,
+body.light .gp-modal-search,
+body.light .gp-sort-control select,
+body.light .gp-search-option,
+body.light .gp-filter-pill,
+body.light .gp-chip {
+  border-color: var(--border);
+  background: var(--surface);
+  color: var(--foreground);
+}
+
+body.light .gp-search-dropdown {
+  border-color: var(--border);
+  background: var(--popover);
+  color: var(--popover-foreground);
+  box-shadow: 0 26px 42px var(--shadow-color);
+}
+
+body.light .gp-search-input,
+body.light .gp-modal-search input,
+body.light .gp-sort-control select {
+  color: var(--foreground);
+}
+
+body.light .gp-search-input::placeholder,
+body.light .gp-modal-search input::placeholder {
+  color: color-mix(in srgb, var(--muted-foreground) 78%, transparent);
+}
+
+body.light .gp-search-field:focus-within,
+body.light .gp-modal-search:focus-within,
+body.light .gp-search-option:hover,
+body.light .gp-search-option.is-active,
+body.light .gp-filter-pill:hover,
+body.light .gp-filter-pill.is-active,
+body.light .gp-game:hover {
+  border-color: var(--ring);
+  background: var(--surface-hover);
+  box-shadow: 0 14px 28px var(--shadow-color);
+}
+
+body.light .gp-badge,
+body.light .gp-date,
+body.light .gp-search-option-badge {
+  border-color: var(--badge-border);
+  background: var(--badge);
+  color: var(--badge-foreground);
+}
+
+body.light .gp-btn--primary {
+  background: var(--primary-gradient);
+  color: var(--primary-foreground);
+}
+
+body.light .gp-sort-control option {
+  background: var(--popover);
+  color: var(--popover-foreground);
+}

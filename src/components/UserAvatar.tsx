@@ -2,16 +2,16 @@ import { useState } from 'react'
 import { resolveAvatarPublicUrl } from '../services/storageService'
 
 interface UserAvatarProps {
-  name: string
+  name?: string | null
   avatarPath?: string | null
   imageClassName: string
   fallbackClassName: string
   alt?: string
 }
 
-function getInitial(name: string) {
-  const firstCharacter = name.trim().charAt(0)
-  return firstCharacter ? firstCharacter.toUpperCase() : 'U'
+function getInitial(name?: string | null) {
+  const firstCharacter = name?.trim().charAt(0)
+  return firstCharacter ? firstCharacter.toUpperCase() : '?'
 }
 
 export function UserAvatar({
@@ -29,7 +29,7 @@ export function UserAvatar({
     return (
       <img
         src={safeSrc}
-        alt={alt || `Avatar de ${name}`}
+        alt={alt || `Avatar de ${name || 'perfil'}`}
         className={imageClassName}
         onError={() => setFailedSrc(safeSrc)}
         loading="lazy"
@@ -38,7 +38,7 @@ export function UserAvatar({
   }
 
   return (
-    <span className={fallbackClassName} aria-label={alt || `Avatar de ${name}`}>
+    <span className={fallbackClassName} aria-label={alt || `Avatar de ${name || 'perfil'}`}>
       {getInitial(name)}
     </span>
   )

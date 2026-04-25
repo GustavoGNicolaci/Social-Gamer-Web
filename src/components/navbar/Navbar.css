@@ -1181,3 +1181,97 @@ body.light .navbar-search-state.is-error {
     width: min(320px, calc(100vw - 1rem));
   }
 }
+
+body.light .navbar-container {
+  border-color: var(--border);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--card) 88%, transparent), color-mix(in srgb, var(--surface-active) 72%, transparent)),
+    var(--card);
+  box-shadow: 0 18px 42px var(--shadow-color);
+}
+
+body.light .navbar-logo-title,
+body.light .navbar-link,
+body.light .navbar-profile-name,
+body.light .navbar-button,
+body.light .navbar-search-input,
+body.light .navbar-search-state,
+body.light .navbar-dropdown-item,
+body.light .navbar-search-option,
+body.light .navbar-dropdown-title {
+  color: var(--foreground);
+}
+
+body.light .navbar-logo-subtitle,
+body.light .navbar-profile-eyebrow,
+body.light .navbar-search-helper,
+body.light .navbar-search-group-title,
+body.light .navbar-search-user-link,
+body.light .navbar-search-option-copy span,
+body.light .navbar-dropdown-hint,
+body.light .navbar-search-field-icon,
+body.light .navbar-profile-chevron {
+  color: var(--muted-foreground);
+}
+
+body.light .navbar-links,
+body.light .navbar-search-toggle,
+body.light .navbar-search-field,
+body.light .navbar-search-option,
+body.light .navbar-profile-trigger,
+body.light .auth-btn,
+body.light .navbar-search-follow-button {
+  border-color: var(--border);
+  background: var(--secondary);
+}
+
+body.light .navbar-search-dropdown,
+body.light .navbar-dropdown {
+  border-color: var(--border);
+  background: var(--popover);
+  color: var(--popover-foreground);
+  box-shadow: 0 26px 42px var(--shadow-color);
+}
+
+body.light .navbar-link:hover,
+body.light .navbar-link.active,
+body.light .navbar-search-toggle:hover,
+body.light .navbar-search-toggle.is-open,
+body.light .navbar-search-field:focus-within,
+body.light .navbar-search-option:hover,
+body.light .navbar-search-option.is-active,
+body.light .navbar-dropdown-item:hover,
+body.light .navbar-profile-trigger:hover,
+body.light .navbar-profile-trigger.is-open {
+  border-color: var(--ring);
+  background: var(--surface-hover);
+  color: var(--foreground);
+  box-shadow: 0 14px 28px var(--shadow-color);
+}
+
+body.light .navbar-link.active {
+  background: var(--surface-active);
+}
+
+body.light .navbar-search-input::placeholder {
+  color: color-mix(in srgb, var(--muted-foreground) 78%, transparent);
+}
+
+body.light .navbar-search-follow-button.is-following {
+  border-color: color-mix(in srgb, var(--success) 24%, var(--border));
+  background: var(--success-surface);
+}
+
+body.light .navbar-avatar-badge,
+body.light .navbar-dropdown-icon {
+  border-color: var(--badge-border);
+  background: var(--badge);
+  color: var(--badge-foreground);
+}
+
+body.light .navbar-dropdown-item.is-danger,
+body.light .navbar-dropdown-item.is-danger .navbar-dropdown-icon,
+body.light .navbar-dropdown-item.is-danger .navbar-dropdown-hint,
+body.light .navbar-search-state.is-error {
+  color: var(--destructive);
+}

@@ -398,3 +398,101 @@
     display: grid;
   }
 }
+
+body.light .account-settings-header,
+body.light .account-settings-state,
+body.light .account-settings-card,
+body.light .account-settings-modal {
+  border-color: var(--border);
+  background:
+    radial-gradient(circle at top left, rgba(79, 70, 229, 0.08), transparent 34%),
+    var(--card);
+  color: var(--card-foreground);
+  box-shadow: 0 18px 42px var(--shadow-color);
+}
+
+body.light .account-settings-header h1,
+body.light .account-settings-state h1,
+body.light .account-settings-card h2,
+body.light .account-settings-modal h2,
+body.light .account-settings-privacy-option,
+body.light .account-settings-privacy-option strong {
+  color: var(--foreground);
+}
+
+body.light .account-settings-header p,
+body.light .account-settings-state p,
+body.light .account-settings-card p,
+body.light .account-settings-modal p,
+body.light .account-settings-field > span,
+body.light .account-settings-privacy-option span {
+  color: var(--muted-foreground);
+}
+
+body.light .account-settings-kicker,
+body.light .account-settings-status {
+  border-color: var(--badge-border);
+  background: var(--badge);
+  color: var(--badge-foreground);
+}
+
+body.light .account-settings-status.is-public {
+  border-color: color-mix(in srgb, var(--success) 28%, var(--border));
+  background: var(--success-surface);
+  color: var(--success);
+}
+
+body.light .account-settings-kicker.is-danger,
+body.light .account-settings-card.is-danger-zone,
+body.light .account-settings-button.is-danger {
+  border-color: color-mix(in srgb, var(--destructive) 26%, var(--border));
+  background: var(--danger-surface);
+  color: var(--destructive);
+}
+
+body.light .account-settings-field input,
+body.light .account-settings-privacy-option,
+body.light .account-settings-button.is-secondary {
+  border-color: var(--border);
+  background: var(--input);
+  color: var(--foreground);
+}
+
+body.light .account-settings-field input::placeholder {
+  color: color-mix(in srgb, var(--muted-foreground) 78%, transparent);
+}
+
+body.light .account-settings-field input:focus,
+body.light .account-settings-privacy-option.is-selected {
+  border-color: var(--ring);
+  background: var(--surface-active);
+  box-shadow: var(--focus-ring);
+}
+
+body.light .account-settings-privacy-option:hover:not(:disabled),
+body.light .account-settings-button:hover:not(:disabled) {
+  border-color: var(--ring);
+  background: var(--surface-hover);
+  box-shadow: 0 14px 28px var(--shadow-color);
+}
+
+body.light .account-settings-button.is-primary {
+  background: var(--primary-gradient);
+  color: var(--primary-foreground);
+}
+
+body.light .account-settings-modal-backdrop {
+  background: var(--overlay);
+}
+
+body.light .account-settings-feedback.is-success {
+  color: var(--success);
+}
+
+body.light .account-settings-feedback.is-error {
+  color: var(--destructive);
+}
+
+body.light .account-settings-feedback.is-info {
+  color: var(--info);
+}

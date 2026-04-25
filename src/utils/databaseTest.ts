@@ -22,7 +22,7 @@ export const testDatabaseOperations = async () => {
     const testData = {
       id: testId,
       username: `testuser_${Date.now()}`,
-      nome_completo: 'Usuario Teste',
+      nome_completo: null,
       avatar_path: null,
       avatar_url: null,
       bio: 'Teste',

@@ -934,3 +934,99 @@ body.light .home-release-card:hover {
     padding-inline: 2.1rem;
   }
 }
+
+body.light .home-state-card,
+body.light .home-hero,
+body.light .home-hero-card,
+body.light .home-feature-card,
+body.light .home-panel,
+body.light .home-spotlight-card,
+body.light .home-activity-card,
+body.light .home-release-card {
+  border-color: var(--border);
+  background:
+    radial-gradient(circle at top left, rgba(79, 70, 229, 0.08), transparent 34%),
+    var(--card);
+  color: var(--card-foreground);
+  box-shadow: 0 18px 42px var(--shadow-color);
+}
+
+body.light .home-state-card::before,
+body.light .home-hero::before,
+body.light .home-hero-card::before,
+body.light .home-feature-card::before,
+body.light .home-panel::before,
+body.light .home-spotlight-card::before,
+body.light .home-activity-card::before,
+body.light .home-release-card::before {
+  opacity: 0;
+}
+
+body.light .home-hero h1,
+body.light .home-state-card h1,
+body.light .home-section-head h2,
+body.light .home-hero-card h2,
+body.light .home-feature-card h3,
+body.light .home-panel-title,
+body.light .home-spotlight-copy h3,
+body.light .home-activity-card h4,
+body.light .home-user-chip strong,
+body.light .home-card-title-link,
+body.light .home-release-body h3 {
+  color: var(--foreground);
+}
+
+body.light .home-hero-text,
+body.light .home-state-card p,
+body.light .home-section-head p,
+body.light .home-panel-heading p,
+body.light .home-feature-card p,
+body.light .home-hero-card p,
+body.light .home-spotlight-copy p,
+body.light .home-spotlight-meta,
+body.light .home-empty-state p,
+body.light .home-activity-card p,
+body.light .home-release-body span,
+body.light .home-stat-card span,
+body.light .home-user-chip span,
+body.light .home-network-meta {
+  color: var(--muted-foreground);
+}
+
+body.light .home-eyebrow,
+body.light .home-spotlight-meta span,
+body.light .home-like-pill {
+  border-color: var(--badge-border);
+  background: var(--badge);
+  color: var(--badge-foreground);
+}
+
+body.light .home-button-primary {
+  background: var(--primary-gradient);
+  color: var(--primary-foreground);
+}
+
+body.light .home-button-secondary,
+body.light .home-stat-card,
+body.light .home-empty-state,
+body.light .home-carousel-arrow {
+  border-color: var(--border);
+  background: var(--secondary);
+  color: var(--secondary-foreground);
+}
+
+body.light .home-inline-link,
+body.light .home-network-meta a,
+body.light .home-card-title-link:hover {
+  color: var(--link);
+}
+
+body.light .home-inline-link:hover,
+body.light .home-network-meta a:hover {
+  color: var(--link-hover);
+}
+
+body.light .home-empty-state.is-error {
+  border-color: color-mix(in srgb, var(--destructive) 28%, var(--border));
+  background: var(--danger-surface);
+}

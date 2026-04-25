@@ -267,3 +267,74 @@
     width: 100%;
   }
 }
+
+body.light .content-report-modal-backdrop {
+  background: var(--overlay);
+}
+
+body.light .content-report-modal,
+body.light .content-report-modal-close-button,
+body.light .content-report-modal-note,
+body.light .content-report-modal-pill {
+  border-color: var(--border);
+  background: var(--card);
+  color: var(--card-foreground);
+  box-shadow: 0 18px 42px var(--shadow-color);
+}
+
+body.light .content-report-modal-kicker {
+  border-color: var(--badge-border);
+  background: var(--badge);
+  color: var(--badge-foreground);
+}
+
+body.light .content-report-modal-copy h2,
+body.light .content-report-modal-note strong,
+body.light .content-report-modal-field span {
+  color: var(--foreground);
+}
+
+body.light .content-report-modal-copy p,
+body.light .content-report-modal-note p,
+body.light .content-report-modal-feedback,
+body.light .content-report-modal-pill {
+  color: var(--muted-foreground);
+}
+
+body.light .content-report-modal-select,
+body.light .content-report-modal-textarea,
+body.light .content-report-modal-secondary-action {
+  border-color: var(--border);
+  background: var(--input);
+  color: var(--foreground);
+}
+
+body.light .content-report-modal-textarea::placeholder {
+  color: color-mix(in srgb, var(--muted-foreground) 78%, transparent);
+}
+
+body.light .content-report-modal-select:focus,
+body.light .content-report-modal-textarea:focus,
+body.light .content-report-modal-close-button:focus-visible,
+body.light .content-report-modal-actions .game-button:focus-visible {
+  border-color: var(--ring);
+  box-shadow: var(--focus-ring);
+}
+
+body.light .content-report-modal-close-button:hover {
+  border-color: var(--ring);
+  background: var(--surface-hover);
+}
+
+body.light .content-report-modal-feedback.is-success {
+  color: var(--success);
+}
+
+body.light .content-report-modal-feedback.is-error,
+body.light .content-report-modal-danger-action {
+  color: var(--destructive);
+}
+
+body.light .content-report-modal-feedback.is-info {
+  color: var(--info);
+}

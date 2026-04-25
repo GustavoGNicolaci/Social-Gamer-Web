@@ -117,10 +117,6 @@ function RegisterPage() {
       nextErrors.username = 'Nome de usuario e obrigatorio.'
     }
 
-    if (!formData.name.trim()) {
-      nextErrors.name = 'Nome completo e obrigatorio.'
-    }
-
     if (!normalizedEmail) {
       nextErrors.email = REQUIRED_EMAIL_MESSAGE
     } else if (!isValidEmailAddress(normalizedEmail)) {
@@ -253,13 +249,13 @@ function RegisterPage() {
               </div>
 
               <div className="auth-field">
-                <label htmlFor="register-name">Nome completo</label>
+                <label htmlFor="register-name">Nome completo (opcional)</label>
                 <input
                   type="text"
                   id="register-name"
                   name="name"
                   className={`auth-input${errors.name ? ' is-error' : ''}`}
-                  placeholder="Seu nome completo"
+                  placeholder="Nome completo (opcional)"
                   autoComplete="name"
                   value={formData.name}
                   onChange={handleInputChange}
