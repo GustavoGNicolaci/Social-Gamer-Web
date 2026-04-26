@@ -2166,7 +2166,6 @@ export function ProfilePage() {
                   onClick={() => setActiveTab('status')}
                 >
                   <span>Status dos jogos</span>
-                  <small>{statusCountLabel}</small>
                 </button>
 
                 <button
@@ -2179,7 +2178,6 @@ export function ProfilePage() {
                   onClick={() => setActiveTab('wishlist')}
                 >
                   <span>Jogos que quero jogar</span>
-                  <small>{wishlistCountLabel}</small>
                 </button>
 
                 <button
@@ -2192,7 +2190,6 @@ export function ProfilePage() {
                   onClick={() => setActiveTab('reviews')}
                 >
                   <span>Reviews</span>
-                  <small>{reviewsCountLabel}</small>
                 </button>
               </div>
 
