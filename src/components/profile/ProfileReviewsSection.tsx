@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { GameCoverImage } from '../GameCoverImage'
 import type { ProfileReviewItem } from '../../services/reviewService'
 import './ProfileReviewsSection.css'
 
@@ -8,8 +9,12 @@ interface ProfileReviewsSectionProps {
   isLoading: boolean
   errorMessage: string | null
   countLabel: string
+  totalCount: number | null
+  hasMore: boolean
+  isLoadingMore: boolean
   isOwnerView: boolean
   onDeleteReview?: (reviewId: string) => Promise<{ ok: boolean; message?: string }>
+  onLoadMore: () => Promise<void>
 }
 
 function formatCompactDate(value: string | null | undefined, fallback = 'Data nao informada') {
@@ -37,17 +42,23 @@ function formatScoreLabel(score: number) {
   })}/10`
 }
 
-export function ProfileReviewsSection({
+export const ProfileReviewsSection = memo(function ProfileReviewsSection({
   items,
   isLoading,
   errorMessage,
   countLabel,
+  totalCount,
+  hasMore,
+  isLoadingMore,
   isOwnerView,
   onDeleteReview,
+  onLoadMore,
 }: ProfileReviewsSectionProps) {
   const [removingReviewIds, setRemovingReviewIds] = useState<string[]>([])
   const [actionError, setActionError] = useState<string | null>(null)
   const hasReviews = items.length > 0
+  const remainingReviewsCount =
+    totalCount === null ? 0 : Math.max(totalCount - items.length, 0)
 
   const handleDeleteReview = async (reviewId: string) => {
     if (!onDeleteReview) return
@@ -101,6 +112,11 @@ export function ProfileReviewsSection({
                 ? 'Estamos reunindo as avaliacoes que voce publicou no catalogo.'
                 : 'Estamos reunindo as avaliacoes publicadas por este perfil no catalogo.'}
             </p>
+            <div className="profile-reviews-skeleton-grid" aria-hidden="true">
+              {Array.from({ length: 4 }, (_, index) => (
+                <span key={`reviews-skeleton-${index}`} className="profile-reviews-skeleton-card" />
+              ))}
+            </div>
           </div>
         ) : errorMessage ? (
           <div className="profile-reviews-empty">
@@ -126,8 +142,9 @@ export function ProfileReviewsSection({
             ) : null}
           </div>
         ) : (
-          <div className="profile-reviews-grid">
-            {items.map(review => {
+          <>
+            <div className="profile-reviews-grid">
+              {items.map(review => {
               const visibleTitle = review.jogo?.titulo || 'Jogo indisponivel'
               const isRemovingReview = removingReviewIds.includes(review.id)
 
@@ -139,9 +156,12 @@ export function ProfileReviewsSection({
                   <Link to={`/games/${review.jogo_id}`} className="profile-reviews-card-link">
                     <div className="profile-reviews-card-cover">
                       {review.jogo?.capa_url ? (
-                        <img
+                        <GameCoverImage
                           src={review.jogo.capa_url}
                           alt={`Capa do jogo ${visibleTitle}`}
+                          width={360}
+                          height={160}
+                          sizes="(max-width: 768px) 100vw, 33vw"
                         />
                       ) : (
                         <div className="profile-reviews-card-fallback">{getInitial(visibleTitle)}</div>
@@ -187,11 +207,27 @@ export function ProfileReviewsSection({
                 </article>
               )
             })}
-          </div>
+            </div>
+
+            {hasMore ? (
+              <button
+                type="button"
+                className="profile-secondary-button profile-reviews-link"
+                onClick={() => void onLoadMore()}
+                disabled={isLoadingMore}
+              >
+                {isLoadingMore
+                  ? 'Carregando...'
+                  : remainingReviewsCount > 0
+                    ? `Mostrar mais reviews (${remainingReviewsCount} restantes)`
+                    : 'Mostrar mais reviews'}
+              </button>
+            ) : null}
+          </>
         )}
 
         {actionError ? <p className="profile-feedback is-error">{actionError}</p> : null}
       </div>
     </section>
   )
-}
+})

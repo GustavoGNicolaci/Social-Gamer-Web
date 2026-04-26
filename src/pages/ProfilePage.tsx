@@ -14,8 +14,9 @@ import {
 } from '../contexts/AuthContext'
 import {
   deleteGameStatus,
-  getGameStatusesByUserId,
+  getGameStatusesPageByUserId,
   saveGameStatus,
+  type GameStatusSortValue,
   type GameStatusError,
   type GameStatusItem,
   type GameStatusValue,
@@ -30,7 +31,7 @@ import {
 } from '../services/profileReportService'
 import {
   deleteReview,
-  getReviewsByUserId,
+  getReviewsPageByUserId,
   type ProfileReviewItem,
   type ReviewError,
 } from '../services/reviewService'
@@ -47,10 +48,12 @@ import {
 } from '../services/userService'
 import {
   deleteWishlistEntry,
+  getWishlistGamesPageByUserId,
   getWishlistGamesByUserId,
   type WishlistError,
   type WishlistGameItem,
 } from '../services/wishlistService'
+import { getPerformanceNow, logPerformanceTiming } from '../utils/performanceDiagnostics'
 import {
   getTopFiveEntriesFromPrivacySettings,
   mergeTopFiveEntriesIntoPrivacySettings,
@@ -62,6 +65,23 @@ type FeedbackTone = 'success' | 'error'
 type FollowFeedbackTone = 'error' | 'info'
 type ReportFeedbackTone = 'success' | 'error' | 'info'
 type ProfileTab = 'status' | 'wishlist' | 'reviews'
+type LoadedProfileTabs = Record<ProfileTab, boolean>
+
+interface ProfilePageState {
+  totalCount: number | null
+  hasMore: boolean
+  nextPage: number | null
+  loaded: boolean
+}
+
+interface ProfileStatusControls {
+  sortValue: GameStatusSortValue
+  statuses: GameStatusValue[]
+}
+
+interface CachedCollection<T> extends ProfilePageState {
+  items: T[]
+}
 
 interface FeedbackState {
   tone: FeedbackTone
@@ -101,6 +121,66 @@ const createProfileDraft = (profile: UserProfile | null): ProfileDraft => ({
   username: profile?.username || '',
   bio: profile?.bio || '',
 })
+
+const createEmptyLoadedProfileTabs = (): LoadedProfileTabs => ({
+  status: false,
+  wishlist: false,
+  reviews: false,
+})
+
+const PROFILE_STATUS_PAGE_SIZE = 12
+const PROFILE_WISHLIST_PAGE_SIZE = 12
+const PROFILE_REVIEWS_PAGE_SIZE = 6
+
+const DEFAULT_STATUS_CONTROLS: ProfileStatusControls = {
+  sortValue: 'recent',
+  statuses: [],
+}
+
+const createEmptyProfilePageState = (): ProfilePageState => ({
+  totalCount: null,
+  hasMore: false,
+  nextPage: null,
+  loaded: false,
+})
+
+const createCachedCollection = <T,>(
+  items: T[],
+  pageState: ProfilePageState
+): CachedCollection<T> => ({
+  items,
+  ...pageState,
+})
+
+const createLoadedPageState = (
+  totalCount: number | null,
+  hasMore: boolean,
+  nextPage: number | null
+): ProfilePageState => ({
+  totalCount,
+  hasMore,
+  nextPage,
+  loaded: true,
+})
+
+function getStatusControlsCacheKey(controls: ProfileStatusControls) {
+  const statusesKey = controls.statuses.length > 0 ? [...controls.statuses].sort().join(',') : 'all'
+  return `${controls.sortValue}:${statusesKey}`
+}
+
+function mergeCollectionsById<T extends { id: string }>(currentItems: T[], nextItems: T[]) {
+  const mergedItems = new Map<string, T>()
+
+  currentItems.forEach(item => {
+    mergedItems.set(item.id, item)
+  })
+
+  nextItems.forEach(item => {
+    mergedItems.set(item.id, item)
+  })
+
+  return Array.from(mergedItems.values())
+}
 
 function formatProfileDate(value: string | null | undefined, fallback = 'Data nao informada') {
   if (!value) return fallback
@@ -461,13 +541,28 @@ export function ProfilePage() {
   const [followersRefreshKey, setFollowersRefreshKey] = useState(0)
   const [statusGames, setStatusGames] = useState<GameStatusItem[]>([])
   const [statusLoading, setStatusLoading] = useState(false)
+  const [statusLoadingMore, setStatusLoadingMore] = useState(false)
   const [statusError, setStatusError] = useState<string | null>(null)
+  const [statusPageState, setStatusPageState] = useState<ProfilePageState>(createEmptyProfilePageState)
+  const [statusControls, setStatusControls] =
+    useState<ProfileStatusControls>(DEFAULT_STATUS_CONTROLS)
   const [wishlistGames, setWishlistGames] = useState<WishlistGameItem[]>([])
   const [wishlistLoading, setWishlistLoading] = useState(false)
+  const [wishlistLoadingMore, setWishlistLoadingMore] = useState(false)
+  const [wishlistPreparingReorder, setWishlistPreparingReorder] = useState(false)
   const [wishlistError, setWishlistError] = useState<string | null>(null)
+  const [wishlistPageState, setWishlistPageState] =
+    useState<ProfilePageState>(createEmptyProfilePageState)
   const [userReviews, setUserReviews] = useState<ProfileReviewItem[]>([])
   const [reviewsLoading, setReviewsLoading] = useState(false)
+  const [reviewsLoadingMore, setReviewsLoadingMore] = useState(false)
   const [reviewsError, setReviewsError] = useState<string | null>(null)
+  const [reviewsPageState, setReviewsPageState] =
+    useState<ProfilePageState>(createEmptyProfilePageState)
+  const [loadedProfileTabs, setLoadedProfileTabs] = useState<LoadedProfileTabs>(
+    createEmptyLoadedProfileTabs
+  )
+  const [loadedCollectionsKey, setLoadedCollectionsKey] = useState<string | null>(null)
   const [currentProfileReport, setCurrentProfileReport] =
     useState<CurrentUserProfileReportSummary | null>(null)
   const [profileReportLoading, setProfileReportLoading] = useState(false)
@@ -477,6 +572,12 @@ export function ProfilePage() {
   const [profileReportFeedback, setProfileReportFeedback] = useState<ReportFeedbackState | null>(null)
 
   const followStateRequestIdRef = useRef(0)
+  const statusRequestIdRef = useRef(0)
+  const wishlistRequestIdRef = useRef(0)
+  const reviewsRequestIdRef = useRef(0)
+  const statusCacheRef = useRef(new Map<string, CachedCollection<GameStatusItem>>())
+  const wishlistCacheRef = useRef(new Map<string, CachedCollection<WishlistGameItem>>())
+  const reviewsCacheRef = useRef(new Map<string, CachedCollection<ProfileReviewItem>>())
 
   useEffect(() => {
     let isMounted = true
@@ -566,93 +667,394 @@ export function ProfilePage() {
 
   useEffect(() => {
     setActiveTab('status')
+    setStatusControls({
+      sortValue: DEFAULT_STATUS_CONTROLS.sortValue,
+      statuses: [],
+    })
     setIsConnectionsModalOpen(false)
     setConnectionsInitialTab('followers')
     setIsProfileReportModalOpen(false)
     setProfileReportFeedback(null)
   }, [activeProfile?.id])
 
-  const loadStatusGames = useCallback(async (userId: string) => {
-    const result = await getGameStatusesByUserId(userId)
+  const collectionsKey = useMemo(() => {
+    if (!activeProfile || isRestrictedPublicView) return null
 
-    if (result.error) {
-      console.error('Erro ao carregar status dos jogos do perfil:', result.error)
-    }
+    return [
+      activeProfile.id,
+      user?.id || 'anon',
+      isOwnerView ? 'owner' : 'viewer',
+    ].join(':')
+  }, [activeProfile, isOwnerView, isRestrictedPublicView, user?.id])
 
-    return result
+  const statusCacheKey = useMemo(
+    () => (collectionsKey ? `${collectionsKey}:status:${getStatusControlsCacheKey(statusControls)}` : null),
+    [collectionsKey, statusControls]
+  )
+  const wishlistCacheKey = useMemo(
+    () => (collectionsKey ? `${collectionsKey}:wishlist` : null),
+    [collectionsKey]
+  )
+  const reviewsCacheKey = useMemo(
+    () => (collectionsKey ? `${collectionsKey}:reviews` : null),
+    [collectionsKey]
+  )
+
+  const resetCollections = useCallback((nextCollectionsKey: string | null) => {
+    setStatusGames([])
+    setStatusError(null)
+    setStatusLoading(false)
+    setStatusLoadingMore(false)
+    setStatusPageState(createEmptyProfilePageState())
+    setWishlistGames([])
+    setWishlistError(null)
+    setWishlistLoading(false)
+    setWishlistLoadingMore(false)
+    setWishlistPreparingReorder(false)
+    setWishlistPageState(createEmptyProfilePageState())
+    setUserReviews([])
+    setReviewsError(null)
+    setReviewsLoading(false)
+    setReviewsLoadingMore(false)
+    setReviewsPageState(createEmptyProfilePageState())
+    setLoadedProfileTabs(createEmptyLoadedProfileTabs())
+    setLoadedCollectionsKey(nextCollectionsKey)
   }, [])
 
-  useEffect(() => {
-    let isMounted = true
-
-    const loadProfileCollections = async () => {
-      if (!activeProfile || isRestrictedPublicView) {
-        if (isMounted) {
-          setStatusGames([])
-          setStatusError(null)
-          setStatusLoading(false)
-          setWishlistGames([])
-          setWishlistError(null)
-          setWishlistLoading(false)
-          setUserReviews([])
-          setReviewsError(null)
-          setReviewsLoading(false)
-        }
-        return
+  const loadStatusPage = useCallback(
+    async ({
+      page = 0,
+      append = false,
+      force = false,
+    }: {
+      page?: number
+      append?: boolean
+      force?: boolean
+    } = {}) => {
+      if (!activeProfile || !statusCacheKey || !collectionsKey || isRestrictedPublicView) {
+        return { ok: false }
       }
 
-      setStatusLoading(true)
+      const cachedCollection = statusCacheRef.current.get(statusCacheKey)
+
+      if (!force && !append && cachedCollection?.loaded) {
+        setStatusGames(cachedCollection.items)
+        setStatusPageState({
+          totalCount: cachedCollection.totalCount,
+          hasMore: cachedCollection.hasMore,
+          nextPage: cachedCollection.nextPage,
+          loaded: cachedCollection.loaded,
+        })
+        setStatusError(null)
+        setLoadedProfileTabs(currentTabs => ({ ...currentTabs, status: true }))
+        return { ok: true }
+      }
+
+      const requestId = statusRequestIdRef.current + 1
+      statusRequestIdRef.current = requestId
+
+      if (append) {
+        setStatusLoadingMore(true)
+      } else {
+        setStatusLoading(true)
+      }
+
       setStatusError(null)
-      setWishlistLoading(true)
-      setWishlistError(null)
-      setReviewsLoading(true)
-      setReviewsError(null)
+      const startedAt = getPerformanceNow()
 
-      const [statusResult, wishlistResult, reviewsResult] = await Promise.all([
-        loadStatusGames(activeProfile.id),
-        getWishlistGamesByUserId(activeProfile.id),
-        getReviewsByUserId(activeProfile.id, {
-          currentUserId: user?.id,
-          includeRestrictedAuthorReviews: Boolean(isOwnerView),
-        }),
-      ])
+      const statusResult = await getGameStatusesPageByUserId(activeProfile.id, {
+        page,
+        pageSize: PROFILE_STATUS_PAGE_SIZE,
+        sort: statusControls.sortValue,
+        statuses: statusControls.statuses,
+      })
 
-      if (!isMounted) return
+      if (statusRequestIdRef.current !== requestId) {
+        return { ok: false }
+      }
+
+      logPerformanceTiming('profile.status.ui-load', getPerformanceNow() - startedAt, {
+        profileId: activeProfile.id,
+        page,
+        append,
+        requestCount: statusResult.timings.requestCount,
+        itemCount: statusResult.data.length,
+      })
 
       if (statusResult.error) {
-        setStatusGames([])
+        console.error('Erro ao carregar status dos jogos do perfil:', statusResult.error)
+        if (!append) {
+          setStatusGames([])
+          setStatusPageState(createEmptyProfilePageState())
+        }
         setStatusError(getGameStatusErrorMessage(statusResult.error, 'load', Boolean(isOwnerView)))
-      } else {
-        setStatusGames(statusResult.data)
+        setStatusLoading(false)
+        setStatusLoadingMore(false)
+        setLoadedProfileTabs(currentTabs => ({ ...currentTabs, status: true }))
+        return { ok: false }
       }
+
+      const nextPageState = createLoadedPageState(
+        statusResult.totalCount,
+        statusResult.hasMore,
+        statusResult.nextPage
+      )
+
+      setStatusGames(currentItems => {
+        const nextItems = append ? mergeCollectionsById(currentItems, statusResult.data) : statusResult.data
+        statusCacheRef.current.set(statusCacheKey, createCachedCollection(nextItems, nextPageState))
+        return nextItems
+      })
+      setStatusPageState(nextPageState)
+      setStatusError(null)
+      setStatusLoading(false)
+      setStatusLoadingMore(false)
+      setLoadedProfileTabs(currentTabs => ({ ...currentTabs, status: true }))
+
+      return { ok: true }
+    },
+    [
+      activeProfile,
+      collectionsKey,
+      isOwnerView,
+      isRestrictedPublicView,
+      statusCacheKey,
+      statusControls.sortValue,
+      statusControls.statuses,
+    ]
+  )
+
+  const loadWishlistPage = useCallback(
+    async ({
+      page = 0,
+      append = false,
+      force = false,
+    }: {
+      page?: number
+      append?: boolean
+      force?: boolean
+    } = {}) => {
+      if (!activeProfile || !wishlistCacheKey || !collectionsKey || isRestrictedPublicView) {
+        return { ok: false }
+      }
+
+      const cachedCollection = wishlistCacheRef.current.get(wishlistCacheKey)
+
+      if (!force && !append && cachedCollection?.loaded) {
+        setWishlistGames(cachedCollection.items)
+        setWishlistPageState({
+          totalCount: cachedCollection.totalCount,
+          hasMore: cachedCollection.hasMore,
+          nextPage: cachedCollection.nextPage,
+          loaded: cachedCollection.loaded,
+        })
+        setWishlistError(null)
+        setLoadedProfileTabs(currentTabs => ({ ...currentTabs, wishlist: true }))
+        return { ok: true }
+      }
+
+      const requestId = wishlistRequestIdRef.current + 1
+      wishlistRequestIdRef.current = requestId
+
+      if (append) {
+        setWishlistLoadingMore(true)
+      } else {
+        setWishlistLoading(true)
+      }
+
+      setWishlistError(null)
+      const startedAt = getPerformanceNow()
+
+      const wishlistResult = await getWishlistGamesPageByUserId(activeProfile.id, {
+        page,
+        pageSize: PROFILE_WISHLIST_PAGE_SIZE,
+      })
+
+      if (wishlistRequestIdRef.current !== requestId) {
+        return { ok: false }
+      }
+
+      logPerformanceTiming('profile.wishlist.ui-load', getPerformanceNow() - startedAt, {
+        profileId: activeProfile.id,
+        page,
+        append,
+        requestCount: wishlistResult.timings.requestCount,
+        itemCount: wishlistResult.data.length,
+      })
 
       if (wishlistResult.error) {
         console.error('Erro ao carregar jogos que quero jogar:', wishlistResult.error)
-        setWishlistGames([])
+        if (!append) {
+          setWishlistGames([])
+          setWishlistPageState(createEmptyProfilePageState())
+        }
         setWishlistError(getWishlistErrorMessage(wishlistResult.error, 'load', Boolean(isOwnerView)))
-      } else {
-        setWishlistGames(wishlistResult.data)
+        setWishlistLoading(false)
+        setWishlistLoadingMore(false)
+        setLoadedProfileTabs(currentTabs => ({ ...currentTabs, wishlist: true }))
+        return { ok: false }
       }
+
+      const nextPageState = createLoadedPageState(
+        wishlistResult.totalCount,
+        wishlistResult.hasMore,
+        wishlistResult.nextPage
+      )
+
+      setWishlistGames(currentItems => {
+        const nextItems = append ? mergeCollectionsById(currentItems, wishlistResult.data) : wishlistResult.data
+        wishlistCacheRef.current.set(wishlistCacheKey, createCachedCollection(nextItems, nextPageState))
+        return nextItems
+      })
+      setWishlistPageState(nextPageState)
+      setWishlistError(null)
+      setWishlistLoading(false)
+      setWishlistLoadingMore(false)
+      setLoadedProfileTabs(currentTabs => ({ ...currentTabs, wishlist: true }))
+
+      return { ok: true }
+    },
+    [activeProfile, collectionsKey, isOwnerView, isRestrictedPublicView, wishlistCacheKey]
+  )
+
+  const loadReviewsPage = useCallback(
+    async ({
+      page = 0,
+      append = false,
+      force = false,
+    }: {
+      page?: number
+      append?: boolean
+      force?: boolean
+    } = {}) => {
+      if (!activeProfile || !reviewsCacheKey || !collectionsKey || isRestrictedPublicView) {
+        return { ok: false }
+      }
+
+      const cachedCollection = reviewsCacheRef.current.get(reviewsCacheKey)
+
+      if (!force && !append && cachedCollection?.loaded) {
+        setUserReviews(cachedCollection.items)
+        setReviewsPageState({
+          totalCount: cachedCollection.totalCount,
+          hasMore: cachedCollection.hasMore,
+          nextPage: cachedCollection.nextPage,
+          loaded: cachedCollection.loaded,
+        })
+        setReviewsError(null)
+        setLoadedProfileTabs(currentTabs => ({ ...currentTabs, reviews: true }))
+        return { ok: true }
+      }
+
+      const requestId = reviewsRequestIdRef.current + 1
+      reviewsRequestIdRef.current = requestId
+
+      if (append) {
+        setReviewsLoadingMore(true)
+      } else {
+        setReviewsLoading(true)
+      }
+
+      setReviewsError(null)
+      const startedAt = getPerformanceNow()
+
+      const reviewsResult = await getReviewsPageByUserId(activeProfile.id, {
+        page,
+        pageSize: PROFILE_REVIEWS_PAGE_SIZE,
+        currentUserId: user?.id,
+        includeRestrictedAuthorReviews: Boolean(isOwnerView),
+      })
+
+      if (reviewsRequestIdRef.current !== requestId) {
+        return { ok: false }
+      }
+
+      logPerformanceTiming('profile.reviews.ui-load', getPerformanceNow() - startedAt, {
+        profileId: activeProfile.id,
+        page,
+        append,
+        requestCount: reviewsResult.timings.requestCount,
+        itemCount: reviewsResult.data.length,
+      })
 
       if (reviewsResult.error) {
         console.error('Erro ao carregar reviews do perfil:', reviewsResult.error)
-        setUserReviews(reviewsResult.data)
+        if (!append) {
+          setUserReviews(reviewsResult.data)
+          setReviewsPageState(createEmptyProfilePageState())
+        }
         setReviewsError(getReviewErrorMessage(reviewsResult.error, 'load', Boolean(isOwnerView)))
-      } else {
-        setUserReviews(reviewsResult.data)
+        setReviewsLoading(false)
+        setReviewsLoadingMore(false)
+        setLoadedProfileTabs(currentTabs => ({ ...currentTabs, reviews: true }))
+        return { ok: false }
       }
 
-      setStatusLoading(false)
-      setWishlistLoading(false)
+      const nextPageState = createLoadedPageState(
+        reviewsResult.totalCount,
+        reviewsResult.hasMore,
+        reviewsResult.nextPage
+      )
+
+      setUserReviews(currentItems => {
+        const nextItems = append ? mergeCollectionsById(currentItems, reviewsResult.data) : reviewsResult.data
+        reviewsCacheRef.current.set(reviewsCacheKey, createCachedCollection(nextItems, nextPageState))
+        return nextItems
+      })
+      setReviewsPageState(nextPageState)
+      setReviewsError(null)
       setReviewsLoading(false)
+      setReviewsLoadingMore(false)
+      setLoadedProfileTabs(currentTabs => ({ ...currentTabs, reviews: true }))
+
+      return { ok: true }
+    },
+    [
+      activeProfile,
+      collectionsKey,
+      isOwnerView,
+      isRestrictedPublicView,
+      reviewsCacheKey,
+      user?.id,
+    ]
+  )
+
+  useEffect(() => {
+    if (!collectionsKey) {
+      if (loadedCollectionsKey !== null) {
+        resetCollections(null)
+      }
+      return
     }
 
-    void loadProfileCollections()
-
-    return () => {
-      isMounted = false
+    if (loadedCollectionsKey !== collectionsKey) {
+      resetCollections(collectionsKey)
     }
-  }, [activeProfile, isOwnerView, isRestrictedPublicView, loadStatusGames, user?.id])
+  }, [collectionsKey, loadedCollectionsKey, resetCollections])
+
+  useEffect(() => {
+    if (!activeProfile || !collectionsKey || isRestrictedPublicView) return
+
+    if (activeTab === 'status') {
+      void loadStatusPage()
+      return
+    }
+
+    if (activeTab === 'wishlist') {
+      void loadWishlistPage()
+      return
+    }
+
+    void loadReviewsPage()
+  }, [
+    activeProfile,
+    activeTab,
+    collectionsKey,
+    isRestrictedPublicView,
+    loadReviewsPage,
+    loadStatusPage,
+    loadWishlistPage,
+  ])
 
   useEffect(() => {
     let isMounted = true
@@ -840,14 +1242,39 @@ export function ProfilePage() {
   const visibleUsername = isEditing ? draftProfile.username || 'usuario' : activeProfile.username || 'usuario'
   const visibleProfileLabel = visibleFullName || visibleUsername
   const visibleBio = isEditing ? draftProfile.bio.trim() : activeProfile.bio?.trim() || ''
+  const hasCurrentCollections = Boolean(collectionsKey && loadedCollectionsKey === collectionsKey)
+  const statusItemsForView = hasCurrentCollections ? statusGames : []
+  const wishlistItemsForView = hasCurrentCollections ? wishlistGames : []
+  const reviewItemsForView = hasCurrentCollections ? userReviews : []
+  const statusTotalCount = statusPageState.totalCount ?? statusItemsForView.length
+  const wishlistTotalCount = wishlistPageState.totalCount ?? wishlistItemsForView.length
+  const reviewsTotalCount = reviewsPageState.totalCount ?? reviewItemsForView.length
+  const statusSectionLoading =
+    !hasCurrentCollections || (statusLoading && !statusPageState.loaded) || !loadedProfileTabs.status
+  const wishlistSectionLoading =
+    !hasCurrentCollections ||
+    (wishlistLoading && !wishlistPageState.loaded) ||
+    !loadedProfileTabs.wishlist
+  const reviewsSectionLoading =
+    !hasCurrentCollections || (reviewsLoading && !reviewsPageState.loaded) || !loadedProfileTabs.reviews
   const statusCountLabel =
-    statusGames.length === 1 ? '1 jogo com status' : `${statusGames.length} jogos com status`
+    statusSectionLoading
+      ? '...'
+      : statusTotalCount === 1
+        ? '1 jogo com status'
+        : `${statusTotalCount} jogos com status`
   const wishlistCountLabel =
-    wishlistGames.length === 1
-      ? '1 jogo salvo para jogar'
-      : `${wishlistGames.length} jogos salvos para jogar`
+    wishlistSectionLoading
+      ? '...'
+      : wishlistTotalCount === 1
+        ? '1 jogo salvo para jogar'
+        : `${wishlistTotalCount} jogos salvos para jogar`
   const reviewsCountLabel =
-    userReviews.length === 1 ? '1 review publicada' : `${userReviews.length} reviews publicadas`
+    reviewsSectionLoading
+      ? '...'
+      : reviewsTotalCount === 1
+        ? '1 review publicada'
+        : `${reviewsTotalCount} reviews publicadas`
   const followButtonLabel = followSubmitting
     ? followState.isFollowing
       ? 'Atualizando...'
@@ -1022,23 +1449,98 @@ export function ProfilePage() {
       setStatusGames([])
       setStatusError(null)
       setStatusLoading(false)
+      setStatusLoadingMore(false)
+      setStatusPageState(createEmptyProfilePageState())
       return
     }
 
-    setStatusLoading(true)
-    setStatusError(null)
-
-    const { data, error } = await loadStatusGames(activeProfile.id)
-
-    if (error) {
-      setStatusGames([])
-      setStatusError(getGameStatusErrorMessage(error, 'load', Boolean(isOwnerView)))
-    } else {
-      setStatusGames(data)
-      setStatusError(null)
+    if (statusCacheKey) {
+      statusCacheRef.current.delete(statusCacheKey)
     }
 
-    setStatusLoading(false)
+    await loadStatusPage({ page: 0, force: true })
+  }
+
+  const handleStatusControlsChange = (nextControls: ProfileStatusControls) => {
+    setStatusControls({
+      sortValue: nextControls.sortValue,
+      statuses: [...nextControls.statuses],
+    })
+    setStatusGames([])
+    setStatusPageState(createEmptyProfilePageState())
+    setStatusError(null)
+    setLoadedProfileTabs(currentTabs => ({ ...currentTabs, status: false }))
+  }
+
+  const handleLoadMoreStatusGames = async () => {
+    if (!statusPageState.hasMore || statusPageState.nextPage === null || statusLoadingMore) return
+
+    await loadStatusPage({
+      page: statusPageState.nextPage,
+      append: true,
+    })
+  }
+
+  const handleLoadMoreWishlistGames = async () => {
+    if (!wishlistPageState.hasMore || wishlistPageState.nextPage === null || wishlistLoadingMore) return
+
+    await loadWishlistPage({
+      page: wishlistPageState.nextPage,
+      append: true,
+    })
+  }
+
+  const handleLoadMoreReviews = async () => {
+    if (!reviewsPageState.hasMore || reviewsPageState.nextPage === null || reviewsLoadingMore) return
+
+    await loadReviewsPage({
+      page: reviewsPageState.nextPage,
+      append: true,
+    })
+  }
+
+  const handleLoadFullWishlistForReorder = async () => {
+    if (!activeProfile || !wishlistCacheKey || wishlistPreparingReorder) {
+      return {
+        ok: false,
+        message: 'Nao foi possivel preparar a reordenacao agora.',
+      }
+    }
+
+    if (!wishlistPageState.hasMore && wishlistPageState.loaded) {
+      return { ok: true }
+    }
+
+    setWishlistPreparingReorder(true)
+    setWishlistError(null)
+    const startedAt = getPerformanceNow()
+    const { data, error } = await getWishlistGamesByUserId(activeProfile.id)
+
+    logPerformanceTiming('profile.wishlist.full-reorder-load', getPerformanceNow() - startedAt, {
+      profileId: activeProfile.id,
+      itemCount: data.length,
+      hasError: Boolean(error),
+    })
+
+    setWishlistPreparingReorder(false)
+
+    if (error) {
+      const message = getWishlistErrorMessage(error, 'load', Boolean(isOwnerView))
+      setWishlistError(message)
+      return {
+        ok: false,
+        message,
+      }
+    }
+
+    const nextPageState = createLoadedPageState(data.length, false, null)
+    setWishlistGames(data)
+    setWishlistPageState(nextPageState)
+    wishlistCacheRef.current.set(wishlistCacheKey, createCachedCollection(data, nextPageState))
+    setLoadedProfileTabs(currentTabs => ({ ...currentTabs, wishlist: true }))
+    setWishlistError(null)
+
+    return { ok: true }
   }
 
   const handleSaveGameStatus = async ({
@@ -1071,17 +1573,19 @@ export function ProfilePage() {
       }
     }
 
-    const { data, error: reloadError } = await loadStatusGames(editableProfile.id)
+    if (statusCacheKey) {
+      statusCacheRef.current.delete(statusCacheKey)
+    }
 
-    if (reloadError) {
-      setStatusError(getGameStatusErrorMessage(reloadError, 'load', true))
+    const reloadResult = await loadStatusPage({ page: 0, force: true })
+
+    if (!reloadResult.ok) {
       return {
         ok: false,
         message: 'O status foi salvo, mas nao foi possivel atualizar a lista agora.',
       }
     }
 
-    setStatusGames(data)
     setStatusError(null)
 
     return {
@@ -1109,7 +1613,20 @@ export function ProfilePage() {
       }
     }
 
-    setStatusGames(currentItems => currentItems.filter(item => item.id !== itemId))
+    const nextPageState = {
+      ...statusPageState,
+      totalCount:
+        statusPageState.totalCount === null ? null : Math.max(statusPageState.totalCount - 1, 0),
+    }
+
+    setStatusGames(currentItems => {
+      const nextItems = currentItems.filter(item => item.id !== itemId)
+      if (statusCacheKey) {
+        statusCacheRef.current.set(statusCacheKey, createCachedCollection(nextItems, nextPageState))
+      }
+      return nextItems
+    })
+    setStatusPageState(nextPageState)
     setStatusError(null)
 
     return {
@@ -1137,7 +1654,22 @@ export function ProfilePage() {
       }
     }
 
-    setWishlistGames(currentItems => currentItems.filter(item => item.id !== itemId))
+    const nextPageState = {
+      ...wishlistPageState,
+      totalCount:
+        wishlistPageState.totalCount === null
+          ? null
+          : Math.max(wishlistPageState.totalCount - 1, 0),
+    }
+
+    setWishlistGames(currentItems => {
+      const nextItems = currentItems.filter(item => item.id !== itemId)
+      if (wishlistCacheKey) {
+        wishlistCacheRef.current.set(wishlistCacheKey, createCachedCollection(nextItems, nextPageState))
+      }
+      return nextItems
+    })
+    setWishlistPageState(nextPageState)
     setWishlistError(null)
 
     return {
@@ -1194,9 +1726,20 @@ export function ProfilePage() {
       }
     }
 
-    setUserReviews(currentReviews =>
-      currentReviews.filter(currentReview => currentReview.id !== reviewId)
-    )
+    const nextPageState = {
+      ...reviewsPageState,
+      totalCount:
+        reviewsPageState.totalCount === null ? null : Math.max(reviewsPageState.totalCount - 1, 0),
+    }
+
+    setUserReviews(currentReviews => {
+      const nextReviews = currentReviews.filter(currentReview => currentReview.id !== reviewId)
+      if (reviewsCacheKey) {
+        reviewsCacheRef.current.set(reviewsCacheKey, createCachedCollection(nextReviews, nextPageState))
+      }
+      return nextReviews
+    })
+    setReviewsPageState(nextPageState)
     setReviewsError(null)
 
     return {
@@ -1662,15 +2205,21 @@ export function ProfilePage() {
               >
                 {activeTab === 'status' ? (
                   <ProfileGameStatusSection
+                    key={`profile-status-${activeProfile.id}`}
                     userId={activeProfile.id}
-                    items={statusGames}
-                    isLoading={statusLoading}
+                    items={statusItemsForView}
+                    isLoading={statusSectionLoading}
                     errorMessage={statusError}
                     countLabel={statusCountLabel}
+                    totalCount={statusPageState.totalCount}
+                    hasMore={statusPageState.hasMore}
+                    isLoadingMore={statusLoadingMore}
                     isOwnerView={Boolean(isOwnerView)}
                     onSaveStatus={isOwnerView ? handleSaveGameStatus : readOnlySaveStatus}
                     onDeleteStatus={isOwnerView ? handleDeleteStatus : readOnlyDeleteStatus}
                     onRefresh={handleRefreshStatusGames}
+                    onLoadMore={handleLoadMoreStatusGames}
+                    onControlsChange={handleStatusControlsChange}
                   />
                 ) : null}
               </div>
@@ -1684,13 +2233,21 @@ export function ProfilePage() {
               >
                 {activeTab === 'wishlist' ? (
                   <ProfileWishlistSection
+                    key={`profile-wishlist-${activeProfile.id}`}
                     userId={activeProfile.id}
-                    items={wishlistGames}
-                    isLoading={wishlistLoading}
+                    items={wishlistItemsForView}
+                    isLoading={wishlistSectionLoading}
                     errorMessage={wishlistError}
                     countLabel={wishlistCountLabel}
+                    totalCount={wishlistPageState.totalCount}
+                    hasMore={wishlistPageState.hasMore}
+                    isLoadingMore={wishlistLoadingMore}
+                    isPreparingReorder={wishlistPreparingReorder}
+                    isFullyLoaded={wishlistPageState.loaded && !wishlistPageState.hasMore}
                     isOwnerView={Boolean(isOwnerView)}
                     onDeleteWishlistItem={isOwnerView ? handleDeleteWishlistItem : readOnlyDeleteWishlist}
+                    onLoadMore={handleLoadMoreWishlistGames}
+                    onLoadFullWishlistForReorder={handleLoadFullWishlistForReorder}
                   />
                 ) : null}
               </div>
@@ -1704,12 +2261,17 @@ export function ProfilePage() {
               >
                 {activeTab === 'reviews' ? (
                   <ProfileReviewsSection
-                    items={userReviews}
-                    isLoading={reviewsLoading}
+                    key={`profile-reviews-${activeProfile.id}`}
+                    items={reviewItemsForView}
+                    isLoading={reviewsSectionLoading}
                     errorMessage={reviewsError}
                     countLabel={reviewsCountLabel}
+                    totalCount={reviewsPageState.totalCount}
+                    hasMore={reviewsPageState.hasMore}
+                    isLoadingMore={reviewsLoadingMore}
                     isOwnerView={Boolean(isOwnerView)}
                     onDeleteReview={isOwnerView ? handleDeleteReview : undefined}
+                    onLoadMore={handleLoadMoreReviews}
                   />
                 ) : null}
               </div>

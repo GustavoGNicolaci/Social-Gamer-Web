@@ -579,6 +579,35 @@
   grid-template-columns: repeat(var(--status-columns), minmax(0, 1fr));
 }
 
+.profile-status-skeleton-grid {
+  --status-columns: 6;
+
+  display: grid;
+  gap: 0.7rem;
+  grid-template-columns: repeat(var(--status-columns), minmax(0, 1fr));
+}
+
+.profile-status-skeleton-card {
+  display: block;
+  min-height: 180px;
+  border-radius: 18px;
+  background:
+    linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent),
+    var(--skeleton);
+  background-size: 220% 100%;
+  animation: profileSkeletonShimmer 1.2s ease-in-out infinite;
+}
+
+@keyframes profileSkeletonShimmer {
+  0% {
+    background-position: 220% 0;
+  }
+
+  100% {
+    background-position: -220% 0;
+  }
+}
+
 .profile-status-card {
   position: relative;
   overflow: hidden;
@@ -752,6 +781,11 @@
   box-shadow: 0 12px 24px rgba(102, 126, 234, 0.28);
 }
 
+.profile-status-load-more {
+  width: fit-content;
+  margin: 0 auto;
+}
+
 @media (max-width: 900px) {
   .profile-status-toolbar,
   .profile-status-list-head {
@@ -822,6 +856,7 @@
 body.light .profile-status-composer,
 body.light .profile-status-empty,
 body.light .profile-status-card,
+body.light .profile-status-skeleton-card,
 body.light .profile-status-autosuggest,
 body.light .profile-status-sort-menu,
 body.light .profile-status-pagination,

@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { GameCoverImage } from '../GameCoverImage'
 import type { HomeFeaturedGame } from '../../services/homeService'
 import { formatCompactDate, formatRating, getInitial } from './homeDisplayUtils'
 
@@ -53,7 +54,13 @@ export function FeaturedRecentReviewedGames({
               <Link key={game.id} to={`/games/${game.id}`} className="home-spotlight-card">
                 <div className="home-spotlight-cover">
                   {game.coverUrl ? (
-                    <img src={game.coverUrl} alt={`Capa do jogo ${game.title}`} />
+                    <GameCoverImage
+                      src={game.coverUrl}
+                      alt={`Capa do jogo ${game.title}`}
+                      width={152}
+                      height={192}
+                      sizes="76px"
+                    />
                   ) : (
                     <div className="home-spotlight-fallback">{getInitial(game.title)}</div>
                   )}

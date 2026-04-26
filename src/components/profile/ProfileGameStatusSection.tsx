@@ -1,4 +1,5 @@
 import {
+  memo,
   useEffect,
   useMemo,
   useRef,
@@ -7,7 +8,9 @@ import {
   type FormEvent,
 } from 'react'
 import { Link } from 'react-router-dom'
+import { GameCoverImage } from '../GameCoverImage'
 import {
+  type GameStatusSortValue,
   type GameStatusItem,
   type GameStatusValue,
 } from '../../services/gameStatusService'
@@ -18,7 +21,7 @@ import {
 } from '../../services/gameCatalogService'
 import './ProfileGameStatusSection.css'
 
-type StatusSortValue = 'recent' | 'oldest' | 'favorites' | 'title'
+type StatusSortValue = GameStatusSortValue
 
 interface SaveStatusResult {
   ok: boolean
@@ -36,6 +39,9 @@ interface ProfileGameStatusSectionProps {
   isLoading: boolean
   errorMessage: string | null
   countLabel: string
+  totalCount: number | null
+  hasMore: boolean
+  isLoadingMore: boolean
   isOwnerView: boolean
   onSaveStatus: (params: {
     gameId: number
@@ -44,6 +50,8 @@ interface ProfileGameStatusSectionProps {
   }) => Promise<SaveStatusResult>
   onDeleteStatus: (itemId: string) => Promise<DeleteStatusResult>
   onRefresh: () => Promise<void>
+  onLoadMore: () => Promise<void>
+  onControlsChange: (controls: { sortValue: StatusSortValue; statuses: GameStatusValue[] }) => void
 }
 
 interface StatusSearchResultItem {
@@ -209,16 +217,21 @@ function PaginationControls({
   )
 }
 
-export function ProfileGameStatusSection({
+export const ProfileGameStatusSection = memo(function ProfileGameStatusSection({
   userId,
   items,
   isLoading,
   errorMessage,
   countLabel,
+  totalCount,
+  hasMore,
+  isLoadingMore,
   isOwnerView,
   onSaveStatus,
   onDeleteStatus,
   onRefresh,
+  onLoadMore,
+  onControlsChange,
 }: ProfileGameStatusSectionProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<CatalogGamePreview[]>([])
@@ -318,18 +331,18 @@ export function ProfileGameStatusSection({
   }, [activeStatusFilterOptions])
 
   const handleToggleStatusFilter = (status: GameStatusValue) => {
-    setActiveStatusFilters(currentFilters => {
-      if (currentFilters.includes(status)) {
-        return currentFilters.filter(currentStatus => currentStatus !== status)
-      }
+    const nextFilters = activeStatusFilters.includes(status)
+      ? activeStatusFilters.filter(currentStatus => currentStatus !== status)
+      : [...activeStatusFilters, status]
 
-      return [...currentFilters, status]
-    })
+    setActiveStatusFilters(nextFilters)
+    onControlsChange({ sortValue, statuses: nextFilters })
     setCurrentPage(0)
   }
 
   const handleClearStatusFilters = () => {
     setActiveStatusFilters([])
+    onControlsChange({ sortValue, statuses: [] })
     setCurrentPage(0)
   }
 
@@ -519,6 +532,7 @@ export function ProfileGameStatusSection({
 
   const handleSelectSort = (nextSortValue: StatusSortValue) => {
     setSortValue(nextSortValue)
+    onControlsChange({ sortValue: nextSortValue, statuses: activeStatusFilters })
     setCurrentPage(0)
     setShowSortMenu(false)
   }
@@ -592,7 +606,13 @@ export function ProfileGameStatusSection({
                         <>
                           <div className="profile-status-autosuggest-cover">
                             {game.capa_url ? (
-                              <img src={game.capa_url} alt={`Capa do jogo ${game.titulo}`} />
+                              <GameCoverImage
+                                src={game.capa_url}
+                                alt={`Capa do jogo ${game.titulo}`}
+                                width={64}
+                                height={64}
+                                sizes="64px"
+                              />
                             ) : (
                               <div className="profile-status-autosuggest-fallback">
                                 {getInitial(game.titulo)}
@@ -745,9 +765,12 @@ export function ProfileGameStatusSection({
             <div className="profile-status-composer-preview">
               <div className="profile-status-composer-cover">
                 {visibleSelectedGame.capa_url ? (
-                  <img
+                  <GameCoverImage
                     src={visibleSelectedGame.capa_url}
                     alt={`Capa do jogo ${visibleSelectedGame.titulo}`}
+                    width={92}
+                    height={92}
+                    sizes="92px"
                   />
                 ) : (
                   <div className="profile-status-card-fallback">
@@ -818,6 +841,11 @@ export function ProfileGameStatusSection({
                 ? 'Estamos montando a grade com tudo o que voce adicionou ao seu perfil.'
                 : 'Estamos montando a grade com tudo o que este perfil adicionou.'}
             </p>
+            <div className="profile-status-skeleton-grid" style={statusGridStyle} aria-hidden="true">
+              {Array.from({ length: Math.min(gridColumns * 2, 12) }, (_, index) => (
+                <span key={`status-skeleton-${index}`} className="profile-status-skeleton-card" />
+              ))}
+            </div>
           </div>
         ) : errorMessage ? (
           <div className="profile-status-empty">
@@ -859,6 +887,9 @@ export function ProfileGameStatusSection({
                 {sortedItems.length === 1
                   ? `1 jogo encontrado${hasActiveStatusFilters ? ' com os filtros atuais.' : ' nesta visualizacao.'}`
                   : `${sortedItems.length} jogos encontrados${hasActiveStatusFilters ? ' com os filtros atuais.' : ' nesta visualizacao.'}`}
+                {totalCount !== null && totalCount > sortedItems.length
+                  ? ` ${totalCount - sortedItems.length} ainda nao carregados.`
+                  : ''}
               </p>
               <span>
                 Pagina {safeCurrentPage + 1} de {totalPages}
@@ -889,7 +920,13 @@ export function ProfileGameStatusSection({
 
                       <div className="profile-status-card-cover">
                         {item.jogo?.capa_url ? (
-                          <img src={item.jogo.capa_url} alt={`Capa do jogo ${visibleTitle}`} />
+                          <GameCoverImage
+                            src={item.jogo.capa_url}
+                            alt={`Capa do jogo ${visibleTitle}`}
+                            width={430}
+                            height={200}
+                            sizes="(max-width: 768px) 100vw, 17vw"
+                          />
                         ) : (
                           <div className="profile-status-card-fallback">{getInitial(visibleTitle)}</div>
                         )}
@@ -968,9 +1005,20 @@ export function ProfileGameStatusSection({
               totalPages={totalPages}
               onChangePage={setCurrentPage}
             />
+
+            {hasMore ? (
+              <button
+                type="button"
+                className="profile-secondary-button profile-status-load-more"
+                onClick={() => void onLoadMore()}
+                disabled={isLoadingMore}
+              >
+                {isLoadingMore ? 'Carregando...' : 'Ver mais jogos'}
+              </button>
+            ) : null}
           </>
         )}
       </div>
     </section>
   )
-}
+})

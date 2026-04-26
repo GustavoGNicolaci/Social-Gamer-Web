@@ -25,6 +25,33 @@
   align-items: start;
 }
 
+.profile-reviews-skeleton-grid {
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.profile-reviews-skeleton-card {
+  display: block;
+  min-height: 250px;
+  border-radius: 18px;
+  background:
+    linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent),
+    var(--skeleton);
+  background-size: 220% 100%;
+  animation: reviewsSkeletonShimmer 1.2s ease-in-out infinite;
+}
+
+@keyframes reviewsSkeletonShimmer {
+  0% {
+    background-position: 220% 0;
+  }
+
+  100% {
+    background-position: -220% 0;
+  }
+}
+
 .profile-reviews-card,
 .profile-reviews-empty {
   border-radius: 20px;
@@ -197,6 +224,10 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .profile-reviews-skeleton-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .profile-reviews-summary {
     min-width: 0;
     width: 100%;
@@ -212,6 +243,10 @@
     grid-template-columns: 1fr;
   }
 
+  .profile-reviews-skeleton-grid {
+    grid-template-columns: 1fr;
+  }
+
   .profile-reviews-card-body {
     padding: 0.8rem;
   }
@@ -223,6 +258,7 @@
 
 body.light .profile-reviews-card,
 body.light .profile-reviews-empty,
+body.light .profile-reviews-skeleton-card,
 body.light .profile-reviews-summary {
   border-color: var(--border);
   background: var(--card);

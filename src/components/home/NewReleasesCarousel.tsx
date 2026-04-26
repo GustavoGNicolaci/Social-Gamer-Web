@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { Link } from 'react-router-dom'
+import { GameCoverImage } from '../GameCoverImage'
 import type { HomeGameSummary } from '../../services/homeService'
 import { formatFullDate, getInitial } from './homeDisplayUtils'
 
@@ -55,16 +56,13 @@ export function NewReleasesCarousel({
   const pages = useMemo(() => chunkItems(items, itemsPerPage), [items, itemsPerPage])
   const totalPages = pages.length
   const safeCurrentPage = Math.min(currentPage, Math.max(totalPages - 1, 0))
+  const visiblePageItems = pages[safeCurrentPage] || []
   const canGoPrevious = safeCurrentPage > 0
   const canGoNext = safeCurrentPage < totalPages - 1
 
   const carouselStyle = {
     '--home-release-columns': String(itemsPerPage),
   } as CSSProperties
-
-  const trackStyle = {
-    transform: `translateX(-${safeCurrentPage * 100}%)`,
-  }
 
   return (
     <section className="home-section home-releases-section">
@@ -102,27 +100,29 @@ export function NewReleasesCarousel({
             ) : null}
 
             <div className="home-release-viewport">
-              <div className="home-release-track" style={trackStyle}>
-                {pages.map((pageItems, pageIndex) => (
-                  <div key={`home-release-page-${pageIndex}`} className="home-release-page">
-                    {pageItems.map(game => (
-                      <Link key={game.id} to={`/games/${game.id}`} className="home-release-card">
-                        <div className="home-release-cover">
-                          {game.coverUrl ? (
-                            <img src={game.coverUrl} alt={`Capa do jogo ${game.title}`} />
-                          ) : (
-                            <div className="home-release-fallback">{getInitial(game.title)}</div>
-                          )}
-                        </div>
+              <div className="home-release-track">
+                <div key={`home-release-page-${safeCurrentPage}`} className="home-release-page">
+                  {visiblePageItems.map(game => (
+                    <Link key={game.id} to={`/games/${game.id}`} className="home-release-card">
+                      <div className="home-release-cover">
+                        {game.coverUrl ? (
+                          <GameCoverImage
+                            src={game.coverUrl}
+                            alt={`Capa do jogo ${game.title}`}
+                            sizes="(max-width: 480px) 100vw, (max-width: 768px) 50vw, (max-width: 992px) 33vw, (max-width: 1200px) 25vw, 17vw"
+                          />
+                        ) : (
+                          <div className="home-release-fallback">{getInitial(game.title)}</div>
+                        )}
+                      </div>
 
-                        <div className="home-release-body">
-                          <span>{formatFullDate(game.releaseDate)}</span>
-                          <h3>{game.title}</h3>
-                        </div>
-                      </Link>
-                    ))}
-                  </div>
-                ))}
+                      <div className="home-release-body">
+                        <span>{formatFullDate(game.releaseDate)}</span>
+                        <h3>{game.title}</h3>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
               </div>
             </div>
 

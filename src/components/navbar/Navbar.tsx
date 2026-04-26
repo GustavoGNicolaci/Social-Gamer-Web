@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FocusEvent, type KeyboardEvent } from 'react'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { GameCoverImage } from '../GameCoverImage'
 import { UserAvatar } from '../UserAvatar'
 import { useAuth } from '../../contexts/AuthContext'
 import { searchCatalogGamesByTitle, type CatalogGamePreview } from '../../services/gameCatalogService'
@@ -514,7 +515,7 @@ function Navbar() {
                         <div className="navbar-search-group-head"><span className="navbar-search-group-title">Jogos</span></div>
                         {gameSearchError && gameResults.length === 0 ? <p className="navbar-search-state is-error">{gameSearchError}</p> : gameResults.length === 0 ? <p className="navbar-search-state">Nenhum jogo encontrado.</p> : gameResults.map((game, index) => (
                           <button key={game.id} id={`navbar-search-option-game-${game.id}`} type="button" role="option" aria-selected={index === activeResultIndex} className={`navbar-search-option${index === activeResultIndex ? ' is-active' : ''}`} onMouseEnter={() => setActiveResultIndex(index)} onClick={() => handleSelectGame(game)}>
-                            <div className="navbar-search-option-cover">{game.capa_url ? <img src={game.capa_url} alt={`Capa do jogo ${game.titulo}`} /> : <div className="navbar-search-option-fallback">{getInitial(game.titulo)}</div>}</div>
+                            <div className="navbar-search-option-cover">{game.capa_url ? <GameCoverImage src={game.capa_url} alt={`Capa do jogo ${game.titulo}`} width={60} height={60} sizes="60px" /> : <div className="navbar-search-option-fallback">{getInitial(game.titulo)}</div>}</div>
                             <div className="navbar-search-option-copy"><strong>{game.titulo}</strong><span>{getGameMetaLine(game)}</span></div>
                           </button>
                         ))}

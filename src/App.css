@@ -166,6 +166,18 @@ body.light {
   margin-bottom: 2rem;
 }
 
+.route-loading-card {
+  width: min(100%, 420px);
+  margin: 0 auto;
+  padding: 1rem 1.2rem;
+  color: var(--muted-foreground);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  text-align: center;
+  box-shadow: 0 18px 40px var(--shadow-color);
+}
+
 
 /* Features Grid */
 .features {

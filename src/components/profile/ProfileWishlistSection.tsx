@@ -1,4 +1,5 @@
 import {
+  memo,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -10,6 +11,7 @@ import {
   type MouseEvent,
 } from 'react'
 import { Link } from 'react-router-dom'
+import { GameCoverImage } from '../GameCoverImage'
 import {
   type WishlistError,
   type WishlistGameItem,
@@ -30,8 +32,15 @@ interface ProfileWishlistSectionProps {
   isLoading: boolean
   errorMessage: string | null
   countLabel: string
+  totalCount: number | null
+  hasMore: boolean
+  isLoadingMore: boolean
+  isPreparingReorder: boolean
+  isFullyLoaded: boolean
   isOwnerView: boolean
   onDeleteWishlistItem: (itemId: string) => Promise<{ ok: boolean; message?: string }>
+  onLoadMore: () => Promise<void>
+  onLoadFullWishlistForReorder: () => Promise<{ ok: boolean; message?: string }>
 }
 
 const HORIZONTAL_LAYOUT_THRESHOLD = 6
@@ -125,14 +134,21 @@ function registerItemRef(
   itemRefs.current.delete(itemId)
 }
 
-export function ProfileWishlistSection({
+export const ProfileWishlistSection = memo(function ProfileWishlistSection({
   userId,
   items,
   isLoading,
   errorMessage,
   countLabel,
+  totalCount,
+  hasMore,
+  isLoadingMore,
+  isPreparingReorder,
+  isFullyLoaded,
   isOwnerView,
   onDeleteWishlistItem,
+  onLoadMore,
+  onLoadFullWishlistForReorder,
 }: ProfileWishlistSectionProps) {
   const [orderedItemIds, setOrderedItemIds] = useState<string[] | null>(null)
   const [draggedItemId, setDraggedItemId] = useState<string | null>(null)
@@ -170,22 +186,34 @@ export function ProfileWishlistSection({
   const isPaginatedLayout = orderedItems.length > HORIZONTAL_LAYOUT_THRESHOLD
   const hasPendingRemoval = removingItemIds.length > 0
   const canReorder =
-    isOwnerView && orderedItems.length > 1 && hasFinePointer && !isSavingOrder && !hasPendingRemoval
-  const pagedItems = isPaginatedLayout ? chunkWishlistItems(orderedItems, itemsPerPage) : []
+    isOwnerView &&
+    isFullyLoaded &&
+    orderedItems.length > 1 &&
+    hasFinePointer &&
+    !isSavingOrder &&
+    !hasPendingRemoval
+  const canPrepareReorder =
+    isOwnerView && !isFullyLoaded && hasFinePointer && orderedItems.length > 1 && !isPreparingReorder
+  const pagedItems = useMemo(
+    () => (isPaginatedLayout ? chunkWishlistItems(orderedItems, itemsPerPage) : []),
+    [isPaginatedLayout, itemsPerPage, orderedItems]
+  )
   const totalPages = isPaginatedLayout ? pagedItems.length : 1
   const safeCurrentPage = Math.min(currentPage, Math.max(totalPages - 1, 0))
-  const visiblePageItems = isPaginatedLayout ? pagedItems[safeCurrentPage] || [] : orderedItems
-  const visibleItemIds = new Set(visiblePageItems.map(item => item.id))
+  const visiblePageItems = useMemo(
+    () => (isPaginatedLayout ? pagedItems[safeCurrentPage] || [] : orderedItems),
+    [isPaginatedLayout, orderedItems, pagedItems, safeCurrentPage]
+  )
+  const visibleItemIds = useMemo(
+    () => new Set(visiblePageItems.map(item => item.id)),
+    [visiblePageItems]
+  )
   const canGoPrevPage = isPaginatedLayout && safeCurrentPage > 0
   const canGoNextPage = isPaginatedLayout && safeCurrentPage < totalPages - 1
 
   const wishlistColumnsStyle = {
     '--wishlist-columns': String(itemsPerPage),
   } as CSSProperties
-
-  const paginatedTrackStyle = {
-    transform: `translateX(-${safeCurrentPage * 100}%)`,
-  }
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return
@@ -461,6 +489,25 @@ export function ProfileWishlistSection({
     }
   }
 
+  const handlePrepareReorder = async () => {
+    setOrderStatus({
+      tone: 'saving',
+      message: 'Carregando lista completa para reordenar...',
+    })
+
+    const result = await onLoadFullWishlistForReorder()
+
+    if (result.ok) {
+      setOrderStatus(null)
+      return
+    }
+
+    setOrderStatus({
+      tone: 'error',
+      message: result.message || 'Nao foi possivel preparar a reordenacao agora.',
+    })
+  }
+
   return (
     <section className="profile-card profile-wishlist-section">
       <div className="profile-card-glow profile-card-glow-left"></div>
@@ -496,6 +543,11 @@ export function ProfileWishlistSection({
                 ? 'Estamos buscando os jogos que voce salvou para jogar depois.'
                 : 'Estamos buscando os jogos que este perfil salvou para jogar depois.'}
             </p>
+            <div className="profile-wishlist-skeleton-grid" style={wishlistColumnsStyle} aria-hidden="true">
+              {Array.from({ length: Math.min(itemsPerPage, 6) }, (_, index) => (
+                <span key={`wishlist-skeleton-${index}`} className="profile-wishlist-skeleton-card" />
+              ))}
+            </div>
           </div>
         ) : errorMessage ? (
           <p className="profile-feedback is-error">{errorMessage}</p>
@@ -519,6 +571,25 @@ export function ProfileWishlistSection({
           </div>
         ) : (
           <>
+            <div className="profile-wishlist-list-head">
+              <p>
+                {totalCount !== null && totalCount > orderedItems.length
+                  ? `${orderedItems.length} de ${totalCount} jogos carregados.`
+                  : `${orderedItems.length} jogos carregados.`}
+              </p>
+
+              {canPrepareReorder ? (
+                <button
+                  type="button"
+                  className="profile-secondary-button profile-wishlist-reorder-button"
+                  onClick={() => void handlePrepareReorder()}
+                  disabled={isPreparingReorder}
+                >
+                  {isPreparingReorder ? 'Preparando...' : 'Preparar reordenacao'}
+                </button>
+              ) : null}
+            </div>
+
             <div
               className={`profile-wishlist-shell${isPaginatedLayout ? ' is-horizontal' : ''}`}
               style={wishlistColumnsStyle}
@@ -543,10 +614,9 @@ export function ProfileWishlistSection({
                     clearAutoPageSchedule()
                   }}
                 >
-                  <div className="profile-wishlist-track" style={paginatedTrackStyle}>
-                    {pagedItems.map((pageItems, pageIndex) => (
-                      <div key={`wishlist-page-${pageIndex}`} className="profile-wishlist-page">
-                        {pageItems.map(item => {
+                  <div className="profile-wishlist-track">
+                    <div key={`wishlist-page-${safeCurrentPage}`} className="profile-wishlist-page">
+                        {visiblePageItems.map(item => {
                           const game = item.jogo
                           const visibleTitle = game?.titulo || 'Jogo indisponivel'
                           const isDraggedItem = draggedItemId === item.id
@@ -575,7 +645,13 @@ export function ProfileWishlistSection({
 
                                 <div className="profile-wishlist-cover">
                                   {game?.capa_url ? (
-                                    <img src={game.capa_url} alt={`Capa do jogo ${visibleTitle}`} />
+                                    <GameCoverImage
+                                      src={game.capa_url}
+                                      alt={`Capa do jogo ${visibleTitle}`}
+                                      width={520}
+                                      height={200}
+                                      sizes="(max-width: 768px) 100vw, 17vw"
+                                    />
                                   ) : (
                                     <div className="profile-wishlist-fallback">
                                       {getInitial(visibleTitle)}
@@ -629,7 +705,6 @@ export function ProfileWishlistSection({
                           )
                         })}
                       </div>
-                    ))}
                   </div>
                 </div>
               ) : (
@@ -662,7 +737,13 @@ export function ProfileWishlistSection({
 
                           <div className="profile-wishlist-cover">
                             {game?.capa_url ? (
-                              <img src={game.capa_url} alt={`Capa do jogo ${visibleTitle}`} />
+                              <GameCoverImage
+                                src={game.capa_url}
+                                alt={`Capa do jogo ${visibleTitle}`}
+                                width={520}
+                                height={200}
+                                sizes="(max-width: 768px) 100vw, 20vw"
+                              />
                             ) : (
                               <div className="profile-wishlist-fallback">{getInitial(visibleTitle)}</div>
                             )}
@@ -735,9 +816,20 @@ export function ProfileWishlistSection({
                 {orderStatus.message}
               </p>
             ) : null}
+
+            {hasMore ? (
+              <button
+                type="button"
+                className="profile-secondary-button profile-wishlist-load-more"
+                onClick={() => void onLoadMore()}
+                disabled={isLoadingMore}
+              >
+                {isLoadingMore ? 'Carregando...' : 'Ver mais jogos'}
+              </button>
+            ) : null}
           </>
         )}
       </div>
     </section>
   )
-}
+})

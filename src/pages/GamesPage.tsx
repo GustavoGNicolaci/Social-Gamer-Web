@@ -1,9 +1,13 @@
 import {
+  memo,
+  useCallback,
   useEffect,
+  useMemo,
   useState,
   type CSSProperties,
 } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import { GameCoverImage } from '../components/GameCoverImage'
 import RatingCircle from '../components/RatingCircle'
 import { useAuth } from '../contexts/AuthContext'
 import {
@@ -20,7 +24,6 @@ interface Game {
   desenvolvedora: string[] | string
   generos: string[] | string
   data_lancamento: string
-  descricao: string
   plataformas: string[] | string
 }
 
@@ -54,6 +57,8 @@ interface CatalogFilterToken {
 }
 
 const DEFAULT_CATALOG_SORT: CatalogSortOption = 'release-desc'
+const CATALOG_GAME_SELECT =
+  'id, titulo, capa_url, desenvolvedora, generos, data_lancamento, plataformas'
 
 const CATALOG_SORT_OPTIONS: Array<{
   value: CatalogSortOption
@@ -203,10 +208,6 @@ function sortCatalogGames(
   })
 }
 
-function buildRatingSummaryMap(summaries: GameRatingSummary[]) {
-  return new Map(summaries.map(summary => [summary.gameId, summary]))
-}
-
 function buildFacetToken(category: FacetCategory, value: string): CatalogFilterToken {
   return {
     key: `${category}-${value.toLowerCase()}`,
@@ -241,7 +242,7 @@ function StaticChip({ label }: { label: string }) {
   return <span className="gp-chip gp-chip--static">{label}</span>
 }
 
-function GameCard({ game, ratingSummary, onShowGenres }: GameCardProps) {
+const GameCard = memo(function GameCard({ game, ratingSummary, onShowGenres }: GameCardProps) {
   const genres = normalizeList(game.generos)
   const displayedGenres = genres.slice(0, 2)
   const hasMoreGenres = genres.length > 2
@@ -255,7 +256,11 @@ function GameCard({ game, ratingSummary, onShowGenres }: GameCardProps) {
     <article className="gp-game">
       <Link to={`/games/${game.id}`} className="gp-cover">
         {game.capa_url ? (
-          <img src={game.capa_url} alt={`Capa do jogo ${game.titulo}`} />
+          <GameCoverImage
+            src={game.capa_url}
+            alt={`Capa do jogo ${game.titulo}`}
+            sizes="(max-width: 480px) 100vw, (max-width: 768px) 50vw, (max-width: 992px) 33vw, (max-width: 1200px) 25vw, 20vw"
+          />
         ) : (
           <div className="gp-fallback">{initial(game.titulo)}</div>
         )}
@@ -313,7 +318,7 @@ function GameCard({ game, ratingSummary, onShowGenres }: GameCardProps) {
       </Link>
     </article>
   )
-}
+})
 
 function PaginationControls({ currentPage, totalPages, onChangePage }: PaginationProps) {
   if (totalPages <= 1) return null
@@ -382,8 +387,9 @@ function GamesPage() {
     const fetchGames = async () => {
       setLoading(true)
       setRatingsError(null)
+      setRatingSummariesByGameId(new Map())
 
-      const { data, error } = await supabase.from('jogos').select('*')
+      const { data, error } = await supabase.from('jogos').select(CATALOG_GAME_SELECT)
 
       if (!isMounted) return
 
@@ -397,22 +403,6 @@ function GamesPage() {
 
       const nextGames = (data || []) as Game[]
       setGames(nextGames)
-
-      const ratingSummariesResult = await getVisibleGameRatingSummaries(
-        nextGames.map(game => game.id),
-        user?.id
-      )
-
-      if (!isMounted) return
-
-      if (ratingSummariesResult.error) {
-        console.error('Erro ao buscar notas do catalogo:', ratingSummariesResult.error)
-        setRatingSummariesByGameId(new Map())
-        setRatingsError('Nao foi possivel carregar as notas do catalogo agora.')
-      } else {
-        setRatingSummariesByGameId(buildRatingSummaryMap(ratingSummariesResult.data))
-      }
-
       setLoading(false)
     }
 
@@ -479,7 +469,7 @@ function GamesPage() {
     }
   }, [showFiltersModal])
 
-  const updateNavbarQuery = (value: string) => {
+  const updateNavbarQuery = useCallback((value: string) => {
     const trimmedValue = value.trim()
 
     setSearchParams(
@@ -496,9 +486,9 @@ function GamesPage() {
       },
       { replace: true }
     )
-  }
+  }, [setSearchParams])
 
-  const updateCatalogSort = (nextSort: CatalogSortOption) => {
+  const updateCatalogSort = useCallback((nextSort: CatalogSortOption) => {
     setSearchParams(
       currentParams => {
         const nextParams = new URLSearchParams(currentParams)
@@ -508,9 +498,9 @@ function GamesPage() {
       },
       { replace: true }
     )
-  }
+  }, [setSearchParams])
 
-  const toggleFacetFilter = (category: FacetCategory, value: string) => {
+  const toggleFacetFilter = useCallback((category: FacetCategory, value: string) => {
     setFacetFilters(currentFilters => {
       const normalizedValue = value.trim().toLowerCase()
       const alreadyExists = currentFilters.some(
@@ -525,32 +515,48 @@ function GamesPage() {
 
       return [...currentFilters, buildFacetToken(category, value)]
     })
-  }
+  }, [])
 
-  const isFacetFilterActive = (category: FacetCategory, value: string) =>
-    facetFilters.some(
-      token => token.category === category && token.value.toLowerCase() === value.toLowerCase()
-    )
-
-  const navbarScopedGames = games.filter(
-    game =>
-      normalizedNavbarQuery.length === 0 ||
-      game.titulo.toLowerCase().includes(normalizedNavbarQuery)
+  const isFacetFilterActive = useCallback(
+    (category: FacetCategory, value: string) =>
+      facetFilters.some(
+        token => token.category === category && token.value.toLowerCase() === value.toLowerCase()
+      ),
+    [facetFilters]
   )
 
-  const allGenres = sortAlphabetically(
-    Array.from(new Set(navbarScopedGames.flatMap(game => normalizeList(game.generos))))
+  const navbarScopedGames = useMemo(
+    () =>
+      games.filter(
+        game =>
+          normalizedNavbarQuery.length === 0 ||
+          game.titulo.toLowerCase().includes(normalizedNavbarQuery)
+      ),
+    [games, normalizedNavbarQuery]
   )
 
-  const allPlatforms = sortAlphabetically(
-    Array.from(new Set(navbarScopedGames.flatMap(game => normalizeList(game.plataformas))))
+  const allGenres = useMemo(
+    () => sortAlphabetically(
+      Array.from(new Set(navbarScopedGames.flatMap(game => normalizeList(game.generos))))
+    ),
+    [navbarScopedGames]
   )
 
-  const allDevelopers = sortAlphabetically(
-    Array.from(new Set(navbarScopedGames.flatMap(game => normalizeList(game.desenvolvedora))))
+  const allPlatforms = useMemo(
+    () => sortAlphabetically(
+      Array.from(new Set(navbarScopedGames.flatMap(game => normalizeList(game.plataformas))))
+    ),
+    [navbarScopedGames]
   )
 
-  const clearAllFilters = () => {
+  const allDevelopers = useMemo(
+    () => sortAlphabetically(
+      Array.from(new Set(navbarScopedGames.flatMap(game => normalizeList(game.desenvolvedora))))
+    ),
+    [navbarScopedGames]
+  )
+
+  const clearAllFilters = useCallback(() => {
     setFacetFilters([])
     setCurrentPage(1)
     setFiltersModalSearch('')
@@ -558,70 +564,103 @@ function GamesPage() {
     if (navbarQuery) {
       updateNavbarQuery('')
     }
-  }
+  }, [navbarQuery, updateNavbarQuery])
 
-  const activeFilters = [
-    ...(navbarQuery
-      ? [
-          {
-            key: `navbar-query-${navbarQuery.toLowerCase()}`,
-            label: `Busca na navbar: ${navbarQuery}`,
-            onRemove: () => updateNavbarQuery(''),
-          },
-        ]
-      : []),
-    ...facetFilters.map(filter => ({
-      key: filter.key,
-      label: filter.label,
-      onRemove: () =>
-        setFacetFilters(currentFilters =>
-          currentFilters.filter(currentFilter => currentFilter.key !== filter.key)
-        ),
-    })),
-  ]
+  const activeFilters = useMemo(
+    () => [
+      ...(navbarQuery
+        ? [
+            {
+              key: `navbar-query-${navbarQuery.toLowerCase()}`,
+              label: `Busca na navbar: ${navbarQuery}`,
+              onRemove: () => updateNavbarQuery(''),
+            },
+          ]
+        : []),
+      ...facetFilters.map(filter => ({
+        key: filter.key,
+        label: filter.label,
+        onRemove: () =>
+          setFacetFilters(currentFilters =>
+            currentFilters.filter(currentFilter => currentFilter.key !== filter.key)
+          ),
+      })),
+    ],
+    [facetFilters, navbarQuery, updateNavbarQuery]
+  )
 
-  const genreFilterTokens = facetFilters.filter(filter => filter.category === 'genre')
-  const platformFilterTokens = facetFilters.filter(filter => filter.category === 'platform')
-  const developerFilterTokens = facetFilters.filter(filter => filter.category === 'developer')
+  const genreFilterTokens = useMemo(
+    () => facetFilters.filter(filter => filter.category === 'genre'),
+    [facetFilters]
+  )
+  const platformFilterTokens = useMemo(
+    () => facetFilters.filter(filter => filter.category === 'platform'),
+    [facetFilters]
+  )
+  const developerFilterTokens = useMemo(
+    () => facetFilters.filter(filter => filter.category === 'developer'),
+    [facetFilters]
+  )
 
-  const filteredGames = navbarScopedGames.filter(game => {
-    const genres = normalizeList(game.generos)
-    const platforms = normalizeList(game.plataformas)
-    const developers = normalizeList(game.desenvolvedora)
+  const filteredGames = useMemo(
+    () =>
+      navbarScopedGames.filter(game => {
+        const genres = normalizeList(game.generos)
+        const platforms = normalizeList(game.plataformas)
+        const developers = normalizeList(game.desenvolvedora)
 
-    const genreMatch =
-      genreFilterTokens.length === 0 ||
-      genreFilterTokens.every(filterToken =>
-        genres.some(genre => genre.toLowerCase().includes(filterToken.value.toLowerCase()))
-      )
+        const genreMatch =
+          genreFilterTokens.length === 0 ||
+          genreFilterTokens.every(filterToken =>
+            genres.some(genre => genre.toLowerCase().includes(filterToken.value.toLowerCase()))
+          )
 
-    const platformMatch =
-      platformFilterTokens.length === 0 ||
-      platformFilterTokens.every(filterToken =>
-        platforms.some(platform => platform.toLowerCase().includes(filterToken.value.toLowerCase()))
-      )
+        const platformMatch =
+          platformFilterTokens.length === 0 ||
+          platformFilterTokens.every(filterToken =>
+            platforms.some(platform =>
+              platform.toLowerCase().includes(filterToken.value.toLowerCase())
+            )
+          )
 
-    const developerMatch =
-      developerFilterTokens.length === 0 ||
-      developerFilterTokens.every(filterToken =>
-        developers.some(developer =>
-          developer.toLowerCase().includes(filterToken.value.toLowerCase())
-        )
-      )
+        const developerMatch =
+          developerFilterTokens.length === 0 ||
+          developerFilterTokens.every(filterToken =>
+            developers.some(developer =>
+              developer.toLowerCase().includes(filterToken.value.toLowerCase())
+            )
+          )
 
-    return genreMatch && platformMatch && developerMatch
-  })
+        return genreMatch && platformMatch && developerMatch
+      }),
+    [developerFilterTokens, genreFilterTokens, navbarScopedGames, platformFilterTokens]
+  )
 
-  const modalGenreOptions = buildVisibleFacetOptions(allGenres, trimmedModalSearch)
-  const modalPlatformOptions = buildVisibleFacetOptions(allPlatforms, trimmedModalSearch)
-  const modalDeveloperOptions = buildVisibleFacetOptions(allDevelopers, trimmedModalSearch)
+  const modalGenreOptions = useMemo(
+    () => buildVisibleFacetOptions(allGenres, trimmedModalSearch),
+    [allGenres, trimmedModalSearch]
+  )
+  const modalPlatformOptions = useMemo(
+    () => buildVisibleFacetOptions(allPlatforms, trimmedModalSearch),
+    [allPlatforms, trimmedModalSearch]
+  )
+  const modalDeveloperOptions = useMemo(
+    () => buildVisibleFacetOptions(allDevelopers, trimmedModalSearch),
+    [allDevelopers, trimmedModalSearch]
+  )
 
-  const sortedGames = sortCatalogGames(filteredGames, catalogSort, ratingSummariesByGameId)
+  const sortedGames = useMemo(
+    () => sortCatalogGames(filteredGames, catalogSort, ratingSummariesByGameId),
+    [catalogSort, filteredGames, ratingSummariesByGameId]
+  )
   const totalPages = Math.ceil(sortedGames.length / itemsPerPage)
   const safeCurrentPage = totalPages === 0 ? 1 : Math.min(currentPage, totalPages)
   const startIndex = (safeCurrentPage - 1) * itemsPerPage
   const endIndex = startIndex + itemsPerPage
-  const gamesToDisplay = sortedGames.slice(startIndex, endIndex)
+  const gamesToDisplay = useMemo(
+    () => sortedGames.slice(startIndex, endIndex),
+    [endIndex, sortedGames, startIndex]
+  )
   const visibleStart = sortedGames.length === 0 ? 0 : startIndex + 1
   const visibleEnd = Math.min(endIndex, sortedGames.length)
   const rangeLabel =
@@ -629,30 +668,90 @@ function GamesPage() {
       ? 'Nenhum item para exibir'
       : `Mostrando ${visibleStart}-${visibleEnd} de ${sortedGames.length}`
 
-  const gridStyle = {
-    '--gp-grid-columns': String(gridColumns),
-  } as CSSProperties
+  const gridStyle = useMemo(
+    () => ({
+      '--gp-grid-columns': String(gridColumns),
+    }) as CSSProperties,
+    [gridColumns]
+  )
 
-  const modalGroups = [
-    {
-      key: 'genre-modal',
-      category: 'genre' as const,
-      title: 'Generos',
-      options: modalGenreOptions,
-    },
-    {
-      key: 'platform-modal',
-      category: 'platform' as const,
-      title: 'Plataformas',
-      options: modalPlatformOptions,
-    },
-    {
-      key: 'developer-modal',
-      category: 'developer' as const,
-      title: 'Studios',
-      options: modalDeveloperOptions,
-    },
-  ]
+  const modalGroups = useMemo(
+    () => [
+      {
+        key: 'genre-modal',
+        category: 'genre' as const,
+        title: 'Generos',
+        options: modalGenreOptions,
+      },
+      {
+        key: 'platform-modal',
+        category: 'platform' as const,
+        title: 'Plataformas',
+        options: modalPlatformOptions,
+      },
+      {
+        key: 'developer-modal',
+        category: 'developer' as const,
+        title: 'Studios',
+        options: modalDeveloperOptions,
+      },
+    ],
+    [modalDeveloperOptions, modalGenreOptions, modalPlatformOptions]
+  )
+
+  const requiresAllRatingSummaries = catalogSort === 'rating-desc' || catalogSort === 'rating-asc'
+  const ratingSummaryTargetIds = useMemo(
+    () => (requiresAllRatingSummaries ? filteredGames : gamesToDisplay).map(game => game.id),
+    [filteredGames, gamesToDisplay, requiresAllRatingSummaries]
+  )
+
+  useEffect(() => {
+    if (loading || ratingSummaryTargetIds.length === 0) return
+
+    const missingRatingIds = ratingSummaryTargetIds.filter(
+      gameId => !ratingSummariesByGameId.has(gameId)
+    )
+
+    if (missingRatingIds.length === 0) return
+
+    let isMounted = true
+
+    const fetchRatingSummaries = async () => {
+      const ratingSummariesResult = await getVisibleGameRatingSummaries(missingRatingIds, user?.id)
+
+      if (!isMounted) return
+
+      if (ratingSummariesResult.error) {
+        console.error('Erro ao buscar notas do catalogo:', ratingSummariesResult.error)
+        setRatingsError('Nao foi possivel carregar as notas do catalogo agora.')
+      } else {
+        setRatingsError(null)
+      }
+
+      if (ratingSummariesResult.data.length > 0) {
+        setRatingSummariesByGameId(currentSummaries => {
+          const nextSummaries = new Map(currentSummaries)
+
+          ratingSummariesResult.data.forEach(summary => {
+            nextSummaries.set(summary.gameId, summary)
+          })
+
+          return nextSummaries
+        })
+      }
+    }
+
+    void fetchRatingSummaries()
+
+    return () => {
+      isMounted = false
+    }
+  }, [loading, ratingSummariesByGameId, ratingSummaryTargetIds, user?.id])
+
+  const handleShowGenres = useCallback((genres: string[]) => {
+    setSelectedGameGenres(genres)
+    setShowGenresModal(true)
+  }, [])
 
   if (loading) {
     return (
@@ -754,10 +853,7 @@ function GamesPage() {
                   key={game.id}
                   game={game}
                   ratingSummary={ratingSummariesByGameId.get(game.id) || null}
-                  onShowGenres={genres => {
-                    setSelectedGameGenres(genres)
-                    setShowGenresModal(true)
-                  }}
+                  onShowGenres={handleShowGenres}
                 />
               ))}
             </div>

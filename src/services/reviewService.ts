@@ -1,4 +1,5 @@
 import { supabase } from '../supabase-client'
+import { getPerformanceNow, logPerformanceTiming } from '../utils/performanceDiagnostics'
 import {
   canViewRestrictedProfile,
   getProfilePrivacyMode,
@@ -132,6 +133,26 @@ interface GetProfileReviewsOptions {
   includeRestrictedAuthorReviews?: boolean
 }
 
+interface GetProfileReviewsPageOptions extends GetProfileReviewsOptions {
+  page?: number
+  pageSize?: number
+}
+
+interface ProfileReviewsQueryTimings {
+  totalMs: number
+  queryMs: number
+  normalizeMs: number
+  requestCount: number
+  privacyFilterMs: number
+}
+
+interface PaginatedServiceResult<T> extends ServiceResult<T> {
+  totalCount: number | null
+  hasMore: boolean
+  nextPage: number | null
+  timings: ProfileReviewsQueryTimings
+}
+
 interface ReviewAuthorRow {
   id?: string
   username: string
@@ -243,6 +264,8 @@ const GAME_RATING_SUMMARY_SELECT = `
   nota,
   usuario:usuarios(id, username, avatar_path, configuracoes_privacidade)
 `
+
+const DEFAULT_PROFILE_REVIEWS_PAGE_SIZE = 6
 
 function normalizeReviewError(error: unknown, fallbackMessage: string): ReviewError {
   if (error && typeof error === 'object') {
@@ -399,6 +422,37 @@ function normalizeProfileReviewItem(row: ReviewRow): ProfileReviewItem {
   }
 }
 
+function normalizeProfileReviewsPageOptions(options: GetProfileReviewsPageOptions = {}) {
+  const page = Math.max(0, options.page || 0)
+  const pageSize = Math.min(Math.max(1, options.pageSize || DEFAULT_PROFILE_REVIEWS_PAGE_SIZE), 36)
+  const from = page * pageSize
+  const to = from + pageSize - 1
+
+  return {
+    ...options,
+    page,
+    pageSize,
+    from,
+    to,
+  }
+}
+
+function buildProfileReviewsPageMetadata(
+  totalCount: number | null,
+  page: number,
+  pageSize: number,
+  itemCount: number
+) {
+  const loadedCount = page * pageSize + itemCount
+  const hasMore = totalCount === null ? itemCount === pageSize : loadedCount < totalCount
+
+  return {
+    totalCount,
+    hasMore,
+    nextPage: hasMore ? page + 1 : null,
+  }
+}
+
 function normalizeRecentReviewActivity(row: RecentReviewActivityRow): RecentReviewActivity {
   const reviewGame = resolveSingleRelation(row.jogos)
   const reviewUser = resolveSingleRelation(row.usuarios)
@@ -550,6 +604,101 @@ export async function getReviewsByUserId(
     return {
       data: [],
       error: normalizeReviewError(error, 'Erro inesperado ao carregar as reviews do perfil.'),
+    }
+  }
+}
+
+export async function getReviewsPageByUserId(
+  userId: string,
+  pageOptions: GetProfileReviewsPageOptions = {}
+): Promise<PaginatedServiceResult<ProfileReviewItem[]>> {
+  const options = normalizeProfileReviewsPageOptions(pageOptions)
+  const startedAt = getPerformanceNow()
+  const timings: ProfileReviewsQueryTimings = {
+    totalMs: 0,
+    queryMs: 0,
+    normalizeMs: 0,
+    requestCount: 0,
+    privacyFilterMs: 0,
+  }
+
+  try {
+    const queryStartedAt = getPerformanceNow()
+    const { data, error, count } = await supabase
+      .from('avaliacoes')
+      .select(PROFILE_REVIEW_SELECT, { count: 'exact' })
+      .eq('usuario_id', userId)
+      .order('data_publicacao', { ascending: false })
+      .range(options.from, options.to)
+
+    timings.requestCount += 1
+    timings.queryMs += getPerformanceNow() - queryStartedAt
+
+    if (error) {
+      timings.totalMs = getPerformanceNow() - startedAt
+      logPerformanceTiming('profile.reviews.page', timings.totalMs, {
+        userId,
+        page: options.page,
+        pageSize: options.pageSize,
+        requestCount: timings.requestCount,
+        hasError: true,
+      })
+
+      return {
+        data: [],
+        error: normalizeReviewError(error, 'Nao foi possivel carregar as reviews do perfil.'),
+        totalCount: null,
+        hasMore: false,
+        nextPage: null,
+        timings,
+      }
+    }
+
+    const privacyStartedAt = getPerformanceNow()
+    const reviewRows = options.includeRestrictedAuthorReviews
+      ? ((data || []) as ReviewRow[])
+      : await filterReviewRowsByPrivacy((data || []) as ReviewRow[], options.currentUserId)
+    timings.privacyFilterMs += getPerformanceNow() - privacyStartedAt
+
+    const normalizeStartedAt = getPerformanceNow()
+    const items = reviewRows.map(normalizeProfileReviewItem)
+    timings.normalizeMs += getPerformanceNow() - normalizeStartedAt
+    timings.totalMs = getPerformanceNow() - startedAt
+
+    const result: PaginatedServiceResult<ProfileReviewItem[]> = {
+      data: items,
+      error: null,
+      ...buildProfileReviewsPageMetadata(count, options.page, options.pageSize, items.length),
+      timings,
+    }
+
+    logPerformanceTiming('profile.reviews.page', timings.totalMs, {
+      userId,
+      page: options.page,
+      pageSize: options.pageSize,
+      requestCount: timings.requestCount,
+      totalCount: result.totalCount,
+      itemCount: result.data.length,
+    })
+
+    return result
+  } catch (error) {
+    timings.totalMs = getPerformanceNow() - startedAt
+    logPerformanceTiming('profile.reviews.page', timings.totalMs, {
+      userId,
+      page: options.page,
+      pageSize: options.pageSize,
+      requestCount: timings.requestCount,
+      hasError: true,
+    })
+
+    return {
+      data: [],
+      error: normalizeReviewError(error, 'Erro inesperado ao carregar as reviews do perfil.'),
+      totalCount: null,
+      hasMore: false,
+      nextPage: null,
+      timings,
     }
   }
 }

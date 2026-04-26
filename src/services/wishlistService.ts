@@ -1,4 +1,5 @@
 import { supabase } from '../supabase-client'
+import { getPerformanceNow, logPerformanceTiming } from '../utils/performanceDiagnostics'
 
 export interface WishlistError {
   code?: string
@@ -35,9 +36,28 @@ export interface WishlistGameItem extends WishlistEntry {
   jogo: WishlistGame | null
 }
 
+export interface WishlistPageOptions {
+  page?: number
+  pageSize?: number
+}
+
+export interface WishlistQueryTimings {
+  totalMs: number
+  queryMs: number
+  normalizeMs: number
+  requestCount: number
+}
+
 interface ServiceResult<T> {
   data: T
   error: WishlistError | null
+}
+
+interface PaginatedServiceResult<T> extends ServiceResult<T> {
+  totalCount: number | null
+  hasMore: boolean
+  nextPage: number | null
+  timings: WishlistQueryTimings
 }
 
 interface AddWishlistParams {
@@ -59,6 +79,24 @@ interface WishlistSortable {
   prioridade: number | null
   adicionado_em: string | null
 }
+
+const DEFAULT_WISHLIST_PAGE_SIZE = 12
+const WISHLIST_GAME_SELECT = `
+  id,
+  usuario_id,
+  jogo_id,
+  adicionado_em,
+  prioridade,
+  jogo:jogos (
+    id,
+    titulo,
+    capa_url,
+    desenvolvedora,
+    generos,
+    data_lancamento,
+    plataformas
+  )
+`
 
 function normalizeWishlistError(error: unknown, fallbackMessage: string): WishlistError {
   if (error && typeof error === 'object') {
@@ -150,6 +188,36 @@ function getNextWishlistPriority(items: WishlistSortable[]) {
   const unprioritizedCount = items.filter(item => item.prioridade === null).length
 
   return maxPriority + unprioritizedCount + 1
+}
+
+function normalizeWishlistPageOptions(options: WishlistPageOptions = {}) {
+  const page = Math.max(0, options.page || 0)
+  const pageSize = Math.min(Math.max(1, options.pageSize || DEFAULT_WISHLIST_PAGE_SIZE), 48)
+  const from = page * pageSize
+  const to = from + pageSize - 1
+
+  return {
+    page,
+    pageSize,
+    from,
+    to,
+  }
+}
+
+function buildWishlistPageMetadata(
+  totalCount: number | null,
+  page: number,
+  pageSize: number,
+  itemCount: number
+) {
+  const loadedCount = page * pageSize + itemCount
+  const hasMore = totalCount === null ? itemCount === pageSize : loadedCount < totalCount
+
+  return {
+    totalCount,
+    hasMore,
+    nextPage: hasMore ? page + 1 : null,
+  }
 }
 
 export async function getWishlistEntry(
@@ -258,28 +326,107 @@ export async function addGameToWishlist({
   }
 }
 
+export async function getWishlistGamesPageByUserId(
+  userId: string,
+  pageOptions: WishlistPageOptions = {}
+): Promise<PaginatedServiceResult<WishlistGameItem[]>> {
+  const options = normalizeWishlistPageOptions(pageOptions)
+  const startedAt = getPerformanceNow()
+  const timings: WishlistQueryTimings = {
+    totalMs: 0,
+    queryMs: 0,
+    normalizeMs: 0,
+    requestCount: 0,
+  }
+
+  try {
+    const queryStartedAt = getPerformanceNow()
+    const { data, error, count } = await supabase
+      .from('lista_desejos')
+      .select(WISHLIST_GAME_SELECT, { count: 'exact' })
+      .eq('usuario_id', userId)
+      .order('prioridade', { ascending: true, nullsFirst: false })
+      .order('adicionado_em', { ascending: false })
+      .range(options.from, options.to)
+
+    timings.requestCount += 1
+    timings.queryMs += getPerformanceNow() - queryStartedAt
+
+    if (error) {
+      timings.totalMs = getPerformanceNow() - startedAt
+      logPerformanceTiming('profile.wishlist.page', timings.totalMs, {
+        userId,
+        page: options.page,
+        pageSize: options.pageSize,
+        requestCount: timings.requestCount,
+        hasError: true,
+      })
+
+      return {
+        data: [],
+        error: normalizeWishlistError(error, 'Nao foi possivel carregar a lista de desejos.'),
+        totalCount: null,
+        hasMore: false,
+        nextPage: null,
+        timings,
+      }
+    }
+
+    const normalizeStartedAt = getPerformanceNow()
+    const normalizedItems = sortWishlistItemsByDisplayOrder(
+      ((data || []) as WishlistGameRow[]).map(item => ({
+        ...item,
+        jogo: resolveWishlistGame(item.jogo),
+      }))
+    )
+    timings.normalizeMs += getPerformanceNow() - normalizeStartedAt
+    timings.totalMs = getPerformanceNow() - startedAt
+
+    const result: PaginatedServiceResult<WishlistGameItem[]> = {
+      data: normalizedItems,
+      error: null,
+      ...buildWishlistPageMetadata(count, options.page, options.pageSize, normalizedItems.length),
+      timings,
+    }
+
+    logPerformanceTiming('profile.wishlist.page', timings.totalMs, {
+      userId,
+      page: options.page,
+      pageSize: options.pageSize,
+      requestCount: timings.requestCount,
+      totalCount: result.totalCount,
+      itemCount: result.data.length,
+    })
+
+    return result
+  } catch (error) {
+    timings.totalMs = getPerformanceNow() - startedAt
+    logPerformanceTiming('profile.wishlist.page', timings.totalMs, {
+      userId,
+      page: options.page,
+      pageSize: options.pageSize,
+      requestCount: timings.requestCount,
+      hasError: true,
+    })
+
+    return {
+      data: [],
+      error: normalizeWishlistError(error, 'Erro inesperado ao carregar a lista de desejos.'),
+      totalCount: null,
+      hasMore: false,
+      nextPage: null,
+      timings,
+    }
+  }
+}
+
 export async function getWishlistGamesByUserId(
   userId: string
 ): Promise<ServiceResult<WishlistGameItem[]>> {
   try {
     const { data, error } = await supabase
       .from('lista_desejos')
-      .select(`
-        id,
-        usuario_id,
-        jogo_id,
-        adicionado_em,
-        prioridade,
-        jogo:jogos (
-          id,
-          titulo,
-          capa_url,
-          desenvolvedora,
-          generos,
-          data_lancamento,
-          plataformas
-        )
-      `)
+      .select(WISHLIST_GAME_SELECT)
       .eq('usuario_id', userId)
       .order('prioridade', { ascending: true, nullsFirst: false })
       .order('adicionado_em', { ascending: false })

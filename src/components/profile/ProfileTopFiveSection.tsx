@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { GameCoverImage } from '../GameCoverImage'
 import {
   getCatalogGamesByIds,
   searchCatalogGamesByTitle,
@@ -417,7 +418,13 @@ export function ProfileTopFiveSection({
           >
             <div className="profile-top-five-slot-cover">
               {slot.game?.capa_url ? (
-                <img src={slot.game.capa_url} alt={`Capa do jogo ${visibleTitle}`} />
+                <GameCoverImage
+                  src={slot.game.capa_url}
+                  alt={`Capa do jogo ${visibleTitle}`}
+                  width={320}
+                  height={400}
+                  sizes="(max-width: 768px) 50vw, 20vw"
+                />
               ) : (
                 <div className="profile-top-five-slot-fallback">{getInitial(visibleTitle)}</div>
               )}
@@ -432,7 +439,13 @@ export function ProfileTopFiveSection({
           <div className="profile-top-five-slot-main">
             <div className="profile-top-five-slot-cover">
               {slot.game?.capa_url ? (
-                <img src={slot.game.capa_url} alt={`Capa do jogo ${visibleTitle}`} />
+                <GameCoverImage
+                  src={slot.game.capa_url}
+                  alt={`Capa do jogo ${visibleTitle}`}
+                  width={320}
+                  height={400}
+                  sizes="(max-width: 768px) 50vw, 20vw"
+                />
               ) : (
                 <div className="profile-top-five-slot-fallback">{getInitial(visibleTitle)}</div>
               )}
@@ -574,7 +587,13 @@ export function ProfileTopFiveSection({
                       >
                         <div className="profile-top-five-search-result-cover">
                           {game.capa_url ? (
-                            <img src={game.capa_url} alt={`Capa do jogo ${game.titulo}`} />
+                            <GameCoverImage
+                              src={game.capa_url}
+                              alt={`Capa do jogo ${game.titulo}`}
+                              width={60}
+                              height={60}
+                              sizes="60px"
+                            />
                           ) : (
                             <div className="profile-top-five-search-result-fallback">
                               {getInitial(game.titulo)}
@@ -600,7 +619,13 @@ export function ProfileTopFiveSection({
                     >
                       <div className="profile-top-five-search-result-cover">
                         {game.capa_url ? (
-                          <img src={game.capa_url} alt={`Capa do jogo ${game.titulo}`} />
+                          <GameCoverImage
+                            src={game.capa_url}
+                            alt={`Capa do jogo ${game.titulo}`}
+                            width={60}
+                            height={60}
+                            sizes="60px"
+                          />
                         ) : (
                           <div className="profile-top-five-search-result-fallback">
                             {getInitial(game.titulo)}

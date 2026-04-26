@@ -52,6 +52,35 @@
   grid-template-columns: repeat(var(--wishlist-columns), minmax(0, 1fr));
 }
 
+.profile-wishlist-skeleton-grid {
+  --wishlist-columns: 6;
+
+  display: grid;
+  gap: 0.7rem;
+  grid-template-columns: repeat(var(--wishlist-columns), minmax(0, 1fr));
+}
+
+.profile-wishlist-skeleton-card {
+  display: block;
+  min-height: 190px;
+  border-radius: 18px;
+  background:
+    linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent),
+    var(--skeleton);
+  background-size: 220% 100%;
+  animation: wishlistSkeletonShimmer 1.2s ease-in-out infinite;
+}
+
+@keyframes wishlistSkeletonShimmer {
+  0% {
+    background-position: 220% 0;
+  }
+
+  100% {
+    background-position: -220% 0;
+  }
+}
+
 .profile-wishlist-viewport {
   overflow: hidden;
 }
@@ -281,6 +310,29 @@
   right: 0;
 }
 
+.profile-wishlist-list-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.85rem;
+  align-items: center;
+}
+
+.profile-wishlist-list-head p {
+  margin: 0;
+  color: rgba(200, 210, 255, 0.78);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.profile-wishlist-reorder-button,
+.profile-wishlist-load-more {
+  width: fit-content;
+}
+
+.profile-wishlist-load-more {
+  margin: 0 auto;
+}
+
 .profile-wishlist-order-status {
   margin: 0;
   font-size: 0.9rem;
@@ -331,6 +383,11 @@
     width: 100%;
   }
 
+  .profile-wishlist-list-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
   .profile-wishlist-shell.is-horizontal {
     padding-inline: 2.4rem;
   }
@@ -361,6 +418,7 @@
 
 body.light .profile-wishlist-card,
 body.light .profile-wishlist-empty,
+body.light .profile-wishlist-skeleton-card,
 body.light .profile-wishlist-summary,
 body.light .profile-wishlist-arrow,
 body.light .profile-wishlist-drag-handle {
@@ -378,6 +436,7 @@ body.light .profile-wishlist-empty h3 {
 
 body.light .profile-section-copy p,
 body.light .profile-wishlist-card-meta,
+body.light .profile-wishlist-list-head p,
 body.light .profile-wishlist-empty p,
 body.light .profile-wishlist-order-status.is-saving {
   color: var(--muted-foreground);

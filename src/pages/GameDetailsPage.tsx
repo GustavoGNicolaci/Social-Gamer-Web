@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { GameCoverImage } from '../components/GameCoverImage'
 import { ContentReportModal } from '../components/reviews/ContentReportModal'
 import { UserAvatar } from '../components/UserAvatar'
 import { useAuth } from '../contexts/AuthContext'
@@ -76,6 +77,8 @@ const INITIAL_VISIBLE_REVIEW_COUNT = 3
 const VISIBLE_REVIEW_BATCH_SIZE = 4
 const INITIAL_VISIBLE_COMMENT_COUNT = 2
 const VISIBLE_COMMENT_BATCH_SIZE = 4
+const GAME_DETAIL_SELECT =
+  'id, titulo, capa_url, desenvolvedora, generos, data_lancamento, descricao, plataformas'
 const QUICK_PROFILE_STATUS_OPTIONS: Array<{
   value: QuickProfileStatusValue
   label: string
@@ -583,7 +586,7 @@ function GameDetailsPage() {
       setLoading(true)
 
       const [gameResponse, reviewsResult] = await Promise.all([
-        supabase.from('jogos').select('*').eq('id', gameId).single(),
+        supabase.from('jogos').select(GAME_DETAIL_SELECT).eq('id', gameId).single(),
         getReviewsByGameId(gameId, user?.id),
       ])
 
@@ -1544,10 +1547,14 @@ function GameDetailsPage() {
           <div className="game-details-hero-grid">
             <div className="game-details-cover-card">
               {game.capa_url ? (
-                <img
+                <GameCoverImage
                   src={game.capa_url}
                   alt={`Capa do jogo ${game.titulo}`}
                   className="game-details-cover-image"
+                  width={320}
+                  height={400}
+                  sizes="(max-width: 480px) 280px, (max-width: 900px) 320px, 320px"
+                  eager
                 />
               ) : (
                 <div className="game-details-cover-fallback">
