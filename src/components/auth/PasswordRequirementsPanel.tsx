@@ -1,7 +1,5 @@
-import {
-  getPasswordRequirementStates,
-  PASSWORD_REQUIREMENTS_TITLE,
-} from '../../utils/passwordValidation'
+import { useI18n } from '../../i18n/I18nContext'
+import { getPasswordRequirementStates } from '../../utils/passwordValidation'
 
 interface PasswordRequirementsPanelProps {
   password: string
@@ -18,6 +16,7 @@ function PasswordRequirementsPanel({
   id,
   className = '',
 }: PasswordRequirementsPanelProps) {
+  const { t } = useI18n()
   const requirementStates = getPasswordRequirementStates(password, shouldValidate)
 
   return (
@@ -26,7 +25,7 @@ function PasswordRequirementsPanel({
       className={`password-requirements-panel${isVisible ? ' is-visible' : ' is-hidden'}${className ? ` ${className}` : ''}`}
     >
       <div className="password-requirements-card">
-        <div className="password-requirements-title">{PASSWORD_REQUIREMENTS_TITLE}</div>
+        <div className="password-requirements-title">{t('auth.passwordRequirementsTitle')}</div>
         <ul className="password-requirements-list">
           {requirementStates.map((requirement) => {
             const visualStatus = requirement.isMet ? 'valid' : 'pending'
@@ -40,7 +39,7 @@ function PasswordRequirementsPanel({
                   className={`password-requirement-indicator is-${visualStatus}`}
                   aria-hidden="true"
                 >
-                  {requirement.isMet ? 'OK' : '--'}
+                  {requirement.isMet ? t('common.ok') : t('common.pendingSymbol')}
                 </span>
                 <span>{requirement.label}</span>
               </li>

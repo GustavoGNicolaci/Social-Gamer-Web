@@ -1,4 +1,4 @@
-import { PASSWORD_INVALID_MESSAGE } from './passwordValidation'
+import { translate } from '../i18n'
 
 export type AuthErrorFlow = 'login' | 'register' | 'password_reset_request' | 'password_update'
 
@@ -20,25 +20,19 @@ export interface FriendlyAuthError {
 }
 
 export const GENERIC_AUTH_ACTION_MESSAGE =
-  'Nao foi possivel concluir a acao agora. Tente novamente em alguns instantes.'
-export const REQUIRED_EMAIL_MESSAGE = 'Email e obrigatorio.'
-export const INVALID_EMAIL_MESSAGE = 'Digite um email valido.'
-export const REQUIRED_LOGIN_PASSWORD_MESSAGE = 'Informe sua senha.'
-export const EMAIL_ALREADY_REGISTERED_MESSAGE = 'Este email ja esta cadastrado.'
-export const INVALID_LOGIN_CREDENTIALS_MESSAGE = 'Email ou senha incorretos.'
-export const EMAIL_NOT_CONFIRMED_MESSAGE = 'Confirme seu email antes de entrar.'
-export const CONNECTION_ERROR_MESSAGE =
-  'Nao foi possivel conectar agora. Verifique sua internet e tente novamente.'
-export const TOO_MANY_REQUESTS_MESSAGE =
-  'Muitas tentativas agora. Aguarde um pouco e tente novamente.'
-export const REGISTER_GENERIC_ERROR_MESSAGE =
-  'Nao foi possivel concluir o cadastro agora. Tente novamente em alguns instantes.'
-export const PASSWORD_RESET_REQUEST_ERROR_MESSAGE =
-  'Nao foi possivel enviar o link de redefinicao agora. Tente novamente.'
-export const PASSWORD_UPDATE_ERROR_MESSAGE =
-  'Nao foi possivel atualizar sua senha agora. Tente novamente.'
-export const INVALID_RESET_LINK_MESSAGE =
-  'Seu link para redefinir a senha e invalido ou expirou. Solicite um novo link.'
+  translate('auth.genericActionError')
+export const REQUIRED_EMAIL_MESSAGE = translate('auth.emailRequired')
+export const INVALID_EMAIL_MESSAGE = translate('auth.invalidEmail')
+export const REQUIRED_LOGIN_PASSWORD_MESSAGE = translate('auth.loginPasswordRequired')
+export const EMAIL_ALREADY_REGISTERED_MESSAGE = translate('auth.emailAlreadyRegistered')
+export const INVALID_LOGIN_CREDENTIALS_MESSAGE = translate('auth.invalidCredentials')
+export const EMAIL_NOT_CONFIRMED_MESSAGE = translate('auth.emailNotConfirmed')
+export const CONNECTION_ERROR_MESSAGE = translate('auth.connectionError')
+export const TOO_MANY_REQUESTS_MESSAGE = translate('auth.tooManyRequests')
+export const REGISTER_GENERIC_ERROR_MESSAGE = translate('auth.registerGenericError')
+export const PASSWORD_RESET_REQUEST_ERROR_MESSAGE = translate('auth.passwordResetRequestError')
+export const PASSWORD_UPDATE_ERROR_MESSAGE = translate('auth.passwordUpdateError')
+export const INVALID_RESET_LINK_MESSAGE = translate('auth.invalidResetLink')
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -124,7 +118,7 @@ export const mapFriendlyAuthError = (
   if (isConnectionError(message, status)) {
     return {
       reason: 'connection',
-      message: CONNECTION_ERROR_MESSAGE,
+      message: translate('auth.connectionError'),
       shouldLog: false,
     }
   }
@@ -132,7 +126,7 @@ export const mapFriendlyAuthError = (
   if (isTooManyRequestsError(message, status)) {
     return {
       reason: 'too_many_requests',
-      message: TOO_MANY_REQUESTS_MESSAGE,
+      message: translate('auth.tooManyRequests'),
       shouldLog: false,
     }
   }
@@ -140,7 +134,7 @@ export const mapFriendlyAuthError = (
   if (isInvalidEmailError(message, code)) {
     return {
       reason: 'invalid_email',
-      message: INVALID_EMAIL_MESSAGE,
+      message: translate('auth.invalidEmail'),
       shouldLog: false,
     }
   }
@@ -148,7 +142,7 @@ export const mapFriendlyAuthError = (
   if (isWeakPasswordError(message)) {
     return {
       reason: 'weak_password',
-      message: PASSWORD_INVALID_MESSAGE,
+      message: translate('auth.passwordInvalid'),
       shouldLog: false,
     }
   }
@@ -156,7 +150,7 @@ export const mapFriendlyAuthError = (
   if (flow === 'register' && isEmailAlreadyRegisteredError(message)) {
     return {
       reason: 'email_already_registered',
-      message: EMAIL_ALREADY_REGISTERED_MESSAGE,
+      message: translate('auth.emailAlreadyRegistered'),
       shouldLog: false,
     }
   }
@@ -164,7 +158,7 @@ export const mapFriendlyAuthError = (
   if (flow === 'login' && isEmailNotConfirmedError(message)) {
     return {
       reason: 'email_not_confirmed',
-      message: EMAIL_NOT_CONFIRMED_MESSAGE,
+      message: translate('auth.emailNotConfirmed'),
       shouldLog: false,
     }
   }
@@ -172,7 +166,7 @@ export const mapFriendlyAuthError = (
   if (flow === 'login' && isInvalidCredentialsError(message, code)) {
     return {
       reason: 'invalid_credentials',
-      message: INVALID_LOGIN_CREDENTIALS_MESSAGE,
+      message: translate('auth.invalidCredentials'),
       shouldLog: false,
     }
   }
@@ -180,7 +174,7 @@ export const mapFriendlyAuthError = (
   if (flow === 'password_update' && isInvalidResetLinkError(message)) {
     return {
       reason: 'invalid_reset_link',
-      message: INVALID_RESET_LINK_MESSAGE,
+      message: translate('auth.invalidResetLink'),
       shouldLog: false,
     }
   }
@@ -188,7 +182,7 @@ export const mapFriendlyAuthError = (
   if (flow === 'register') {
     return {
       reason: 'unexpected',
-      message: REGISTER_GENERIC_ERROR_MESSAGE,
+      message: translate('auth.registerGenericError'),
       shouldLog: true,
     }
   }
@@ -196,7 +190,7 @@ export const mapFriendlyAuthError = (
   if (flow === 'password_reset_request') {
     return {
       reason: 'unexpected',
-      message: PASSWORD_RESET_REQUEST_ERROR_MESSAGE,
+      message: translate('auth.passwordResetRequestError'),
       shouldLog: true,
     }
   }
@@ -204,14 +198,14 @@ export const mapFriendlyAuthError = (
   if (flow === 'password_update') {
     return {
       reason: 'unexpected',
-      message: PASSWORD_UPDATE_ERROR_MESSAGE,
+      message: translate('auth.passwordUpdateError'),
       shouldLog: true,
     }
   }
 
   return {
     reason: 'unexpected',
-    message: GENERIC_AUTH_ACTION_MESSAGE,
+    message: translate('auth.genericActionError'),
     shouldLog: true,
   }
 }

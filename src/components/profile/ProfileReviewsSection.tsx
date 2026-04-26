@@ -2,6 +2,8 @@ import { memo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { GameCoverImage } from '../GameCoverImage'
 import type { ProfileReviewItem } from '../../services/reviewService'
+import { formatLocalizedDate, formatLocalizedNumber } from '../../i18n'
+import { useI18n } from '../../i18n/I18nContext'
 import './ProfileReviewsSection.css'
 
 interface ProfileReviewsSectionProps {
@@ -18,12 +20,8 @@ interface ProfileReviewsSectionProps {
 }
 
 function formatCompactDate(value: string | null | undefined, fallback = 'Data nao informada') {
-  if (!value) return fallback
-
-  const parsedDate = new Date(value)
-  if (Number.isNaN(parsedDate.getTime())) return fallback
-
-  return parsedDate.toLocaleDateString('pt-BR', {
+  return formatLocalizedDate(value, {
+    fallback,
     day: '2-digit',
     month: 'short',
     year: 'numeric',
@@ -36,7 +34,7 @@ function getInitial(value: string) {
 }
 
 function formatScoreLabel(score: number) {
-  return `${score.toLocaleString('pt-BR', {
+  return `${formatLocalizedNumber(score, {
     minimumFractionDigits: 0,
     maximumFractionDigits: 1,
   })}/10`
@@ -54,6 +52,7 @@ export const ProfileReviewsSection = memo(function ProfileReviewsSection({
   onDeleteReview,
   onLoadMore,
 }: ProfileReviewsSectionProps) {
+  const { t, formatNumber } = useI18n()
   const [removingReviewIds, setRemovingReviewIds] = useState<string[]>([])
   const [actionError, setActionError] = useState<string | null>(null)
   const hasReviews = items.length > 0
@@ -73,7 +72,7 @@ export const ProfileReviewsSection = memo(function ProfileReviewsSection({
     setRemovingReviewIds(currentIds => currentIds.filter(currentId => currentId !== reviewId))
 
     if (!result.ok) {
-      setActionError(result.message || 'Nao foi possivel apagar esta review.')
+      setActionError(result.message || t('profileReviews.delete'))
     }
   }
 
@@ -85,32 +84,32 @@ export const ProfileReviewsSection = memo(function ProfileReviewsSection({
       <div className="profile-reviews-content">
         <div className="profile-section-head">
           <div className="profile-section-copy">
-            <span className="profile-section-label">Reviews</span>
+            <span className="profile-section-label">{t('common.reviews')}</span>
             <h2>
               {isOwnerView
-                ? 'Seu historico de avaliacoes do catalogo'
-                : 'As avaliacoes publicadas por este perfil'}
+                ? t('profileReviews.ownerTitle')
+                : t('profileReviews.publicTitle')}
             </h2>
             <p>
               {isOwnerView
-                ? 'Consulte rapidamente as notas que voce ja publicou e volte para qualquer jogo com um clique.'
-                : 'Consulte rapidamente as notas publicadas por este perfil e volte para qualquer jogo com um clique.'}
+                ? t('profileReviews.ownerText')
+                : t('profileReviews.publicText')}
             </p>
           </div>
 
           <div className="profile-meta-item profile-reviews-summary">
-            <span>Total publicado</span>
-            <strong>{isLoading ? '...' : countLabel}</strong>
+            <span>{t('profileReviews.totalPublished')}</span>
+            <strong>{isLoading ? t('common.loadingShort') : countLabel}</strong>
           </div>
         </div>
 
         {isLoading ? (
           <div className="profile-reviews-empty">
-            <h3>{isOwnerView ? 'Carregando suas reviews' : 'Carregando reviews deste perfil'}</h3>
+            <h3>{isOwnerView ? t('profileReviews.loadingOwner') : t('profileReviews.loadingPublic')}</h3>
             <p>
               {isOwnerView
-                ? 'Estamos reunindo as avaliacoes que voce publicou no catalogo.'
-                : 'Estamos reunindo as avaliacoes publicadas por este perfil no catalogo.'}
+                ? t('profileReviews.loadingOwnerText')
+                : t('profileReviews.loadingPublicText')}
             </p>
             <div className="profile-reviews-skeleton-grid" aria-hidden="true">
               {Array.from({ length: 4 }, (_, index) => (
@@ -120,24 +119,24 @@ export const ProfileReviewsSection = memo(function ProfileReviewsSection({
           </div>
         ) : errorMessage ? (
           <div className="profile-reviews-empty">
-            <h3>Ocorreu um problema ao carregar as reviews deste perfil</h3>
+            <h3>{t('profileReviews.errorTitle')}</h3>
             <p>{errorMessage}</p>
           </div>
         ) : !hasReviews ? (
           <div className="profile-reviews-empty">
             <h3>
               {isOwnerView
-                ? 'Voce ainda nao publicou nenhuma review'
-                : 'Este perfil ainda nao publicou nenhuma review'}
+                ? t('profileReviews.emptyOwner')
+                : t('profileReviews.emptyPublic')}
             </h3>
             <p>
               {isOwnerView
-                ? 'Quando voce avaliar um jogo com nota ou comentario, ele vai aparecer aqui.'
-                : 'Quando este usuario publicar reviews, elas vao aparecer aqui.'}
+                ? t('profileReviews.emptyOwnerText')
+                : t('profileReviews.emptyPublicText')}
             </p>
             {isOwnerView ? (
               <Link to="/games" className="profile-secondary-button profile-reviews-link">
-                Explorar jogos
+                {t('common.exploreGames')}
               </Link>
             ) : null}
           </div>
@@ -145,7 +144,7 @@ export const ProfileReviewsSection = memo(function ProfileReviewsSection({
           <>
             <div className="profile-reviews-grid">
               {items.map(review => {
-              const visibleTitle = review.jogo?.titulo || 'Jogo indisponivel'
+              const visibleTitle = review.jogo?.titulo || t('common.gameUnavailable')
               const isRemovingReview = removingReviewIds.includes(review.id)
 
               return (
@@ -158,7 +157,7 @@ export const ProfileReviewsSection = memo(function ProfileReviewsSection({
                       {review.jogo?.capa_url ? (
                         <GameCoverImage
                           src={review.jogo.capa_url}
-                          alt={`Capa do jogo ${visibleTitle}`}
+                          alt={t('catalog.coverAlt', { title: visibleTitle })}
                           width={360}
                           height={160}
                           sizes="(max-width: 768px) 100vw, 33vw"
@@ -171,10 +170,12 @@ export const ProfileReviewsSection = memo(function ProfileReviewsSection({
                     <div className="profile-reviews-card-body">
                       <div className="profile-reviews-card-meta">
                         <span className="profile-reviews-score-pill">
-                          Nota {formatScoreLabel(review.nota)}
+                          {t('profileReviews.score', { score: formatScoreLabel(review.nota) })}
                         </span>
                         <span className="profile-reviews-date">
-                          Avaliado em {formatCompactDate(review.data_publicacao)}
+                          {t('profileReviews.reviewedAt', {
+                            date: formatCompactDate(review.data_publicacao, t('profile.dateFallback')),
+                          })}
                         </span>
                       </div>
 
@@ -184,11 +185,11 @@ export const ProfileReviewsSection = memo(function ProfileReviewsSection({
                         <p className="profile-reviews-comment">{review.texto_review}</p>
                       ) : (
                         <p className="profile-reviews-comment is-empty">
-                          Review sem comentario. Apenas a nota foi registrada.
+                          {t('profileReviews.noComment')}
                         </p>
                       )}
 
-                      <span className="profile-reviews-cta">Ver detalhes do jogo</span>
+                      <span className="profile-reviews-cta">{t('common.viewGameDetails')}</span>
                     </div>
                   </Link>
 
@@ -200,7 +201,7 @@ export const ProfileReviewsSection = memo(function ProfileReviewsSection({
                         onClick={() => void handleDeleteReview(review.id)}
                         disabled={isRemovingReview}
                       >
-                        {isRemovingReview ? 'Apagando...' : 'Apagar review'}
+                        {isRemovingReview ? t('common.deleting') : t('profileReviews.delete')}
                       </button>
                     </div>
                   ) : null}
@@ -217,10 +218,10 @@ export const ProfileReviewsSection = memo(function ProfileReviewsSection({
                 disabled={isLoadingMore}
               >
                 {isLoadingMore
-                  ? 'Carregando...'
+                  ? t('common.loading')
                   : remainingReviewsCount > 0
-                    ? `Mostrar mais reviews (${remainingReviewsCount} restantes)`
-                    : 'Mostrar mais reviews'}
+                    ? t('profileReviews.moreWithCount', { count: formatNumber(remainingReviewsCount) })
+                    : t('profileReviews.more')}
               </button>
             ) : null}
           </>

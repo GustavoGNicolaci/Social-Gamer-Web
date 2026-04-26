@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { Link } from 'react-router-dom'
 import { GameCoverImage } from '../GameCoverImage'
 import type { HomeGameSummary } from '../../services/homeService'
+import { useI18n } from '../../i18n/I18nContext'
 import { formatFullDate, getInitial } from './homeDisplayUtils'
 
 interface NewReleasesCarouselProps {
@@ -33,6 +34,7 @@ export function NewReleasesCarousel({
   isLoading,
   errorMessage,
 }: NewReleasesCarouselProps) {
+  const { t } = useI18n()
   const [itemsPerPage, setItemsPerPage] = useState(() =>
     typeof window === 'undefined' ? 6 : getItemsPerPage(window.innerWidth)
   )
@@ -68,15 +70,15 @@ export function NewReleasesCarousel({
     <section className="home-section home-releases-section">
       <div className="home-section-head">
         <div>
-          <span className="home-eyebrow">Lancamentos</span>
-          <h2>Jogos lancamentos</h2>
+          <span className="home-eyebrow">{t('home.releases.eyebrow')}</span>
+          <h2>{t('home.releases.title')}</h2>
         </div>
       </div>
 
       <div className="home-release-shell" style={carouselStyle}>
         {isLoading ? (
           <div className="home-empty-state">
-            <p>Carregando lancamentos recentes...</p>
+            <p>{t('home.releases.loading')}</p>
           </div>
         ) : errorMessage ? (
           <div className="home-empty-state is-error">
@@ -84,7 +86,7 @@ export function NewReleasesCarousel({
           </div>
         ) : items.length === 0 ? (
           <div className="home-empty-state">
-            <p>Nenhum lancamento encontrado no catalogo.</p>
+            <p>{t('home.releases.empty')}</p>
           </div>
         ) : (
           <>
@@ -93,7 +95,7 @@ export function NewReleasesCarousel({
                 type="button"
                 className="home-carousel-arrow home-carousel-arrow--prev"
                 onClick={() => setCurrentPage(Math.max(safeCurrentPage - 1, 0))}
-                aria-label="Mostrar lancamentos anteriores"
+                aria-label={t('home.releases.previous')}
               >
                 <span aria-hidden="true">&lt;</span>
               </button>
@@ -108,7 +110,7 @@ export function NewReleasesCarousel({
                         {game.coverUrl ? (
                           <GameCoverImage
                             src={game.coverUrl}
-                            alt={`Capa do jogo ${game.title}`}
+                            alt={t('catalog.coverAlt', { title: game.title })}
                             sizes="(max-width: 480px) 100vw, (max-width: 768px) 50vw, (max-width: 992px) 33vw, (max-width: 1200px) 25vw, 17vw"
                           />
                         ) : (
@@ -131,7 +133,7 @@ export function NewReleasesCarousel({
                 type="button"
                 className="home-carousel-arrow home-carousel-arrow--next"
                 onClick={() => setCurrentPage(Math.min(safeCurrentPage + 1, totalPages - 1))}
-                aria-label="Mostrar proximos lancamentos"
+                aria-label={t('home.releases.next')}
               >
                 <span aria-hidden="true">&gt;</span>
               </button>

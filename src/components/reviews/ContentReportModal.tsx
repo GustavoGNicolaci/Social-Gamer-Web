@@ -1,12 +1,11 @@
 import { useEffect, useId, useState, type FormEvent } from 'react'
 import {
-  REPORT_REASON_LABELS,
   REPORT_REASON_OPTIONS,
-  REPORT_STATUS_LABELS,
   type CurrentUserReportSummary,
   type ReportReason,
   type ReportTargetType,
 } from '../../services/reviewInteractionsService'
+import { useI18n } from '../../i18n/I18nContext'
 import './ContentReportModal.css'
 
 type FeedbackTone = 'success' | 'error' | 'info'
@@ -30,19 +29,6 @@ interface ContentReportModalProps {
 
 const DEFAULT_REPORT_REASON: ReportReason = 'spam'
 
-function formatReportDate(value: string | null | undefined) {
-  if (!value) return 'Data indisponivel'
-
-  const parsedDate = new Date(value)
-  if (Number.isNaN(parsedDate.getTime())) return 'Data indisponivel'
-
-  return parsedDate.toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric',
-  })
-}
-
 export function ContentReportModal({
   currentReport,
   feedback,
@@ -54,6 +40,7 @@ export function ContentReportModal({
   onSubmit,
   onRemove,
 }: ContentReportModalProps) {
+  const { t, formatDate } = useI18n()
   const titleId = useId()
   const descriptionId = useId()
   const [reason, setReason] = useState<ReportReason>(currentReport?.reason || DEFAULT_REPORT_REASON)
@@ -87,10 +74,10 @@ export function ContentReportModal({
     })
   }
 
-  const titleText = currentReport ? 'Denuncia registrada' : 'Denunciar conteudo'
+  const titleText = currentReport ? t('report.content.titleExisting') : t('report.content.titleNew')
   const descriptionText = currentReport
-    ? `Voce ja denunciou ${targetLabel}. Aqui esta o status atual da sua denuncia.`
-    : `Explique rapidamente o motivo da denuncia de ${targetLabel}.`
+    ? t('report.content.descriptionExisting', { target: targetLabel })
+    : t('report.content.descriptionNew', { target: targetLabel })
 
   return (
     <div
@@ -116,7 +103,7 @@ export function ContentReportModal({
           <header className="content-report-modal-header">
             <div className="content-report-modal-copy">
               <span className="content-report-modal-kicker">
-                {targetType === 'review' ? 'Review' : 'Comentario'}
+                {targetType === 'review' ? t('common.review') : t('common.comment')}
               </span>
               <h2 id={titleId}>{titleText}</h2>
               <p id={descriptionId}>{descriptionText}</p>
@@ -127,7 +114,7 @@ export function ContentReportModal({
               className="content-report-modal-close-button"
               onClick={onClose}
               disabled={isBusy}
-              aria-label="Fechar modal de denuncia"
+              aria-label={t('report.content.close')}
             >
               <span aria-hidden="true">&times;</span>
             </button>
@@ -141,25 +128,32 @@ export function ContentReportModal({
             <div className="content-report-modal-summary">
               <div className="content-report-modal-pill-row">
                 <span className="content-report-modal-pill">
-                  Motivo: {REPORT_REASON_LABELS[currentReport.reason]}
+                  {t('report.content.reasonLabel', { reason: t(`report.reason.${currentReport.reason}`) })}
                 </span>
                 <span className="content-report-modal-pill">
-                  Status: {REPORT_STATUS_LABELS[currentReport.status]}
+                  {t('report.content.statusLabel', { status: t(`report.status.${currentReport.status}`) })}
                 </span>
                 <span className="content-report-modal-pill">
-                  Enviada em {formatReportDate(currentReport.createdAt)}
+                  {t('report.content.sentAt', {
+                    date: formatDate(currentReport.createdAt, {
+                      day: '2-digit',
+                      month: 'long',
+                      year: 'numeric',
+                      fallback: t('common.unavailableDate'),
+                    }),
+                  })}
                 </span>
               </div>
 
               {currentReport.description ? (
                 <div className="content-report-modal-note">
-                  <strong>Detalhes enviados</strong>
+                  <strong>{t('report.content.detailsSent')}</strong>
                   <p>{currentReport.description}</p>
                 </div>
               ) : (
                 <div className="content-report-modal-note">
-                  <strong>Sem detalhes extras</strong>
-                  <p>Voce enviou apenas o motivo principal da denuncia.</p>
+                  <strong>{t('report.content.noDetails')}</strong>
+                  <p>{t('report.content.noDetailsText')}</p>
                 </div>
               )}
 
@@ -170,7 +164,7 @@ export function ContentReportModal({
                   onClick={onRemove}
                   disabled={isRemoving}
                 >
-                  {isRemoving ? 'Removendo...' : 'Remover denuncia'}
+                  {isRemoving ? t('common.removing') : t('report.content.remove')}
                 </button>
                 <button
                   type="button"
@@ -178,14 +172,14 @@ export function ContentReportModal({
                   onClick={onClose}
                   disabled={isRemoving}
                 >
-                  Fechar
+                  {t('common.close')}
                 </button>
               </div>
             </div>
           ) : (
             <form className="content-report-modal-form" onSubmit={handleSubmit}>
               <label className="content-report-modal-field">
-                <span>Motivo da denuncia</span>
+                <span>{t('report.content.reason')}</span>
                 <select
                   className="content-report-modal-select"
                   value={reason}
@@ -194,19 +188,19 @@ export function ContentReportModal({
                 >
                   {REPORT_REASON_OPTIONS.map(option => (
                     <option key={option.value} value={option.value}>
-                      {option.label}
+                      {t(`report.reason.${option.value}`)}
                     </option>
                   ))}
                 </select>
               </label>
 
               <label className="content-report-modal-field">
-                <span>Detalhes adicionais (opcional)</span>
+                <span>{t('report.content.detailsOptional')}</span>
                 <textarea
                   className="content-report-modal-textarea"
                   value={description}
                   onChange={event => setDescription(event.target.value)}
-                  placeholder="Se quiser, descreva o contexto para ajudar na moderacao."
+                  placeholder={t('report.content.placeholder')}
                   disabled={isSubmitting}
                 />
               </label>
@@ -218,14 +212,14 @@ export function ContentReportModal({
                   onClick={onClose}
                   disabled={isBusy}
                 >
-                  Cancelar
+                  {t('common.cancel')}
                 </button>
                 <button
                   type="submit"
                   className="game-button content-report-modal-primary-action"
                   disabled={isBusy}
                 >
-                  {isSubmitting ? 'Enviando...' : 'Enviar denuncia'}
+                  {isSubmitting ? t('common.sending') : t('report.content.submit')}
                 </button>
               </div>
             </form>

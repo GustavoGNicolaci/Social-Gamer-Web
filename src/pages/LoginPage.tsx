@@ -3,12 +3,8 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import AuthShell from '../components/auth/AuthShell'
 import AuthStatusBanner from '../components/auth/AuthStatusBanner'
 import { useAuth } from '../contexts/AuthContext'
-import {
-  INVALID_EMAIL_MESSAGE,
-  REQUIRED_EMAIL_MESSAGE,
-  REQUIRED_LOGIN_PASSWORD_MESSAGE,
-  isValidEmailAddress,
-} from '../utils/authErrorMessages'
+import { useI18n } from '../i18n/I18nContext'
+import { isValidEmailAddress } from '../utils/authErrorMessages'
 
 interface LoginLocationState {
   successMessage?: string
@@ -19,13 +15,8 @@ interface LoginFieldErrors {
   password?: string
 }
 
-const HERO_HIGHLIGHTS = [
-  'Continue de onde parou, sem perder seu progresso.',
-  'Organize backlog, favoritos e wishlist em um so lugar.',
-  'Entre com seguranca para compartilhar sua opiniao.',
-]
-
 function LoginPage() {
+  const { t } = useI18n()
   const location = useLocation()
   const navigate = useNavigate()
   const { login, user } = useAuth()
@@ -76,13 +67,13 @@ function LoginPage() {
     const normalizedEmail = email.trim().toLowerCase()
 
     if (!normalizedEmail) {
-      validationErrors.email = REQUIRED_EMAIL_MESSAGE
+      validationErrors.email = t('auth.emailRequired')
     } else if (!isValidEmailAddress(normalizedEmail)) {
-      validationErrors.email = INVALID_EMAIL_MESSAGE
+      validationErrors.email = t('auth.invalidEmail')
     }
 
     if (!password) {
-      validationErrors.password = REQUIRED_LOGIN_PASSWORD_MESSAGE
+      validationErrors.password = t('auth.loginPasswordRequired')
     }
 
     return validationErrors
@@ -118,26 +109,30 @@ function LoginPage() {
 
   return (
     <AuthShell
-      title="Login"
-      subtitle="Entre para continuar sua jornada gamer."
-      heroEyebrow="Social Gamer"
-      heroTitle="Volte para sua jornada"
-      heroDescription="Acesse seu perfil para acompanhar status, favoritos, wishlist e reviews em um so lugar."
-      heroHighlights={HERO_HIGHLIGHTS}
+      title={t('auth.login.title')}
+      subtitle={t('auth.login.subtitle')}
+      heroEyebrow={t('common.appName')}
+      heroTitle={t('auth.login.heroTitle')}
+      heroDescription={t('auth.login.heroDescription')}
+      heroHighlights={[
+        t('auth.login.highlight1'),
+        t('auth.login.highlight2'),
+        t('auth.login.highlight3'),
+      ]}
       layout="auth"
       footer={
         <div className="auth-link-groups">
           <div className="auth-link-row">
-            <span>Nao tem conta?</span>
+            <span>{t('auth.login.noAccount')}</span>
             <Link to="/register" className="auth-link">
-              Criar conta
+              {t('common.register')}
             </Link>
           </div>
 
           <div className="auth-link-row">
-            <span>Precisa recuperar o acesso?</span>
+            <span>{t('auth.login.needRecover')}</span>
             <Link to="/esqueci-a-senha" className="auth-link">
-              Esqueci minha senha
+              {t('auth.login.forgotPassword')}
             </Link>
           </div>
         </div>
@@ -148,7 +143,7 @@ function LoginPage() {
 
       <form className="auth-form" onSubmit={handleLogin}>
         <div className="auth-field">
-          <label htmlFor="login-email">Email</label>
+          <label htmlFor="login-email">{t('common.email')}</label>
           <input
             type="email"
             id="login-email"
@@ -169,12 +164,12 @@ function LoginPage() {
         </div>
 
         <div className="auth-field">
-          <label htmlFor="login-password">Senha</label>
+          <label htmlFor="login-password">{t('common.password')}</label>
           <input
             type="password"
             id="login-password"
             className={`auth-input${fieldErrors.password ? ' is-error' : ''}`}
-            placeholder="Sua senha"
+            placeholder={t('common.password')}
             autoComplete="current-password"
             value={password}
             onChange={handleFieldChange('password', setPassword)}
@@ -195,7 +190,7 @@ function LoginPage() {
             className="auth-button auth-button--primary"
             disabled={isSubmitting}
           >
-            {isSubmitting ? 'Entrando...' : 'Entrar'}
+            {isSubmitting ? t('auth.login.submitting') : t('auth.login.submit')}
           </button>
         </div>
       </form>

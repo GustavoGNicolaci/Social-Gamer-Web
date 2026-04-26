@@ -3,20 +3,16 @@ import type { Session, User } from '@supabase/supabase-js'
 import { createStatelessSupabaseClient, supabase } from '../supabase-client'
 import { getPasswordValidationError } from '../utils/passwordValidation'
 import {
-  INVALID_EMAIL_MESSAGE,
-  REGISTER_GENERIC_ERROR_MESSAGE,
-  REQUIRED_EMAIL_MESSAGE,
-  REQUIRED_LOGIN_PASSWORD_MESSAGE,
   isValidEmailAddress,
   logUnexpectedAuthError,
   mapFriendlyAuthError,
 } from '../utils/authErrorMessages'
+import { translate } from '../i18n'
 
-const USERNAME_TAKEN_MESSAGE = 'Esse nome de usuario ja esta em uso.'
-const CURRENT_PASSWORD_REQUIRED_MESSAGE = 'Informe sua senha atual.'
-const CURRENT_PASSWORD_INVALID_MESSAGE = 'A senha atual informada nao esta correta.'
-const DELETE_ACCOUNT_ERROR_MESSAGE =
-  'Nao foi possivel excluir sua conta agora. Tente novamente em alguns instantes.'
+const getUsernameTakenMessage = () => translate('auth.usernameTaken')
+const getCurrentPasswordRequiredMessage = () => translate('auth.currentPasswordRequired')
+const getCurrentPasswordInvalidMessage = () => translate('auth.currentPasswordInvalid')
+const getDeleteAccountErrorMessageFallback = () => translate('auth.deleteAccountError')
 const USER_PROFILE_SELECT =
   'id, username, nome_completo, avatar_path, avatar_url, bio, data_cadastro, configuracoes_privacidade'
 
@@ -193,21 +189,21 @@ async function getFunctionErrorPayload(error: unknown): Promise<FunctionErrorPay
 function getDeleteAccountErrorMessage(errorCode: string | null | undefined) {
   switch (errorCode) {
     case 'invalid_password':
-      return CURRENT_PASSWORD_INVALID_MESSAGE
+      return getCurrentPasswordInvalidMessage()
     case 'username_mismatch':
-      return 'O username informado nao corresponde a esta conta.'
+      return translate('auth.deleteUsernameMismatch')
     case 'not_authenticated':
-      return 'Sua sessao expirou. Faca login novamente para excluir a conta.'
+      return translate('auth.deleteSessionExpired')
     case 'missing_confirmation':
-      return 'Confirme seu username e senha atual para excluir a conta.'
+      return translate('auth.deleteMissingConfirmation')
     case 'storage_cleanup_failed':
-      return 'Nao foi possivel remover seus arquivos agora. Tente novamente em alguns instantes.'
+      return translate('auth.deleteStorageCleanupFailed')
     case 'data_cleanup_failed':
-      return 'Nao foi possivel remover os dados vinculados a conta agora. Verifique os logs da Edge Function.'
+      return translate('auth.deleteDataCleanupFailed')
     case 'auth_delete_failed':
-      return 'Os dados foram limpos, mas nao foi possivel finalizar a exclusao do login. Verifique os logs da Edge Function.'
+      return translate('auth.deleteAuthCleanupFailed')
     default:
-      return DELETE_ACCOUNT_ERROR_MESSAGE
+      return getDeleteAccountErrorMessageFallback()
   }
 }
 
@@ -446,19 +442,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       if (!normalizedInput.username) {
         return buildValidationErrorResult({
-          username: 'Nome de usuario e obrigatorio.',
+          username: translate('auth.usernameRequired'),
         })
       }
 
       if (!normalizedInput.email) {
         return buildValidationErrorResult({
-          email: REQUIRED_EMAIL_MESSAGE,
+          email: translate('auth.emailRequired'),
         })
       }
 
       if (!isValidEmailAddress(normalizedInput.email)) {
         return buildValidationErrorResult({
-          email: INVALID_EMAIL_MESSAGE,
+          email: translate('auth.invalidEmail'),
         })
       }
 
@@ -481,13 +477,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           console.error('Erro ao verificar disponibilidade do nome de usuario:', usernameLookupError)
           return {
             status: 'system_error',
-            message: REGISTER_GENERIC_ERROR_MESSAGE,
+            message: translate('auth.registerGenericError'),
           }
         }
 
         if (usernameRows && usernameRows.length > 0) {
           return buildValidationErrorResult({
-            username: USERNAME_TAKEN_MESSAGE,
+            username: getUsernameTakenMessage(),
           })
         }
 
@@ -515,7 +511,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
           return {
             status: 'system_error',
-            message: REGISTER_GENERIC_ERROR_MESSAGE,
+            message: translate('auth.registerGenericError'),
           }
         }
 
@@ -528,7 +524,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
             return {
               status: 'system_error',
-              message: REGISTER_GENERIC_ERROR_MESSAGE,
+              message: translate('auth.registerGenericError'),
             }
           }
 
@@ -549,14 +545,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         return {
           status: 'system_error',
-          message: REGISTER_GENERIC_ERROR_MESSAGE,
+          message: translate('auth.registerGenericError'),
         }
       } catch (error) {
         console.error('Erro inesperado ao registrar usuario:', error)
 
         return {
           status: 'system_error',
-          message: REGISTER_GENERIC_ERROR_MESSAGE,
+          message: translate('auth.registerGenericError'),
         }
       }
     },
@@ -568,7 +564,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (!user) {
         return {
           data: null,
-          error: { message: 'Usuario nao autenticado para atualizar o perfil.' },
+          error: { message: translate('profile.error.notAuthenticated') },
         }
       }
 
@@ -583,7 +579,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         if (error) {
           const normalizedError = normalizeProfileUpdateError(
             error,
-            'Nao foi possivel atualizar o perfil.'
+            translate('profile.error.updateFailed')
           )
 
           console.error('Erro ao atualizar perfil:', {
@@ -598,7 +594,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         if (!data) {
           const normalizedError = normalizeProfileUpdateError(
             null,
-            'Nenhum registro foi retornado apos atualizar o perfil.'
+            translate('profile.error.noRecordReturned')
           )
 
           console.error('Atualizacao do perfil sem retorno de dados:', {
@@ -615,7 +611,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       } catch (error) {
         const normalizedError = normalizeProfileUpdateError(
           error,
-          'Erro inesperado ao atualizar o perfil.'
+          translate('profile.error.unexpectedUpdate')
         )
 
         console.error('Erro inesperado ao atualizar perfil:', {
@@ -671,15 +667,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const normalizedEmail = email.trim().toLowerCase()
 
     if (!normalizedEmail) {
-      return { error: REQUIRED_EMAIL_MESSAGE }
+      return { error: translate('auth.emailRequired') }
     }
 
     if (!isValidEmailAddress(normalizedEmail)) {
-      return { error: INVALID_EMAIL_MESSAGE }
+      return { error: translate('auth.invalidEmail') }
     }
 
     if (!password) {
-      return { error: REQUIRED_LOGIN_PASSWORD_MESSAGE }
+      return { error: translate('auth.loginPasswordRequired') }
     }
 
     try {
@@ -715,13 +711,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     if (!normalizedEmail) {
       return {
-        error: REQUIRED_EMAIL_MESSAGE,
+        error: translate('auth.emailRequired'),
       }
     }
 
     if (!isValidEmailAddress(normalizedEmail)) {
       return {
-        error: INVALID_EMAIL_MESSAGE,
+        error: translate('auth.invalidEmail'),
       }
     }
 
@@ -760,13 +756,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     async (currentPassword: string) => {
       if (!user?.email) {
         return {
-          error: 'Voce precisa estar logado para alterar a senha.',
+          error: translate('auth.passwordChangeLoginRequired'),
         }
       }
 
       if (!currentPassword) {
         return {
-          error: CURRENT_PASSWORD_REQUIRED_MESSAGE,
+          error: getCurrentPasswordRequiredMessage(),
         }
       }
 
@@ -788,7 +784,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           return {
             error:
               friendlyError.reason === 'invalid_credentials'
-                ? CURRENT_PASSWORD_INVALID_MESSAGE
+                ? getCurrentPasswordInvalidMessage()
                 : friendlyError.message,
           }
         }
@@ -856,19 +852,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const deleteOwnAccount = useCallback(async ({ username, currentPassword }: DeleteOwnAccountInput) => {
     if (!user?.email || !profile) {
       return {
-        error: 'Voce precisa estar logado para excluir sua conta.',
+        error: translate('auth.deleteLoginRequired'),
       }
     }
 
     if (username !== profile.username) {
       return {
-        error: 'O username informado nao corresponde a esta conta.',
+        error: translate('auth.deleteUsernameMismatch'),
       }
     }
 
     if (!currentPassword) {
       return {
-        error: CURRENT_PASSWORD_REQUIRED_MESSAGE,
+        error: getCurrentPasswordRequiredMessage(),
       }
     }
 
@@ -890,7 +886,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return {
           error:
             friendlyError.reason === 'invalid_credentials'
-              ? CURRENT_PASSWORD_INVALID_MESSAGE
+              ? getCurrentPasswordInvalidMessage()
               : friendlyError.message,
         }
       }
@@ -934,7 +930,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     } catch (error) {
       console.error('Erro inesperado ao excluir a propria conta:', error)
       return {
-        error: DELETE_ACCOUNT_ERROR_MESSAGE,
+        error: getDeleteAccountErrorMessageFallback(),
       }
     }
   }, [clearAuthState, profile, user])

@@ -1158,6 +1158,7 @@ body.light .navbar-search-state.is-error {
 
   .navbar-container {
     padding: 0.68rem 0.72rem;
+    grid-template-columns: auto minmax(0, 1fr) auto;
   }
 
   .navbar-logo-icon {
@@ -1166,9 +1167,13 @@ body.light .navbar-search-state.is-error {
     font-size: 1.35rem;
   }
 
-  .navbar-link {
-    padding-inline: 0.45rem;
-    font-size: 0.8rem;
+  .navbar-center {
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .navbar-links {
+    display: none;
   }
 
   .navbar-avatar-shell {

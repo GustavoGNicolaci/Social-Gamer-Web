@@ -453,8 +453,8 @@ body.light .account-settings-button.is-danger {
 body.light .account-settings-field input,
 body.light .account-settings-privacy-option,
 body.light .account-settings-button.is-secondary {
-  border-color: var(--border);
-  background: var(--input);
+  border-color: #94a3b8;
+  background: #f8fafc;
   color: var(--foreground);
 }
 
@@ -471,9 +471,22 @@ body.light .account-settings-privacy-option.is-selected {
 
 body.light .account-settings-privacy-option:hover:not(:disabled),
 body.light .account-settings-button:hover:not(:disabled) {
-  border-color: var(--ring);
-  background: var(--surface-hover);
+  border-color: #2563eb;
+  background: #dbeafe;
   box-shadow: 0 14px 28px var(--shadow-color);
+}
+
+body.light .account-settings-privacy-option:active:not(:disabled),
+body.light .account-settings-button.is-secondary:active:not(:disabled) {
+  background: #bfdbfe;
+}
+
+body.light .account-settings-button:disabled,
+body.light .account-settings-privacy-option:disabled {
+  border-color: #cbd5e1;
+  background: #f1f5f9;
+  color: #64748b;
+  opacity: 0.78;
 }
 
 body.light .account-settings-button.is-primary {

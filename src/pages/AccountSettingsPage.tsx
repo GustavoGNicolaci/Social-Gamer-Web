@@ -10,6 +10,8 @@ import {
   type ProfilePrivacyMode,
 } from '../utils/profilePrivacy'
 import { getPublicProfilePath } from '../utils/profileRoutes'
+import { translate, type SupportedLocale } from '../i18n'
+import { useI18n } from '../i18n/I18nContext'
 import './AccountSettingsPage.css'
 
 type FeedbackTone = 'success' | 'error' | 'info'
@@ -33,29 +35,43 @@ interface AccountDeletionModalProps {
 
 const PRIVACY_OPTIONS: Array<{
   value: ProfilePrivacyMode
-  label: string
-  description: string
+  labelKey: string
+  descriptionKey: string
 }> = [
   {
     value: 'public',
-    label: 'Publico',
-    description: 'Qualquer usuario pode ver seu perfil completo.',
+    labelKey: 'common.public',
+    descriptionKey: 'settings.privacy.publicDescription',
   },
   {
     value: 'friends',
-    label: 'Somente amigos',
-    description: 'Apenas amigos mutuos veem bio, listas, Top 5 e reviews.',
+    labelKey: 'common.friendsOnly',
+    descriptionKey: 'settings.privacy.friendsDescription',
   },
   {
     value: 'private',
-    label: 'Privado',
-    description: 'Somente voce ve as informacoes restritas do perfil.',
+    labelKey: 'common.private',
+    descriptionKey: 'settings.privacy.privateDescription',
   },
 ]
 
-function getSettingsUpdateErrorMessage(_error: ProfileUpdateError | null) {
+const LANGUAGE_OPTIONS: Array<{
+  value: SupportedLocale
+  labelKey: string
+}> = [
+  {
+    value: 'pt-BR',
+    labelKey: 'language.portuguese',
+  },
+  {
+    value: 'en-US',
+    labelKey: 'language.english',
+  },
+]
+
+function getSettingsUpdateErrorMessage(_error: ProfileUpdateError | null, t: (key: string) => string) {
   void _error
-  return 'Nao foi possivel salvar esta configuracao agora. Tente novamente em alguns instantes.'
+  return t('settings.saveError')
 }
 
 function SettingsFeedback({ feedback }: { feedback: FeedbackState | null }) {
@@ -79,6 +95,7 @@ function AccountDeletionModal({
   onClose,
   onConfirm,
 }: AccountDeletionModalProps) {
+  const { t } = useI18n()
   const canConfirm = username === expectedUsername && password.length > 0 && !isSubmitting
 
   useEffect(() => {
@@ -124,15 +141,14 @@ function AccountDeletionModal({
         onSubmit={handleSubmit}
         onMouseDown={event => event.stopPropagation()}
       >
-        <span className="account-settings-kicker is-danger">Exclusao definitiva</span>
-        <h2 id="account-delete-title">Excluir conta</h2>
+        <span className="account-settings-kicker is-danger">{t('settings.delete.kicker')}</span>
+        <h2 id="account-delete-title">{t('settings.delete.title')}</h2>
         <p id="account-delete-description">
-          Esta acao remove sua conta, perfil e dados relacionados. Confirme seu username e senha
-          atual antes de continuar.
+          {t('settings.delete.description')}
         </p>
 
         <label className="account-settings-field">
-          <span>Username</span>
+          <span>{t('common.username')}</span>
           <input
             type="text"
             value={username}
@@ -144,13 +160,13 @@ function AccountDeletionModal({
         </label>
 
         <label className="account-settings-field">
-          <span>Senha atual</span>
+          <span>{t('common.currentPassword')}</span>
           <input
             type="password"
             value={password}
             onChange={event => onChangePassword(event.target.value)}
             disabled={isSubmitting}
-            placeholder="Sua senha atual"
+            placeholder={t('settings.password.currentPlaceholder')}
             autoComplete="current-password"
           />
         </label>
@@ -164,7 +180,7 @@ function AccountDeletionModal({
             onClick={onClose}
             disabled={isSubmitting}
           >
-            Cancelar
+            {t('common.cancel')}
           </button>
 
           <button
@@ -172,7 +188,7 @@ function AccountDeletionModal({
             className="account-settings-button is-danger"
             disabled={!canConfirm}
           >
-            {isSubmitting ? 'Excluindo...' : 'Excluir minha conta'}
+            {isSubmitting ? t('settings.delete.submitting') : t('settings.delete.submit')}
           </button>
         </div>
       </form>
@@ -182,6 +198,7 @@ function AccountDeletionModal({
 
 function AccountSettingsPage() {
   const navigate = useNavigate()
+  const { locale, setLocale, t } = useI18n()
   const {
     user,
     profile,
@@ -193,6 +210,8 @@ function AccountSettingsPage() {
 
   const [privacySaving, setPrivacySaving] = useState(false)
   const [privacyFeedback, setPrivacyFeedback] = useState<FeedbackState | null>(null)
+  const [languageSaving, setLanguageSaving] = useState(false)
+  const [languageFeedback, setLanguageFeedback] = useState<FeedbackState | null>(null)
   const [currentPassword, setCurrentPassword] = useState('')
   const [passwordSubmitting, setPasswordSubmitting] = useState(false)
   const [passwordFeedback, setPasswordFeedback] = useState<FeedbackState | null>(null)
@@ -222,7 +241,7 @@ function AccountSettingsPage() {
     if (error) {
       setPrivacyFeedback({
         tone: 'error',
-        message: getSettingsUpdateErrorMessage(error),
+        message: getSettingsUpdateErrorMessage(error, t),
       })
       setPrivacySaving(false)
       return
@@ -232,12 +251,34 @@ function AccountSettingsPage() {
       tone: 'success',
       message:
         nextPrivacyMode === 'public'
-          ? 'Seu perfil agora esta publico.'
+          ? t('settings.privacy.savedPublic')
           : nextPrivacyMode === 'friends'
-            ? 'Seu perfil agora esta visivel apenas para amigos.'
-            : 'Seu perfil agora esta privado.',
+            ? t('settings.privacy.savedFriends')
+            : t('settings.privacy.savedPrivate'),
     })
     setPrivacySaving(false)
+  }
+
+  const handleChangeLocale = async (nextLocale: SupportedLocale) => {
+    if (languageSaving || nextLocale === locale) return
+
+    setLanguageSaving(true)
+    setLanguageFeedback(null)
+
+    try {
+      await setLocale(nextLocale)
+      setLanguageFeedback({
+        tone: 'success',
+        message: translate('settings.language.saved', undefined, nextLocale),
+      })
+    } catch {
+      setLanguageFeedback({
+        tone: 'error',
+        message: t('settings.language.saveError'),
+      })
+    } finally {
+      setLanguageSaving(false)
+    }
   }
 
   const handlePasswordResetRequest = async (event: FormEvent) => {
@@ -248,7 +289,7 @@ function AccountSettingsPage() {
     if (!currentPassword) {
       setPasswordFeedback({
         tone: 'error',
-        message: 'Informe sua senha atual para continuar.',
+        message: t('settings.password.currentRequired'),
       })
       return
     }
@@ -270,7 +311,7 @@ function AccountSettingsPage() {
     setCurrentPassword('')
     setPasswordFeedback({
       tone: 'success',
-      message: 'Senha atual confirmada. Enviamos um email para voce redefinir a senha.',
+      message: t('settings.password.success'),
     })
     setPasswordSubmitting(false)
   }
@@ -297,7 +338,7 @@ function AccountSettingsPage() {
     if (deleteUsername !== profile.username) {
       setDeleteFeedback({
         tone: 'error',
-        message: 'O username informado nao corresponde a esta conta.',
+        message: t('settings.delete.usernameMismatch'),
       })
       return
     }
@@ -305,7 +346,7 @@ function AccountSettingsPage() {
     if (!deletePassword) {
       setDeleteFeedback({
         tone: 'error',
-        message: 'Informe sua senha atual para excluir a conta.',
+        message: t('settings.delete.passwordRequired'),
       })
       return
     }
@@ -330,7 +371,7 @@ function AccountSettingsPage() {
     navigate('/login', {
       replace: true,
       state: {
-        successMessage: 'Sua conta foi excluida com sucesso.',
+        successMessage: t('settings.delete.success'),
       },
     })
   }
@@ -340,9 +381,9 @@ function AccountSettingsPage() {
       <div className="page-container">
         <div className="page-content">
           <div className="account-settings-state">
-            <span className="account-settings-kicker">Configuracoes</span>
-            <h1>Carregando sua conta</h1>
-            <p>Estamos buscando suas preferencias com seguranca.</p>
+            <span className="account-settings-kicker">{t('common.settings')}</span>
+            <h1>{t('settings.loadingTitle')}</h1>
+            <p>{t('settings.loadingText')}</p>
           </div>
         </div>
       </div>
@@ -354,11 +395,11 @@ function AccountSettingsPage() {
       <div className="page-container">
         <div className="page-content">
           <div className="account-settings-state">
-            <span className="account-settings-kicker">Configuracoes</span>
-            <h1>Entre para alterar sua conta</h1>
-            <p>Apenas o usuario logado pode acessar privacidade, senha e exclusao de conta.</p>
+            <span className="account-settings-kicker">{t('common.settings')}</span>
+            <h1>{t('settings.loginTitle')}</h1>
+            <p>{t('settings.loginText')}</p>
             <Link to="/login" className="account-settings-button is-primary">
-              Fazer login
+              {t('auth.login.submit')}
             </Link>
           </div>
         </div>
@@ -372,45 +413,43 @@ function AccountSettingsPage() {
         <main className="account-settings-page">
           <header className="account-settings-header">
             <div>
-              <span className="account-settings-kicker">Conta</span>
-              <h1>Configuracoes da conta</h1>
+              <span className="account-settings-kicker">{t('common.myAccount')}</span>
+              <h1>{t('settings.title')}</h1>
               <p>
-                Ajuste como seu perfil aparece, solicite troca de senha e gerencie a permanencia
-                da sua conta.
+                {t('settings.description')}
               </p>
             </div>
 
             <Link to={profilePath} className="account-settings-button is-secondary">
-              Ver meu perfil
+              {t('settings.viewMyProfile')}
             </Link>
           </header>
 
-          <section className="account-settings-layout" aria-label="Configuracoes da conta">
+          <section className="account-settings-layout" aria-label={t('settings.title')}>
             <article className="account-settings-card">
               <div className="account-settings-card-header">
                 <div>
-                  <span className="account-settings-kicker">Privacidade</span>
-                  <h2>Visibilidade do perfil</h2>
+                  <span className="account-settings-kicker">{t('common.privacy')}</span>
+                  <h2>{t('settings.privacy.title')}</h2>
                 </div>
 
                 <span className={`account-settings-status is-${privacyMode}`}>
                   {privacyMode === 'public'
-                    ? 'Publico'
+                    ? t('common.public')
                     : privacyMode === 'friends'
-                      ? 'Somente amigos'
-                      : 'Privado'}
+                      ? t('common.friendsOnly')
+                      : t('common.private')}
                 </span>
               </div>
 
               <p>
-                Escolha quem pode ver bio, Top 5, conexoes, listas, status dos jogos e reviews no
-                seu perfil.
+                {t('settings.privacy.description')}
               </p>
 
               <div
                 className="account-settings-privacy-options"
                 role="radiogroup"
-                aria-label="Visibilidade do perfil"
+                aria-label={t('settings.privacy.title')}
               >
                 {PRIVACY_OPTIONS.map(option => (
                   <button
@@ -424,8 +463,8 @@ function AccountSettingsPage() {
                     onClick={() => void handleChangePrivacyMode(option.value)}
                     disabled={privacySaving}
                   >
-                    <strong>{option.label}</strong>
-                    <span>{option.description}</span>
+                    <strong>{t(option.labelKey)}</strong>
+                    <span>{t(option.descriptionKey)}</span>
                   </button>
                 ))}
               </div>
@@ -436,19 +475,58 @@ function AccountSettingsPage() {
             <article className="account-settings-card">
               <div className="account-settings-card-header">
                 <div>
-                  <span className="account-settings-kicker">Seguranca</span>
-                  <h2>Trocar senha</h2>
+                  <span className="account-settings-kicker">{t('settings.language.current')}</span>
+                  <h2>{t('settings.language.title')}</h2>
+                </div>
+
+                <span className="account-settings-status">
+                  {locale === 'pt-BR' ? t('language.portuguese') : t('language.english')}
+                </span>
+              </div>
+
+              <p>{t('settings.language.description')}</p>
+
+              <div
+                className="account-settings-privacy-options"
+                role="radiogroup"
+                aria-label={t('settings.language.title')}
+              >
+                {LANGUAGE_OPTIONS.map(option => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={`account-settings-privacy-option${
+                      locale === option.value ? ' is-selected' : ''
+                    }`}
+                    role="radio"
+                    aria-checked={locale === option.value}
+                    onClick={() => void handleChangeLocale(option.value)}
+                    disabled={languageSaving}
+                  >
+                    <strong>{t(option.labelKey)}</strong>
+                    <span>{option.value}</span>
+                  </button>
+                ))}
+              </div>
+
+              <SettingsFeedback feedback={languageFeedback} />
+            </article>
+
+            <article className="account-settings-card">
+              <div className="account-settings-card-header">
+                <div>
+                  <span className="account-settings-kicker">{t('common.security')}</span>
+                  <h2>{t('settings.password.title')}</h2>
                 </div>
               </div>
 
               <p>
-                Confirme sua senha atual. Depois disso, enviaremos um link seguro para redefinicao
-                no email da sua conta.
+                {t('settings.password.description')}
               </p>
 
               <form className="account-settings-form" onSubmit={handlePasswordResetRequest}>
                 <label className="account-settings-field">
-                  <span>Senha atual</span>
+                  <span>{t('common.currentPassword')}</span>
                   <input
                     type="password"
                     value={currentPassword}
@@ -456,7 +534,7 @@ function AccountSettingsPage() {
                       setCurrentPassword(event.target.value)
                       setPasswordFeedback(null)
                     }}
-                    placeholder="Sua senha atual"
+                    placeholder={t('settings.password.currentPlaceholder')}
                     autoComplete="current-password"
                     disabled={passwordSubmitting}
                   />
@@ -467,7 +545,7 @@ function AccountSettingsPage() {
                   className="account-settings-button is-primary"
                   disabled={passwordSubmitting}
                 >
-                  {passwordSubmitting ? 'Validando...' : 'Enviar email de redefinicao'}
+                  {passwordSubmitting ? t('settings.password.submitting') : t('settings.password.submit')}
                 </button>
               </form>
 
@@ -477,14 +555,13 @@ function AccountSettingsPage() {
             <article className="account-settings-card is-danger-zone">
               <div className="account-settings-card-header">
                 <div>
-                  <span className="account-settings-kicker is-danger">Zona de perigo</span>
-                  <h2>Excluir conta</h2>
+                  <span className="account-settings-kicker is-danger">{t('common.dangerZone')}</span>
+                  <h2>{t('settings.delete.title')}</h2>
                 </div>
               </div>
 
               <p>
-                A exclusao remove sua conta definitivamente. Antes de executar, a aplicacao tenta
-                limpar seus arquivos enviados e entao chama o processo seguro no Supabase.
+                {t('settings.delete.zoneText')}
               </p>
 
               <button
@@ -492,7 +569,7 @@ function AccountSettingsPage() {
                 className="account-settings-button is-danger"
                 onClick={handleOpenDeleteModal}
               >
-                Excluir minha conta
+                {t('settings.delete.submit')}
               </button>
             </article>
           </section>

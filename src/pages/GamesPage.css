@@ -1098,8 +1098,6 @@ body.light .gp-panel-stat,
 body.light .gp-filter-group,
 body.light .gp-modal-section,
 body.light .gp-meta,
-body.light .gp-pagination,
-body.light .gp-btn--secondary,
 body.light .gp-modal-search,
 body.light .gp-sort-control select,
 body.light .gp-search-option,
@@ -1108,6 +1106,14 @@ body.light .gp-chip {
   border-color: var(--border);
   background: var(--surface);
   color: var(--foreground);
+}
+
+body.light .gp-pagination,
+body.light .gp-pagination button,
+body.light .gp-btn--secondary {
+  border-color: #94a3b8;
+  background: #f8fafc;
+  color: #0f172a;
 }
 
 body.light .gp-search-dropdown {
@@ -1134,10 +1140,31 @@ body.light .gp-search-option:hover,
 body.light .gp-search-option.is-active,
 body.light .gp-filter-pill:hover,
 body.light .gp-filter-pill.is-active,
-body.light .gp-game:hover {
+body.light .gp-game:hover,
+body.light .gp-btn--secondary:hover,
+body.light .gp-pagination button:hover:not(:disabled) {
   border-color: var(--ring);
-  background: var(--surface-hover);
+  background: #dbeafe;
   box-shadow: 0 14px 28px var(--shadow-color);
+}
+
+body.light .gp-btn--secondary:active,
+body.light .gp-pagination button:active:not(:disabled) {
+  background: #bfdbfe;
+}
+
+body.light .gp-pagination .is-active {
+  border-color: #1d4ed8;
+  background: #dbeafe;
+  color: #1e3a8a;
+}
+
+body.light .gp-pagination button:disabled,
+body.light .gp-btn--secondary:disabled {
+  border-color: #cbd5e1;
+  background: #f1f5f9;
+  color: #64748b;
+  opacity: 0.78;
 }
 
 body.light .gp-badge,

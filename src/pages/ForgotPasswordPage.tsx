@@ -3,21 +3,11 @@ import { Link } from 'react-router-dom'
 import AuthShell from '../components/auth/AuthShell'
 import AuthStatusBanner from '../components/auth/AuthStatusBanner'
 import { useAuth } from '../contexts/AuthContext'
-import {
-  INVALID_EMAIL_MESSAGE,
-  REQUIRED_EMAIL_MESSAGE,
-  isValidEmailAddress,
-} from '../utils/authErrorMessages'
-
-const RESET_PASSWORD_SUCCESS_MESSAGE =
-  'Se esse e-mail estiver cadastrado, enviaremos um link para redefinir sua senha.'
-const HERO_HIGHLIGHTS = [
-  'Envio seguro com o fluxo nativo do Supabase Auth.',
-  'Mensagem discreta para proteger a privacidade do usuario.',
-  'Recuperacao simples, rapida e sem quebrar o fluxo atual.',
-]
+import { useI18n } from '../i18n/I18nContext'
+import { isValidEmailAddress } from '../utils/authErrorMessages'
 
 function ForgotPasswordPage() {
+  const { t } = useI18n()
   const { requestPasswordReset } = useAuth()
   const emailErrorId = useId()
   const [email, setEmail] = useState('')
@@ -41,12 +31,12 @@ function ForgotPasswordPage() {
     const normalizedEmail = email.trim().toLowerCase()
 
     if (!normalizedEmail) {
-      setEmailError(REQUIRED_EMAIL_MESSAGE)
+      setEmailError(t('auth.emailRequired'))
       return
     }
 
     if (!isValidEmailAddress(normalizedEmail)) {
-      setEmailError(INVALID_EMAIL_MESSAGE)
+      setEmailError(t('auth.invalidEmail'))
       return
     }
 
@@ -60,7 +50,7 @@ function ForgotPasswordPage() {
         return
       }
 
-      setSuccessMessage(RESET_PASSWORD_SUCCESS_MESSAGE)
+      setSuccessMessage(t('auth.forgot.success'))
     } finally {
       setIsSubmitting(false)
     }
@@ -68,25 +58,29 @@ function ForgotPasswordPage() {
 
   return (
     <AuthShell
-      title="Esqueci a senha"
-      subtitle="Informe seu email e enviaremos um link seguro para redefinir o acesso."
-      heroEyebrow="Social Gamer"
-      heroTitle="Recupere seu acesso sem complicacao"
-      heroDescription="Use o fluxo nativo do Supabase para gerar um link de redefinicao e voltar a entrar com seguranca."
-      heroHighlights={HERO_HIGHLIGHTS}
+      title={t('auth.forgot.title')}
+      subtitle={t('auth.forgot.subtitle')}
+      heroEyebrow={t('common.appName')}
+      heroTitle={t('auth.forgot.heroTitle')}
+      heroDescription={t('auth.forgot.heroDescription')}
+      heroHighlights={[
+        t('auth.forgot.highlight1'),
+        t('auth.forgot.highlight2'),
+        t('auth.forgot.highlight3'),
+      ]}
       footer={
         <div className="auth-link-groups">
           <div className="auth-link-row">
-            <span>Lembrou sua senha?</span>
+            <span>{t('auth.forgot.remembered')}</span>
             <Link to="/login" className="auth-link">
-              Voltar para o login
+              {t('auth.forgot.backToLogin')}
             </Link>
           </div>
 
           <div className="auth-link-row">
-            <span>Ainda nao tem conta?</span>
+            <span>{t('auth.forgot.noAccount')}</span>
             <Link to="/register" className="auth-link">
-              Criar conta
+              {t('common.register')}
             </Link>
           </div>
         </div>
@@ -97,7 +91,7 @@ function ForgotPasswordPage() {
 
       <form className="auth-form" onSubmit={handleSubmit}>
         <div className="auth-field">
-          <label htmlFor="forgot-password-email">Email</label>
+          <label htmlFor="forgot-password-email">{t('common.email')}</label>
           <input
             type="email"
             id="forgot-password-email"
@@ -123,7 +117,7 @@ function ForgotPasswordPage() {
             className="auth-button auth-button--primary"
             disabled={isSubmitting}
           >
-            {isSubmitting ? 'Enviando link...' : 'Enviar link'}
+            {isSubmitting ? t('auth.forgot.submitting') : t('auth.forgot.submit')}
           </button>
         </div>
       </form>

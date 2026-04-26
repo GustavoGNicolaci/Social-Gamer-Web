@@ -6,6 +6,7 @@ import { RecentFollowingActivity } from '../components/home/RecentFollowingActiv
 import { TrendingReviews } from '../components/home/TrendingReviews'
 import { formatCompactDate, formatCount } from '../components/home/homeDisplayUtils'
 import { useAuth } from '../contexts/AuthContext'
+import { useI18n } from '../i18n/I18nContext'
 import {
   getHomeFeaturedRecentReviewedGames,
   getHomeFollowingActivities,
@@ -80,6 +81,7 @@ function iconWishlist() {
 }
 
 function HomePage() {
+  const { t } = useI18n()
   const { user, profile } = useAuth()
   const [followingActivities, setFollowingActivities] = useState<HomeFollowingActivity[]>([])
   const [trendingReviews, setTrendingReviews] = useState<HomeTrendingReview[]>([])
@@ -125,7 +127,7 @@ function HomePage() {
         if (!isMounted) return
 
         if (followingResponse.error) {
-          console.error('Erro ao buscar atividades de quem voce segue:', followingResponse.error)
+          console.error('Erro ao buscar atividades de quem você segue:', followingResponse.error)
         }
 
         if (featuredGamesResponse.error) {
@@ -133,7 +135,7 @@ function HomePage() {
         }
 
         if (releasesResponse.error) {
-          console.error('Erro ao buscar lancamentos:', releasesResponse.error)
+          console.error('Erro ao buscar lançamentos:', releasesResponse.error)
         }
 
         if (trendingReviewsResponse.error) {
@@ -164,10 +166,10 @@ function HomePage() {
           setNewReleases([])
           setTrendingReviews([])
           setHomeErrors({
-            following: 'Nao foi possivel carregar atividades agora.',
-            featured: 'Nao foi possivel carregar jogos em destaque agora.',
-            releases: 'Nao foi possivel carregar lancamentos agora.',
-            trending: 'Nao foi possivel carregar reviews em alta agora.',
+            following: t('home.error.following'),
+            featured: t('home.error.featured'),
+            releases: t('home.error.releases'),
+            trending: t('home.error.trending'),
           })
         }
       } finally {
@@ -182,20 +184,22 @@ function HomePage() {
     return () => {
       isMounted = false
     }
-  }, [user?.id])
+  }, [t, user?.id])
 
-  const heroEyebrow = user && profile?.username ? `Bem-vindo, @${profile.username}` : 'Social Gamer'
+  const heroEyebrow = user && profile?.username
+    ? t('home.welcome', { username: profile.username })
+    : t('common.appName')
   const latestNetworkActivity = followingActivities[0] || null
   const secondaryAction = user
     ? {
         to: profile?.username ? getPublicProfilePath(profile.username) : '/profile',
-        label: 'Meu perfil',
+        label: t('common.myProfile'),
       }
-    : { to: '/register', label: 'Criar conta' }
+    : { to: '/register', label: t('common.register') }
 
   const heroStats = [
-    { value: loading ? '...' : formatCount(siteStats.games), label: 'jogos' },
-    { value: loading ? '...' : formatCount(siteStats.reviews), label: 'reviews' },
+    { value: loading ? t('common.loadingShort') : formatCount(siteStats.games), label: t('home.stat.games') },
+    { value: loading ? t('common.loadingShort') : formatCount(siteStats.reviews), label: t('home.stat.reviews') },
   ]
 
   const featureCards: Array<{
@@ -206,23 +210,23 @@ function HomePage() {
     icon: ReactNode
   }> = [
     {
-      title: 'Explorar jogos',
-      description: 'Busque e filtre o catalogo em poucos cliques.',
-      ctaLabel: 'Abrir catalogo',
+      title: t('home.feature.catalog.title'),
+      description: t('home.feature.catalog.description'),
+      ctaLabel: t('home.feature.catalog.cta'),
       ctaTo: '/games',
       icon: iconCatalog(),
     },
     {
-      title: 'Ver opinioes',
-      description: 'Leia reviews e comentarios direto na pagina de cada jogo.',
-      ctaLabel: 'Ver jogos',
+      title: t('home.feature.reviews.title'),
+      description: t('home.feature.reviews.description'),
+      ctaLabel: t('home.feature.reviews.cta'),
       ctaTo: '/games',
       icon: iconReview(),
     },
     {
-      title: 'Salvar favoritos',
-      description: 'Monte sua lista e deixe seu perfil pronto para voltar depois.',
-      ctaLabel: user ? 'Abrir perfil' : 'Entrar agora',
+      title: t('home.feature.wishlist.title'),
+      description: t('home.feature.wishlist.description'),
+      ctaLabel: user ? t('home.feature.wishlist.ctaProfile') : t('home.feature.wishlist.ctaLogin'),
       ctaTo: user ? (profile?.username ? getPublicProfilePath(profile.username) : '/profile') : '/login',
       icon: iconWishlist(),
     },
@@ -234,22 +238,21 @@ function HomePage() {
         <section className="home-hero">
           <div className="home-hero-copy">
             <span className="home-eyebrow">{heroEyebrow}</span>
-            <h1>Descubra jogos e guarde o que vale sua proxima jogatina.</h1>
+            <h1>{t('home.heroTitle')}</h1>
             <p className="home-hero-text">
-              Explore o catalogo, acompanhe reviews relevantes e veja o que esta ganhando
-              movimento na comunidade.
+              {t('home.heroText')}
             </p>
 
             <div className="home-hero-actions">
               <Link to="/games" className="home-button home-button-primary">
-                Explorar jogos
+                {t('common.exploreGames')}
               </Link>
               <Link to={secondaryAction.to} className="home-button home-button-secondary">
                 {secondaryAction.label}
               </Link>
             </div>
 
-            <div className="home-stats" aria-label="Numeros da plataforma">
+            <div className="home-stats" aria-label={t('home.statsLabel')}>
               {heroStats.map(stat => (
                 <article key={stat.label} className="home-stat-card">
                   <strong>{stat.value}</strong>
@@ -261,19 +264,19 @@ function HomePage() {
 
           <div className="home-hero-side">
             <article className="home-hero-card home-network-card">
-              <span className="home-eyebrow">Sua rede agora</span>
+              <span className="home-eyebrow">{t('home.networkNow')}</span>
 
               {loading ? (
                 <>
-                  <h2>Carregando sua rede...</h2>
-                  <p>Buscando as atividades mais recentes de quem voce segue.</p>
+                  <h2>{t('home.networkLoadingTitle')}</h2>
+                  <p>{t('home.networkLoadingText')}</p>
                 </>
               ) : !user ? (
                 <>
-                  <h2>Entre para acompanhar sua rede</h2>
-                  <p>Siga outros jogadores para ver reviews, favoritos e jogos adicionados aqui.</p>
+                  <h2>{t('home.networkLoginTitle')}</h2>
+                  <p>{t('home.networkLoginText')}</p>
                   <Link to="/login" className="home-inline-link">
-                    Fazer login
+                    {t('auth.login.submit')}
                   </Link>
                 </>
               ) : latestNetworkActivity ? (
@@ -289,15 +292,15 @@ function HomePage() {
                   <p>{latestNetworkActivity.summary}</p>
 
                   <Link to={`/games/${latestNetworkActivity.game.id}`} className="home-inline-link">
-                    Ver jogo
+                    {t('common.viewGame')}
                   </Link>
                 </>
               ) : (
                 <>
-                  <h2>Sua rede ainda esta quieta</h2>
-                  <p>Siga jogadores ou explore o catalogo para encontrar novas conexoes e reviews.</p>
+                  <h2>{t('home.networkQuietTitle')}</h2>
+                  <p>{t('home.networkQuietText')}</p>
                   <Link to="/games" className="home-inline-link">
-                    Explorar jogos
+                    {t('common.exploreGames')}
                   </Link>
                 </>
               )}
@@ -308,8 +311,8 @@ function HomePage() {
         <section className="home-section">
           <div className="home-section-head">
             <div>
-              <span className="home-eyebrow">Essencial</span>
-              <h2>O que voce pode fazer aqui</h2>
+              <span className="home-eyebrow">{t('home.essential')}</span>
+              <h2>{t('home.whatCanDo')}</h2>
             </div>
           </div>
 
@@ -336,8 +339,8 @@ function HomePage() {
         <section className="home-section">
           <div className="home-section-head">
             <div>
-              <span className="home-eyebrow">Agora na plataforma</span>
-              <h2>Jogos e movimento recente</h2>
+              <span className="home-eyebrow">{t('home.nowPlatform')}</span>
+              <h2>{t('home.gamesAndRecent')}</h2>
             </div>
           </div>
 

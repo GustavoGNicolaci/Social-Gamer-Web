@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { UserAvatar } from '../UserAvatar'
 import type { HomeFollowingActivity } from '../../services/homeService'
+import { useI18n } from '../../i18n/I18nContext'
 import { getPublicProfilePath } from '../../utils/profileRoutes'
 import { formatCompactDate } from './homeDisplayUtils'
 
@@ -11,9 +12,9 @@ interface RecentFollowingActivityProps {
   isAuthenticated: boolean
 }
 
-function getActivityTag(activity: HomeFollowingActivity) {
-  if (activity.type === 'review') return 'Review'
-  if (activity.isFavorite) return 'Favorito'
+function getActivityTag(activity: HomeFollowingActivity, t: ReturnType<typeof useI18n>['t']) {
+  if (activity.type === 'review') return t('common.review')
+  if (activity.isFavorite) return t('common.favorite')
   return activity.statusValue || 'Status'
 }
 
@@ -23,18 +24,20 @@ export function RecentFollowingActivity({
   errorMessage,
   isAuthenticated,
 }: RecentFollowingActivityProps) {
+  const { t } = useI18n()
+
   return (
     <div className="home-panel">
       <div className="home-panel-heading">
         <div>
-          <h3 className="home-panel-title">Atividades de quem voce segue</h3>
-          <p>Reviews e jogos adicionados pelos perfis que fazem parte da sua rede.</p>
+          <h3 className="home-panel-title">{t('home.activity.title')}</h3>
+          <p>{t('home.activity.description')}</p>
         </div>
       </div>
 
       {isLoading ? (
         <div className="home-empty-state">
-          <p>Buscando atividades recentes...</p>
+          <p>{t('home.activity.loading')}</p>
         </div>
       ) : errorMessage ? (
         <div className="home-empty-state is-error">
@@ -42,14 +45,14 @@ export function RecentFollowingActivity({
         </div>
       ) : !isAuthenticated ? (
         <div className="home-empty-state">
-          <p>Entre para ver as atividades das pessoas que voce segue.</p>
+          <p>{t('home.activity.login')}</p>
           <Link to="/login" className="home-inline-link">
-            Fazer login
+            {t('auth.login.submit')}
           </Link>
         </div>
       ) : items.length === 0 ? (
         <div className="home-empty-state">
-          <p>Quando pessoas que voce segue publicarem reviews ou adicionarem jogos, tudo aparece aqui.</p>
+          <p>{t('home.activity.empty')}</p>
         </div>
       ) : (
         <div className="home-activity-list">
@@ -76,7 +79,7 @@ export function RecentFollowingActivity({
                 {activity.score !== null ? (
                   <span className="home-score-pill">{activity.score}/10</span>
                 ) : (
-                  <span className="home-tag">{getActivityTag(activity)}</span>
+                  <span className="home-tag">{getActivityTag(activity, t)}</span>
                 )}
               </div>
 

@@ -1,11 +1,10 @@
 import { useEffect, useId, useState, type FormEvent } from 'react'
 import {
-  PROFILE_REPORT_REASON_LABELS,
   PROFILE_REPORT_REASON_OPTIONS,
-  PROFILE_REPORT_STATUS_LABELS,
   type CurrentUserProfileReportSummary,
   type ProfileReportReason,
 } from '../../services/profileReportService'
+import { useI18n } from '../../i18n/I18nContext'
 import '../reviews/ContentReportModal.css'
 
 type FeedbackTone = 'success' | 'error' | 'info'
@@ -28,19 +27,6 @@ interface ProfileReportModalProps {
 
 const DEFAULT_PROFILE_REPORT_REASON: ProfileReportReason = 'foto_ofensiva'
 
-function formatReportDate(value: string | null | undefined) {
-  if (!value) return 'Data indisponivel'
-
-  const parsedDate = new Date(value)
-  if (Number.isNaN(parsedDate.getTime())) return 'Data indisponivel'
-
-  return parsedDate.toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric',
-  })
-}
-
 export function ProfileReportModal({
   currentReport,
   feedback,
@@ -51,6 +37,7 @@ export function ProfileReportModal({
   onSubmit,
   onRemove,
 }: ProfileReportModalProps) {
+  const { t, formatDate } = useI18n()
   const titleId = useId()
   const descriptionId = useId()
   const [reason, setReason] = useState<ProfileReportReason>(() =>
@@ -86,10 +73,10 @@ export function ProfileReportModal({
     })
   }
 
-  const titleText = currentReport ? 'Denuncia registrada' : 'Denunciar perfil'
+  const titleText = currentReport ? t('report.content.titleExisting') : t('report.profile.titleNew')
   const descriptionText = currentReport
-    ? `Voce ja denunciou ${reportedUserLabel}. Aqui esta o status atual da sua denuncia.`
-    : `Explique rapidamente o motivo da denuncia de ${reportedUserLabel}.`
+    ? t('report.profile.descriptionExisting', { target: reportedUserLabel })
+    : t('report.profile.descriptionNew', { target: reportedUserLabel })
 
   return (
     <div
@@ -114,7 +101,7 @@ export function ProfileReportModal({
         <div className="content-report-modal-content">
           <header className="content-report-modal-header">
             <div className="content-report-modal-copy">
-              <span className="content-report-modal-kicker">Perfil</span>
+              <span className="content-report-modal-kicker">{t('common.profile')}</span>
               <h2 id={titleId}>{titleText}</h2>
               <p id={descriptionId}>{descriptionText}</p>
             </div>
@@ -124,7 +111,7 @@ export function ProfileReportModal({
               className="content-report-modal-close-button"
               onClick={onClose}
               disabled={isBusy}
-              aria-label="Fechar modal de denuncia de perfil"
+              aria-label={t('report.profile.close')}
             >
               <span aria-hidden="true">&times;</span>
             </button>
@@ -138,25 +125,32 @@ export function ProfileReportModal({
             <div className="content-report-modal-summary">
               <div className="content-report-modal-pill-row">
                 <span className="content-report-modal-pill">
-                  Motivo: {PROFILE_REPORT_REASON_LABELS[currentReport.reason]}
+                  {t('report.content.reasonLabel', { reason: t(`report.reason.${currentReport.reason}`) })}
                 </span>
                 <span className="content-report-modal-pill">
-                  Status: {PROFILE_REPORT_STATUS_LABELS[currentReport.status]}
+                  {t('report.content.statusLabel', { status: t(`report.status.${currentReport.status}`) })}
                 </span>
                 <span className="content-report-modal-pill">
-                  Enviada em {formatReportDate(currentReport.createdAt)}
+                  {t('report.content.sentAt', {
+                    date: formatDate(currentReport.createdAt, {
+                      day: '2-digit',
+                      month: 'long',
+                      year: 'numeric',
+                      fallback: t('common.unavailableDate'),
+                    }),
+                  })}
                 </span>
               </div>
 
               {currentReport.description ? (
                 <div className="content-report-modal-note">
-                  <strong>Detalhes enviados</strong>
+                  <strong>{t('report.content.detailsSent')}</strong>
                   <p>{currentReport.description}</p>
                 </div>
               ) : (
                 <div className="content-report-modal-note">
-                  <strong>Sem detalhes extras</strong>
-                  <p>Voce enviou apenas o motivo principal da denuncia deste perfil.</p>
+                  <strong>{t('report.content.noDetails')}</strong>
+                  <p>{t('report.profile.noDetailsText')}</p>
                 </div>
               )}
 
@@ -167,7 +161,7 @@ export function ProfileReportModal({
                   onClick={onRemove}
                   disabled={isRemoving}
                 >
-                  {isRemoving ? 'Removendo...' : 'Remover denuncia'}
+                  {isRemoving ? t('common.removing') : t('report.content.remove')}
                 </button>
                 <button
                   type="button"
@@ -175,14 +169,14 @@ export function ProfileReportModal({
                   onClick={onClose}
                   disabled={isRemoving}
                 >
-                  Fechar
+                  {t('common.close')}
                 </button>
               </div>
             </div>
           ) : (
             <form className="content-report-modal-form" onSubmit={handleSubmit}>
               <label className="content-report-modal-field">
-                <span>Motivo da denuncia</span>
+                <span>{t('report.content.reason')}</span>
                 <select
                   className="content-report-modal-select"
                   value={reason}
@@ -191,19 +185,19 @@ export function ProfileReportModal({
                 >
                   {PROFILE_REPORT_REASON_OPTIONS.map(option => (
                     <option key={option.value} value={option.value}>
-                      {option.label}
+                      {t(`report.reason.${option.value}`)}
                     </option>
                   ))}
                 </select>
               </label>
 
               <label className="content-report-modal-field">
-                <span>Detalhes adicionais (opcional)</span>
+                <span>{t('report.content.detailsOptional')}</span>
                 <textarea
                   className="content-report-modal-textarea"
                   value={description}
                   onChange={event => setDescription(event.target.value)}
-                  placeholder="Se quiser, descreva o contexto para ajudar na moderacao."
+                  placeholder={t('report.content.placeholder')}
                   disabled={isSubmitting}
                 />
               </label>
@@ -215,14 +209,14 @@ export function ProfileReportModal({
                   onClick={onClose}
                   disabled={isBusy}
                 >
-                  Cancelar
+                  {t('common.cancel')}
                 </button>
                 <button
                   type="submit"
                   className="game-button content-report-modal-primary-action"
                   disabled={isBusy}
                 >
-                  {isSubmitting ? 'Enviando...' : 'Enviar denuncia'}
+                  {isSubmitting ? t('common.sending') : t('report.content.submit')}
                 </button>
               </div>
             </form>

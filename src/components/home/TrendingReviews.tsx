@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { UserAvatar } from '../UserAvatar'
 import type { HomeTrendingReview } from '../../services/homeService'
+import { useI18n } from '../../i18n/I18nContext'
 import { getPublicProfilePath } from '../../utils/profileRoutes'
 import { formatCompactDate, formatCount } from './homeDisplayUtils'
 
@@ -10,23 +11,27 @@ interface TrendingReviewsProps {
   errorMessage: string | null
 }
 
-function getLikeLabel(value: number) {
-  return value === 1 ? '1 curtida' : `${formatCount(value)} curtidas`
+function getLikeLabel(value: number, t: ReturnType<typeof useI18n>['t']) {
+  return value === 1
+    ? t('home.trending.likeOne')
+    : t('home.trending.likeMany', { count: formatCount(value) })
 }
 
 export function TrendingReviews({ items, isLoading, errorMessage }: TrendingReviewsProps) {
+  const { t } = useI18n()
+
   return (
     <div className="home-panel">
       <div className="home-panel-heading">
         <div>
-          <h3 className="home-panel-title">Reviews em alta</h3>
-          <p>Reviews que estao movimentando a comunidade.</p>
+          <h3 className="home-panel-title">{t('home.trending.title')}</h3>
+          <p>{t('home.trending.description')}</p>
         </div>
       </div>
 
       {isLoading ? (
         <div className="home-empty-state">
-          <p>Buscando reviews em alta...</p>
+          <p>{t('home.trending.loading')}</p>
         </div>
       ) : errorMessage ? (
         <div className="home-empty-state is-error">
@@ -34,7 +39,7 @@ export function TrendingReviews({ items, isLoading, errorMessage }: TrendingRevi
         </div>
       ) : items.length === 0 ? (
         <div className="home-empty-state">
-          <p>Nenhuma review em alta no momento.</p>
+          <p>{t('home.trending.empty')}</p>
         </div>
       ) : (
         <div className="home-activity-list">
@@ -55,7 +60,7 @@ export function TrendingReviews({ items, isLoading, errorMessage }: TrendingRevi
                   </div>
                 </Link>
 
-                <span className="home-like-pill">{getLikeLabel(review.likesCount)}</span>
+                <span className="home-like-pill">{getLikeLabel(review.likesCount, t)}</span>
               </div>
 
               <div className="home-card-title-row">

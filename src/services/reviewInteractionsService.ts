@@ -978,7 +978,7 @@ export async function toggleCommentDislike({
       status: 'error',
       data: null,
       error: {
-        message: 'Voce nao pode marcar "NÃ£o gostei" no proprio comentario.',
+        message: 'Você não pode marcar "Não gostei" no próprio comentário.',
       },
     }
   }
@@ -995,7 +995,7 @@ export async function toggleCommentDislike({
         return {
           status: 'error',
           data: null,
-          error: normalizeReviewError(error, 'Nao foi possivel remover o "NÃ£o gostei" deste comentario.'),
+          error: normalizeReviewError(error, 'Não foi possível remover o "Não gostei" deste comentário.'),
         }
       }
 
@@ -1024,7 +1024,7 @@ export async function toggleCommentDislike({
         data: null,
         error: normalizeReviewError(
           insertDislikeError,
-          'Nao foi possivel marcar "NÃ£o gostei" neste comentario.'
+          'Não foi possível marcar "Não gostei" neste comentário.'
         ),
       }
     }
@@ -1046,7 +1046,7 @@ export async function toggleCommentDislike({
           data: null,
           error: normalizeReviewError(
             removeLikeError,
-            'Nao foi possivel sincronizar curtida e "Nao gostei" deste comentario.'
+            'Não foi possível sincronizar curtida e "Não gostei" deste comentário.'
           ),
         }
       }
@@ -1070,7 +1070,7 @@ export async function toggleCommentDislike({
       data: null,
       error: normalizeReviewError(
         error,
-        'Erro inesperado ao atualizar o "NÃ£o gostei" deste comentario.'
+        'Erro inesperado ao atualizar o "Não gostei" deste comentário.'
       ),
     }
   }

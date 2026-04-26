@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import Navbar from './components/navbar/Navbar'
+import { useI18n } from './i18n/I18nContext'
 import './App.css'
 
 const HomePage = lazy(() => import('./pages/HomePage'))
@@ -16,11 +17,13 @@ const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'))
 const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'))
 
 function RouteFallback() {
+  const { t } = useI18n()
+
   return (
     <div className="page-container">
       <div className="page-content">
         <div className="route-loading-card" role="status" aria-live="polite">
-          <span>Carregando pagina...</span>
+          <span>{t('app.loadingPage')}</span>
         </div>
       </div>
     </div>

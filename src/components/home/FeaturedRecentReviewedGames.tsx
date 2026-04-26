@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { GameCoverImage } from '../GameCoverImage'
 import type { HomeFeaturedGame } from '../../services/homeService'
+import { useI18n } from '../../i18n/I18nContext'
 import { formatCompactDate, formatRating, getInitial } from './homeDisplayUtils'
 
 interface FeaturedRecentReviewedGamesProps {
@@ -9,14 +10,14 @@ interface FeaturedRecentReviewedGamesProps {
   errorMessage: string | null
 }
 
-function getReviewCountLabel(game: HomeFeaturedGame) {
+function getReviewCountLabel(game: HomeFeaturedGame, t: ReturnType<typeof useI18n>['t']) {
   const count = game.recentReviewCount || game.totalReviewCount
 
-  if (count === 1) return '1 review recente'
-  if (game.recentReviewCount > 0) return `${count} reviews recentes`
-  if (count > 0) return `${count} reviews no total`
+  if (count === 1) return t('home.featured.recentOne')
+  if (game.recentReviewCount > 0) return t('home.featured.recentMany', { count })
+  if (count > 0) return t('home.featured.totalMany', { count })
 
-  return 'Catalogo'
+  return t('home.featured.catalog')
 }
 
 export function FeaturedRecentReviewedGames({
@@ -24,18 +25,20 @@ export function FeaturedRecentReviewedGames({
   isLoading,
   errorMessage,
 }: FeaturedRecentReviewedGamesProps) {
+  const { t } = useI18n()
+
   return (
     <div className="home-panel">
       <div className="home-panel-heading">
         <div>
-          <h3 className="home-panel-title">Jogos em destaque</h3>
-          <p>Jogos com mais reviews publicadas nos ultimos 30 dias.</p>
+          <h3 className="home-panel-title">{t('home.featured.title')}</h3>
+          <p>{t('home.featured.description')}</p>
         </div>
       </div>
 
       {isLoading ? (
         <div className="home-empty-state">
-          <p>Calculando jogos com reviews recentes...</p>
+          <p>{t('home.featured.loading')}</p>
         </div>
       ) : errorMessage ? (
         <div className="home-empty-state is-error">
@@ -43,7 +46,7 @@ export function FeaturedRecentReviewedGames({
         </div>
       ) : items.length === 0 ? (
         <div className="home-empty-state">
-          <p>Nenhum jogo recebeu reviews recentes suficientes no momento.</p>
+          <p>{t('home.featured.empty')}</p>
         </div>
       ) : (
         <div className="home-spotlight-list">
@@ -56,7 +59,7 @@ export function FeaturedRecentReviewedGames({
                   {game.coverUrl ? (
                     <GameCoverImage
                       src={game.coverUrl}
-                      alt={`Capa do jogo ${game.title}`}
+                      alt={t('catalog.coverAlt', { title: game.title })}
                       width={152}
                       height={192}
                       sizes="76px"
@@ -68,12 +71,12 @@ export function FeaturedRecentReviewedGames({
 
                 <div className="home-spotlight-copy">
                   <h3>{game.title}</h3>
-                  <p>{game.genres.slice(0, 2).join(', ') || 'Sem genero informado'}</p>
+                  <p>{game.genres.slice(0, 2).join(', ') || t('common.noGenreProvided')}</p>
                   <div className="home-spotlight-meta">
-                    <span>{getReviewCountLabel(game)}</span>
-                    {averageRating ? <span>Media {averageRating}/10</span> : null}
+                    <span>{getReviewCountLabel(game, t)}</span>
+                    {averageRating ? <span>{t('home.featured.average', { rating: averageRating })}</span> : null}
                     {game.latestReviewAt ? (
-                      <span>Ultima em {formatCompactDate(game.latestReviewAt)}</span>
+                      <span>{t('home.featured.latest', { date: formatCompactDate(game.latestReviewAt) })}</span>
                     ) : null}
                   </div>
                 </div>

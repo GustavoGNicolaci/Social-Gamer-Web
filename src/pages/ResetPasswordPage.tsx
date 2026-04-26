@@ -4,27 +4,23 @@ import AuthShell from '../components/auth/AuthShell'
 import AuthStatusBanner from '../components/auth/AuthStatusBanner'
 import PasswordRequirementsPanel from '../components/auth/PasswordRequirementsPanel'
 import { useAuth } from '../contexts/AuthContext'
-import { INVALID_RESET_LINK_MESSAGE } from '../utils/authErrorMessages'
+import { useI18n } from '../i18n/I18nContext'
 import { getPasswordValidationError } from '../utils/passwordValidation'
 
-const CONFIRM_PASSWORD_REQUIRED_MESSAGE = 'Confirme a nova senha.'
-const CONFIRM_PASSWORD_MISMATCH_MESSAGE = 'As senhas nao coincidem.'
-const RESET_PASSWORD_SUCCESS_MESSAGE = 'Senha redefinida com sucesso. Faca login com sua nova senha.'
-const HERO_HIGHLIGHTS = [
-  'Nova senha validada com os mesmos criterios do cadastro.',
-  'Feedback em tempo real para deixar o processo mais claro.',
-  'Depois do sucesso, voce volta ao login com confirmacao visual.',
-]
-
-const getConfirmPasswordMismatchError = (password: string, confirmPassword: string) => {
+const getConfirmPasswordMismatchError = (
+  password: string,
+  confirmPassword: string,
+  mismatchMessage: string
+) => {
   if (!confirmPassword) {
     return null
   }
 
-  return password === confirmPassword ? null : CONFIRM_PASSWORD_MISMATCH_MESSAGE
+  return password === confirmPassword ? null : mismatchMessage
 }
 
 function ResetPasswordPage() {
+  const { t } = useI18n()
   const navigate = useNavigate()
   const { user, loading, updatePassword, logout } = useAuth()
   const passwordRequirementsId = useId()
@@ -62,22 +58,26 @@ function ResetPasswordPage() {
     setSubmitError(null)
 
     if (confirmPassword) {
-      setConfirmPasswordError(getConfirmPasswordMismatchError(value, confirmPassword))
+      setConfirmPasswordError(
+        getConfirmPasswordMismatchError(value, confirmPassword, t('auth.passwordMismatch'))
+      )
     }
   }
 
   const handleConfirmPasswordChange = (value: string) => {
     setConfirmPassword(value)
     setSubmitError(null)
-    setConfirmPasswordError(getConfirmPasswordMismatchError(password, value))
+    setConfirmPasswordError(
+      getConfirmPasswordMismatchError(password, value, t('auth.passwordMismatch'))
+    )
   }
 
   const validateForm = () => {
     const nextPasswordError = getPasswordValidationError(password)
     const nextConfirmPasswordError = !confirmPassword
-      ? CONFIRM_PASSWORD_REQUIRED_MESSAGE
+      ? t('auth.confirmNewPasswordRequired')
       : password !== confirmPassword
-        ? CONFIRM_PASSWORD_MISMATCH_MESSAGE
+        ? t('auth.passwordMismatch')
         : null
 
     setPasswordError(nextPasswordError)
@@ -109,7 +109,7 @@ function ResetPasswordPage() {
       navigate('/login', {
         replace: true,
         state: {
-          successMessage: RESET_PASSWORD_SUCCESS_MESSAGE,
+          successMessage: t('auth.reset.success'),
         },
       })
     } finally {
@@ -120,16 +120,16 @@ function ResetPasswordPage() {
   const footer = (
     <div className="auth-link-groups">
       <div className="auth-link-row">
-        <span>Quer voltar agora?</span>
+        <span>{t('auth.reset.goBackNow')}</span>
         <Link to="/login" className="auth-link">
-          Ir para o login
+          {t('auth.reset.goToLogin')}
         </Link>
       </div>
 
       <div className="auth-link-row">
-        <span>Precisa de um novo link?</span>
+        <span>{t('auth.reset.needNewLink')}</span>
         <Link to="/esqueci-a-senha" className="auth-link">
-          Solicitar novamente
+          {t('auth.reset.requestAgain')}
         </Link>
       </div>
     </div>
@@ -138,16 +138,20 @@ function ResetPasswordPage() {
   if (loading) {
     return (
       <AuthShell
-        title="Resetar Senha"
-        subtitle="Estamos validando seu link de redefinicao."
-        heroEyebrow="Social Gamer"
-        heroTitle="Quase la para recuperar o acesso"
-        heroDescription="Assim que a sessao de recuperacao for confirmada, voce podera escolher uma nova senha."
-        heroHighlights={HERO_HIGHLIGHTS}
+        title={t('auth.reset.title')}
+        subtitle={t('auth.reset.subtitleLoading')}
+        heroEyebrow={t('common.appName')}
+        heroTitle={t('auth.reset.heroLoading')}
+        heroDescription={t('auth.reset.heroLoadingDescription')}
+        heroHighlights={[
+          t('auth.reset.highlight1'),
+          t('auth.reset.highlight2'),
+          t('auth.reset.highlight3'),
+        ]}
         layout="wide"
         footer={footer}
       >
-        <AuthStatusBanner tone="info">Validando seu link de redefinicao...</AuthStatusBanner>
+        <AuthStatusBanner tone="info">{t('auth.reset.validating')}</AuthStatusBanner>
       </AuthShell>
     )
   }
@@ -155,18 +159,22 @@ function ResetPasswordPage() {
   if (!user) {
     return (
       <AuthShell
-        title="Resetar Senha"
-        subtitle="Seu link de redefinicao precisa estar valido para continuar."
-        heroEyebrow="Social Gamer"
-        heroTitle="Solicite um novo link com seguranca"
-        heroDescription="Se o link expirou ou ficou invalido, voce pode pedir uma nova mensagem de redefinicao em poucos segundos."
-        heroHighlights={HERO_HIGHLIGHTS}
+        title={t('auth.reset.title')}
+        subtitle={t('auth.reset.subtitleInvalid')}
+        heroEyebrow={t('common.appName')}
+        heroTitle={t('auth.reset.heroInvalid')}
+        heroDescription={t('auth.reset.heroInvalidDescription')}
+        heroHighlights={[
+          t('auth.reset.highlight1'),
+          t('auth.reset.highlight2'),
+          t('auth.reset.highlight3'),
+        ]}
         layout="wide"
         footer={footer}
       >
         <div className="auth-empty-state">
-          <AuthStatusBanner tone="error">{INVALID_RESET_LINK_MESSAGE}</AuthStatusBanner>
-          <p>Abra o email mais recente enviado pelo sistema ou solicite um novo link para continuar.</p>
+          <AuthStatusBanner tone="error">{t('auth.invalidResetLink')}</AuthStatusBanner>
+          <p>{t('auth.reset.invalidHelp')}</p>
         </div>
       </AuthShell>
     )
@@ -174,12 +182,16 @@ function ResetPasswordPage() {
 
   return (
     <AuthShell
-      title="Resetar Senha"
-      subtitle="Defina uma nova senha para voltar a entrar com seguranca."
-      heroEyebrow="Social Gamer"
-      heroTitle="Escolha uma nova senha"
-      heroDescription="Atualize sua senha com os mesmos criterios usados no cadastro e volte para a sua conta com tranquilidade."
-      heroHighlights={HERO_HIGHLIGHTS}
+      title={t('auth.reset.title')}
+      subtitle={t('auth.reset.subtitle')}
+      heroEyebrow={t('common.appName')}
+      heroTitle={t('auth.reset.heroTitle')}
+      heroDescription={t('auth.reset.heroDescription')}
+      heroHighlights={[
+        t('auth.reset.highlight1'),
+        t('auth.reset.highlight2'),
+        t('auth.reset.highlight3'),
+      ]}
       layout="wide"
       footer={footer}
     >
@@ -189,12 +201,12 @@ function ResetPasswordPage() {
         <div className="auth-password-section">
           <div className="auth-password-fields">
             <div className="auth-field">
-              <label htmlFor="reset-password">Nova senha</label>
+              <label htmlFor="reset-password">{t('auth.reset.newPassword')}</label>
               <input
                 type="password"
                 id="reset-password"
                 className={`auth-input${passwordError ? ' is-error' : ''}`}
-                placeholder="Crie uma nova senha"
+                placeholder={t('auth.reset.newPasswordPlaceholder')}
                 autoComplete="new-password"
                 value={password}
                 onChange={(event) => handlePasswordChange(event.target.value)}
@@ -212,12 +224,12 @@ function ResetPasswordPage() {
             </div>
 
             <div className="auth-field">
-              <label htmlFor="reset-confirm-password">Confirmar nova senha</label>
+              <label htmlFor="reset-confirm-password">{t('auth.reset.confirmNewPassword')}</label>
               <input
                 type="password"
                 id="reset-confirm-password"
                 className={`auth-input${confirmPasswordError ? ' is-error' : ''}`}
-                placeholder="Repita a nova senha"
+                placeholder={t('auth.reset.confirmNewPasswordPlaceholder')}
                 autoComplete="new-password"
                 value={confirmPassword}
                 onChange={(event) => handleConfirmPasswordChange(event.target.value)}
@@ -245,7 +257,7 @@ function ResetPasswordPage() {
 
         <div className="auth-actions">
           <button type="submit" className="auth-button auth-button--primary" disabled={isSubmitting}>
-            {isSubmitting ? 'Salvando nova senha...' : 'Salvar nova senha'}
+            {isSubmitting ? t('auth.reset.submitting') : t('auth.reset.submit')}
           </button>
         </div>
       </form>

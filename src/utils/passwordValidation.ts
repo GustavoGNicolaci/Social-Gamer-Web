@@ -1,10 +1,12 @@
+import { translate } from '../i18n'
+
 export type PasswordRequirementId = 'letterAndNumber' | 'minLength' | 'uppercase' | 'symbol'
 
 export type PasswordRequirementStatus = 'pending' | 'invalid' | 'valid'
 
 interface PasswordRequirementDefinition {
   id: PasswordRequirementId
-  label: string
+  labelKey: string
   validate: (password: string) => boolean
 }
 
@@ -21,37 +23,36 @@ const NUMBER_REGEX = /\d/
 const UPPERCASE_REGEX = /[A-Z]/
 const SYMBOL_REGEX = /[^A-Za-z0-9\s]/
 
-export const PASSWORD_REQUIREMENTS_TITLE = 'Sua senha precisa ter:'
-export const PASSWORD_REQUIRED_MESSAGE = 'Senha e obrigatoria.'
-export const PASSWORD_INVALID_MESSAGE =
-  'Use pelo menos 8 caracteres, com letra, numero, letra maiuscula e simbolo.'
+export const PASSWORD_REQUIREMENTS_TITLE = translate('auth.passwordRequirementsTitle')
+export const PASSWORD_REQUIRED_MESSAGE = translate('auth.passwordRequired')
+export const PASSWORD_INVALID_MESSAGE = translate('auth.passwordInvalid')
 
 const PASSWORD_REQUIREMENT_DEFINITIONS: PasswordRequirementDefinition[] = [
   {
     id: 'letterAndNumber',
-    label: 'Letra e numero',
+    labelKey: 'auth.passwordRequirement.letterAndNumber',
     validate: (password) => LETTER_REGEX.test(password) && NUMBER_REGEX.test(password),
   },
   {
     id: 'minLength',
-    label: 'Minimo de 8 caracteres',
+    labelKey: 'auth.passwordRequirement.minLength',
     validate: (password) => password.length >= PASSWORD_MIN_LENGTH,
   },
   {
     id: 'uppercase',
-    label: 'Uma letra maiuscula',
+    labelKey: 'auth.passwordRequirement.uppercase',
     validate: (password) => UPPERCASE_REGEX.test(password),
   },
   {
     id: 'symbol',
-    label: 'Um simbolo',
+    labelKey: 'auth.passwordRequirement.symbol',
     validate: (password) => SYMBOL_REGEX.test(password),
   },
 ]
 
-export const PASSWORD_REQUIREMENTS = PASSWORD_REQUIREMENT_DEFINITIONS.map(({ id, label }) => ({
+export const PASSWORD_REQUIREMENTS = PASSWORD_REQUIREMENT_DEFINITIONS.map(({ id, labelKey }) => ({
   id,
-  label,
+  label: translate(labelKey),
 }))
 
 export const getPasswordRequirementStates = (
@@ -60,12 +61,12 @@ export const getPasswordRequirementStates = (
 ): PasswordRequirementState[] => {
   const isNeutralState = !shouldValidate
 
-  return PASSWORD_REQUIREMENT_DEFINITIONS.map(({ id, label, validate }) => {
+  return PASSWORD_REQUIREMENT_DEFINITIONS.map(({ id, labelKey, validate }) => {
     const isMet = validate(password)
 
     return {
       id,
-      label,
+      label: translate(labelKey),
       isMet,
       status: isNeutralState ? 'pending' : isMet ? 'valid' : 'invalid',
     }
@@ -77,12 +78,12 @@ export const isPasswordValid = (password: string) =>
 
 export const getPasswordValidationError = (password: string) => {
   if (!password) {
-    return PASSWORD_REQUIRED_MESSAGE
+    return translate('auth.passwordRequired')
   }
 
   if (isPasswordValid(password)) {
     return null
   }
 
-  return PASSWORD_INVALID_MESSAGE
+  return translate('auth.passwordInvalid')
 }

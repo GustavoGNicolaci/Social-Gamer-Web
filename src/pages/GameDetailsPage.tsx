@@ -43,6 +43,8 @@ import {
   getWishlistEntry,
 } from '../services/wishlistService'
 import { supabase } from '../supabase-client'
+import { formatLocalizedDate, formatLocalizedNumber, translate } from '../i18n'
+import { useI18n } from '../i18n/I18nContext'
 import { getOptionalPublicProfilePath } from '../utils/profileRoutes'
 import './GameDetailsPage.css'
 
@@ -81,11 +83,11 @@ const GAME_DETAIL_SELECT =
   'id, titulo, capa_url, desenvolvedora, generos, data_lancamento, descricao, plataformas'
 const QUICK_PROFILE_STATUS_OPTIONS: Array<{
   value: QuickProfileStatusValue
-  label: string
+  labelKey: string
 }> = [
-  { value: 'jogando', label: 'Jogando' },
-  { value: 'zerado', label: 'Zerei' },
-  { value: 'dropado', label: 'Dropei' },
+  { value: 'jogando', labelKey: 'game.status.jogando' },
+  { value: 'zerado', labelKey: 'game.status.zerado' },
+  { value: 'dropado', labelKey: 'game.status.dropado' },
 ]
 
 function normalizeList(value: string[] | string | null | undefined) {
@@ -98,17 +100,12 @@ function formatList(value: string[] | string | null | undefined, fallback: strin
   return items.length > 0 ? items.join(', ') : fallback
 }
 
-function formatDate(value: string | null | undefined, fallback = 'Nao informado') {
-  if (!value) return fallback
-
-  const parsedDate = new Date(value)
-  if (Number.isNaN(parsedDate.getTime())) return fallback
-
-  return parsedDate.toLocaleDateString('pt-BR')
+function formatDate(value: string | null | undefined, fallback?: string) {
+  return formatLocalizedDate(value, { fallback })
 }
 
 function formatReviewScore(score: number) {
-  return score.toLocaleString('pt-BR', {
+  return formatLocalizedNumber(score, {
     minimumFractionDigits: 0,
     maximumFractionDigits: 1,
   })
@@ -167,7 +164,7 @@ function getWishlistErrorMessage(
   }
 
   if (fullMessage.includes('duplicate') || fullMessage.includes('unique')) {
-    return 'Esse jogo ja esta na sua lista de desejos.'
+    return 'Esse jogo já está na sua lista de desejos.'
   }
 
   if (fullMessage.includes('column')) {
@@ -238,9 +235,9 @@ function getReviewErrorMessage(
     if (action === 'comment_dislike') {
       return 'Nao foi possivel atualizar o "Não gostei" deste comentario agora.'
     }
-    if (action === 'report') return 'Nao foi possivel registrar esta denuncia agora.'
-    if (action === 'report_delete') return 'Nao foi possivel remover esta denuncia agora.'
-    if (action === 'delete') return 'Nao foi possivel apagar esta review agora.'
+    if (action === 'report') return 'Nao foi possivel registrar está denuncia agora.'
+    if (action === 'report_delete') return 'Nao foi possivel remover está denuncia agora.'
+    if (action === 'delete') return 'Nao foi possivel apagar está review agora.'
     return 'Nao foi possivel carregar as reviews deste jogo agora.'
   }
 
@@ -265,11 +262,11 @@ function getReviewErrorMessage(
     }
 
     if (action === 'review_like') {
-      return 'Nao foi possivel atualizar esta curtida por permissao. Verifique as policies da tabela avaliacao_curtidas no Supabase.'
+      return 'Nao foi possivel atualizar está curtida por permissao. Verifique as policies da tabela avaliacao_curtidas no Supabase.'
     }
 
     if (action === 'comment_like') {
-      return 'Nao foi possivel atualizar esta curtida por permissao. Verifique as policies da tabela comentario_curtidas no Supabase.'
+      return 'Nao foi possivel atualizar está curtida por permissao. Verifique as policies da tabela comentario_curtidas no Supabase.'
     }
 
     if (action === 'review_dislike') {
@@ -281,15 +278,15 @@ function getReviewErrorMessage(
     }
 
     if (action === 'report') {
-      return 'Nao foi possivel registrar esta denuncia por permissao. Verifique as policies da tabela denuncias_conteudo no Supabase.'
+      return 'Nao foi possivel registrar está denuncia por permissao. Verifique as policies da tabela denuncias_conteudo no Supabase.'
     }
 
     if (action === 'report_delete') {
-      return 'Nao foi possivel remover esta denuncia por permissao. Verifique as policies DELETE da tabela denuncias_conteudo no Supabase.'
+      return 'Nao foi possivel remover está denuncia por permissao. Verifique as policies DELETE da tabela denuncias_conteudo no Supabase.'
     }
 
     if (action === 'delete') {
-      return 'Nao foi possivel apagar esta review por permissao. Verifique as policies DELETE da tabela avaliacoes no Supabase.'
+      return 'Nao foi possivel apagar está review por permissao. Verifique as policies DELETE da tabela avaliacoes no Supabase.'
     }
 
     return 'Nao foi possivel carregar as reviews por permissao. Verifique as policies das tabelas avaliacoes, comentarios, avaliacao_curtidas, comentario_curtidas, avaliacao_deslikes, comentario_deslikes e denuncias_conteudo no Supabase.'
@@ -297,19 +294,19 @@ function getReviewErrorMessage(
 
   if (fullMessage.includes('duplicate') || fullMessage.includes('unique')) {
     if (action === 'review_like') {
-      return 'Essa review ja estava curtida por este usuario.'
+      return 'Essa review já estava curtida por este usuario.'
     }
 
     if (action === 'comment_like') {
-      return 'Esse comentario ja estava curtido por este usuario.'
+      return 'Esse comentario já estava curtido por este usuario.'
     }
 
     if (action === 'review_dislike' || action === 'comment_dislike') {
-      return 'Esse "Não gostei" ja estava registrado por este usuario.'
+      return 'Esse "Não gostei" já estava registrado por este usuario.'
     }
 
     if (action === 'report') {
-      return 'Voce ja denunciou este conteudo anteriormente.'
+      return 'Você já denunciou este conteudo anteriormente.'
     }
 
     return 'Ja existe uma review sua para este jogo. Envie novamente para atualizar a avaliacao.'
@@ -323,14 +320,14 @@ function getReviewErrorMessage(
 }
 
 function getGameStatusLabel(status: GameStatusValue | null | undefined) {
-  if (status === 'zerado') return 'Zerei'
-  if (status === 'dropado') return 'Dropei'
-  return 'Jogando'
+  if (status === 'zerado') return translate('game.status.zerado')
+  if (status === 'dropado') return translate('game.status.dropado')
+  return translate('game.status.jogando')
 }
 
 function getUserName(usuario: { username?: string | null } | null | undefined) {
   const username = usuario?.username?.trim()
-  return username || 'Usuario'
+  return username || translate('common.username')
 }
 
 function getInitial(name: string) {
@@ -343,7 +340,7 @@ function iconHeart(isFilled: boolean) {
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path
         d="M12 20.4L10.55 19.08C5.4 14.36 2 11.27 2 7.5C2 4.41 4.42 2 7.5 2C9.24 2 10.91 2.81 12 4.09C13.09 2.81 14.76 2 16.5 2C19.58 2 22 4.41 22 7.5C22 11.27 18.6 14.36 13.45 19.09L12 20.4Z"
-        fill={isFilled ? 'currentColor' : 'none'}
+        fill={isFilled ? '⚑' : '⚐'}
         stroke="currentColor"
         strokeWidth="1.8"
         strokeLinejoin="round"
@@ -378,6 +375,7 @@ function iconFlag(isFilled: boolean) {
 function GameDetailsPage() {
   const { id } = useParams()
   const { user } = useAuth()
+  const { t, formatNumber } = useI18n()
 
   const [game, setGame] = useState<Game | null>(null)
   const [reviews, setReviews] = useState<ReviewItem[]>([])
@@ -1145,8 +1143,8 @@ function GameDetailsPage() {
       tone: reportResult.status === 'already_exists' ? 'info' : 'success',
       message:
         reportResult.status === 'already_exists'
-          ? 'Voce ja havia denunciado este conteudo. Mantivemos o registro atual.'
-          : 'Denuncia enviada com sucesso. Obrigado por ajudar a manter a comunidade segura.',
+          ? t('game.details.reportAlreadyExists')
+          : t('game.details.reportCreated'),
     })
     setSubmittingReport(false)
   }
@@ -1179,7 +1177,7 @@ function GameDetailsPage() {
     )
     setReportModalFeedback({
       tone: 'success',
-      message: 'Denuncia removida com sucesso.',
+      message: t('game.details.reportRemoved'),
     })
     setRemovingReport(false)
   }
@@ -1363,7 +1361,7 @@ function GameDetailsPage() {
         setWishlistEntryId(null)
         setWishlistFeedback({
           tone: 'info',
-          message: 'Jogo removido da sua lista de desejos.',
+          message: t('game.details.wishlistRemoved'),
         })
       }
     } else {
@@ -1377,14 +1375,14 @@ function GameDetailsPage() {
         setWishlistEntryId(result.data?.id || null)
         setWishlistFeedback({
           tone: 'success',
-          message: 'Jogo salvo na sua lista de desejos.',
+          message: t('game.details.wishlistSaved'),
         })
       } else if (result.status === 'duplicate') {
         setIsInWishlist(true)
         setWishlistEntryId(result.data?.id || null)
         setWishlistFeedback({
           tone: 'info',
-          message: 'Esse jogo ja esta na sua lista de desejos.',
+          message: t('game.details.wishlistSaved'),
         })
       } else {
         console.error('Erro ao salvar jogo na wishlist:', result.error)
@@ -1424,7 +1422,7 @@ function GameDetailsPage() {
         setGameStatusEntry(null)
         setGameStatusFeedback({
           tone: 'info',
-          message: 'Jogo removido do seu perfil.',
+          message: t('game.details.removeStatusSuccess'),
         })
       }
     } else {
@@ -1446,8 +1444,8 @@ function GameDetailsPage() {
         setGameStatusFeedback({
           tone: 'success',
           message: gameStatusEntry
-            ? 'Status do jogo atualizado no seu perfil.'
-            : 'Jogo adicionado ao seu perfil.',
+            ? t('game.details.statusUpdated')
+            : t('game.details.statusAdded'),
         })
       }
     }
@@ -1461,9 +1459,9 @@ function GameDetailsPage() {
       <div className="page-container">
         <div className="page-content game-details-page">
           <section className="game-details-state-card">
-            <span className="game-details-state-badge">GamePage</span>
-            <h1>Carregando detalhes do jogo</h1>
-            <p>Estamos preparando capa, informacoes principais e avaliacoes da comunidade.</p>
+            <span className="game-details-state-badge">{t('game.details.badge')}</span>
+            <h1>{t('game.details.loadingTitle')}</h1>
+            <p>{t('game.details.loadingText')}</p>
           </section>
         </div>
       </div>
@@ -1475,12 +1473,12 @@ function GameDetailsPage() {
       <div className="page-container">
         <div className="page-content game-details-page">
           <section className="game-details-state-card">
-            <span className="game-details-state-badge">GamePage</span>
-            <h1>Jogo nao encontrado</h1>
-            <p>O item solicitado nao esta disponivel no catalogo ou pode ter sido removido.</p>
+            <span className="game-details-state-badge">{t('game.details.badge')}</span>
+            <h1>{t('game.details.notFoundTitle')}</h1>
+            <p>{t('game.details.notFoundText')}</p>
             <div className="game-details-state-actions">
               <Link to="/games" className="game-button game-details-secondary-button">
-                Voltar ao catalogo
+                {t('common.goBackToCatalog')}
               </Link>
             </div>
           </section>
@@ -1492,8 +1490,8 @@ function GameDetailsPage() {
   const generos = normalizeList(game.generos)
   const desenvolvedoras = normalizeList(game.desenvolvedora)
   const plataformas = normalizeList(game.plataformas)
-  const releaseDate = formatDate(game.data_lancamento)
-  const descricaoCompleta = game.descricao?.trim() || 'Descricao nao informada.'
+  const releaseDate = formatDate(game.data_lancamento, t('common.notProvided'))
+  const descricaoCompleta = game.descricao?.trim() || t('game.details.noDescription')
   const totalAvaliacoes = reviews.length
   const totalComentarios = reviews.reduce(
     (commentCount, review) => commentCount + review.comentarios.length,
@@ -1504,38 +1502,38 @@ function GameDetailsPage() {
       ? reviews.reduce((scoreTotal, review) => scoreTotal + review.nota, 0) / totalAvaliacoes
       : null
   const mediaAvaliacoesLabel = mediaAvaliacoes
-    ? mediaAvaliacoes.toLocaleString('pt-BR', {
+    ? formatNumber(mediaAvaliacoes, {
         minimumFractionDigits: 1,
         maximumFractionDigits: 1,
       })
-    : 'Sem notas'
+    : t('game.details.noRatingYet')
   const totalAvaliacoesLabel =
-    totalAvaliacoes === 1 ? '1 avaliacao' : `${totalAvaliacoes} avaliacoes`
+    totalAvaliacoes === 1 ? t('game.details.totalReviews.one') : t('game.details.totalReviews.many', { count: formatNumber(totalAvaliacoes) })
   const totalComentariosLabel =
-    totalComentarios === 1 ? '1 comentario' : `${totalComentarios} comentarios`
+    totalComentarios === 1 ? t('game.details.comments.one') : t('game.details.comments.many', { count: formatNumber(totalComentarios) })
   const wishlistButtonLabel = wishlistLoading
-    ? 'Verificando...'
+    ? t('game.details.checking')
     : wishlistSaving
       ? isInWishlist
-        ? 'Removendo...'
-        : 'Salvando...'
+        ? t('common.removing')
+        : t('common.saving')
       : isInWishlist
-        ? 'Na sua lista'
-        : 'Salvar na lista'
+        ? t('game.details.inWishlist')
+        : t('game.details.addWishlist')
   const profileStatusTitle = gameStatusEntry
-    ? 'Atualize rapidamente este jogo no seu perfil'
-    : 'Adicione este jogo direto ao seu perfil'
+    ? t('game.details.profilePanelTitleUpdate')
+    : t('game.details.profilePanelTitleAdd')
   const profileStatusSubtitle = gameStatusLoading
-    ? 'Verificando como esse jogo aparece no seu perfil...'
+    ? t('game.details.profilePanelChecking')
     : gameStatusEntry
-      ? `Status atual: ${getGameStatusLabel(gameStatusEntry.status)}. Toque novamente no botao ativo para remover.`
-      : 'Escolha um status rapido sem sair da pagina.'
+      ? t('game.details.profilePanelCurrent', { status: getGameStatusLabel(gameStatusEntry.status) })
+      : t('game.details.quickStatusText')
   const reviewFormHeading = currentUserReview
-    ? 'Atualize sua review para este jogo'
-    : 'Publique sua review para este jogo'
+    ? t('game.details.editReview')
+    : t('game.details.writeReview')
   const reviewFormDescription = currentUserReview
-    ? 'Sua nota continua obrigatoria e o comentario pode ficar vazio se voce quiser deixar apenas a avaliacao numerica.'
-    : 'Escolha uma nota e, se quiser, complemente com um comentario. O comentario e opcional.'
+    ? t('game.details.reviewHelp')
+    : t('game.details.reviewPlaceholder')
 
   return (
     <div className="page-container">
@@ -1549,7 +1547,7 @@ function GameDetailsPage() {
               {game.capa_url ? (
                 <GameCoverImage
                   src={game.capa_url}
-                  alt={`Capa do jogo ${game.titulo}`}
+                  alt={t('catalog.coverAlt', { title: game.titulo })}
                   className="game-details-cover-image"
                   width={320}
                   height={400}
@@ -1563,24 +1561,24 @@ function GameDetailsPage() {
               )}
 
               <div className="game-details-cover-top">
-                <span className="game-details-pill">Catalogo Social Gamer</span>
+                <span className="game-details-pill">{t('game.details.catalogBadge')}</span>
                 <span className="game-details-cover-date">{releaseDate}</span>
               </div>
 
               <div className="game-details-cover-bottom">
                 <div className="game-details-score-chip">
-                  <span className="game-details-score-label">Media</span>
+                  <span className="game-details-score-label">{t('game.details.averageRating')}</span>
                   <strong>{mediaAvaliacoes ? `${mediaAvaliacoesLabel}/10` : mediaAvaliacoesLabel}</strong>
                 </div>
               </div>
             </div>
 
             <div className="game-details-hero-copy">
-              <span className="game-details-eyebrow">Detalhes do jogo</span>
+              <span className="game-details-eyebrow">{t('game.details.gameDetails')}</span>
               <h1>{game.titulo}</h1>
 
               <div className="game-details-chip-section">
-                <span className="game-details-chip-label">Categorias</span>
+                <span className="game-details-chip-label">{t('game.details.categories')}</span>
 
                 <div className="game-details-chip-row">
                   {generos.length > 0 ? (
@@ -1590,7 +1588,7 @@ function GameDetailsPage() {
                       </span>
                     ))
                   ) : (
-                    <span className="game-details-muted-chip">Genero nao informado</span>
+                    <span className="game-details-muted-chip">{t('game.details.genreMissing')}</span>
                   )}
                 </div>
               </div>
@@ -1598,11 +1596,11 @@ function GameDetailsPage() {
               <div className="game-details-actions">
                 {user ? (
                   <a href="#game-community" className="game-button game-details-primary-button">
-                    Avaliar agora
+                    {t('game.details.rateNow')}
                   </a>
                 ) : (
                   <Link to="/login" className="game-button game-details-primary-button">
-                    Fazer login para avaliar
+                    {t('game.details.loginToRate')}
                   </Link>
                 )}
 
@@ -1621,19 +1619,19 @@ function GameDetailsPage() {
                     to="/login"
                     className="game-button game-details-secondary-button game-details-wishlist-button"
                   >
-                    Fazer login para salvar
+                    {t('game.details.loginToSave')}
                   </Link>
                 )}
 
                 <Link to="/games" className="game-button game-details-secondary-button">
-                  Voltar ao catalogo
+                  {t('common.goBackToCatalog')}
                 </Link>
               </div>
 
               {user ? (
                 <div className="game-details-profile-status-card">
                   <div className="game-details-profile-status-copy">
-                    <span className="game-details-panel-kicker">Perfil</span>
+                    <span className="game-details-panel-kicker">{t('common.profile')}</span>
                     <strong>{profileStatusTitle}</strong>
                     <p>{profileStatusSubtitle}</p>
                   </div>
@@ -1656,12 +1654,12 @@ function GameDetailsPage() {
                           <span className="game-details-profile-status-button-label">
                             {gameStatusSaving && isPendingThisStatus
                               ? isRemovingThisStatus
-                                ? 'Removendo...'
-                                : 'Salvando...'
-                              : option.label}
+                                ? t('common.removing')
+                                : t('common.saving')
+                              : t(option.labelKey)}
                           </span>
                           <small className="game-details-profile-status-button-hint">
-                            {isSelected ? 'Toque para remover' : 'Salvar no perfil'}
+                            {isSelected ? t('game.details.profilePanelRemoveHint') : t('game.details.profilePanelHint')}
                           </small>
                         </button>
                       )
@@ -1685,33 +1683,33 @@ function GameDetailsPage() {
           </div>
         </section>
 
-        <section className="game-details-highlights" aria-label="Informacoes principais">
+        <section className="game-details-highlights" aria-label={t('game.details.gameDetails')}>
           <article className="game-details-highlight-card">
-            <span className="game-details-highlight-label">Desenvolvedora</span>
-            <strong>{formatList(desenvolvedoras, 'Nao informada')}</strong>
+            <span className="game-details-highlight-label">{t('game.details.developer')}</span>
+            <strong>{formatList(desenvolvedoras, t('common.notProvided'))}</strong>
           </article>
 
           <article className="game-details-highlight-card">
-            <span className="game-details-highlight-label">Plataformas</span>
-            <strong>{formatList(plataformas, 'Nao informadas')}</strong>
+            <span className="game-details-highlight-label">{t('game.details.platforms')}</span>
+            <strong>{formatList(plataformas, t('common.notProvidedPlural'))}</strong>
           </article>
 
           <article className="game-details-highlight-card">
-            <span className="game-details-highlight-label">Lancamento</span>
+            <span className="game-details-highlight-label">{t('game.details.releaseDate')}</span>
             <strong>{releaseDate}</strong>
           </article>
 
           <article className="game-details-highlight-card">
-            <span className="game-details-highlight-label">Comunidade</span>
-            <strong>{mediaAvaliacoes ? `${mediaAvaliacoesLabel}/10` : 'Ainda sem notas'}</strong>
+            <span className="game-details-highlight-label">{t('game.details.community')}</span>
+            <strong>{mediaAvaliacoes ? `${mediaAvaliacoesLabel}/10` : t('game.details.noRatingYet')}</strong>
             <small>{`${totalAvaliacoesLabel} | ${totalComentariosLabel}`}</small>
           </article>
         </section>
 
         <section className="game-details-info-grid">
           <article className="game-details-panel game-details-panel-full">
-            <span className="game-details-panel-kicker">Descricao</span>
-            <h2>Sobre o jogo</h2>
+            <span className="game-details-panel-kicker">{t('game.details.description')}</span>
+            <h2>{t('game.details.aboutTitle')}</h2>
             <p className="game-details-description-body">{descricaoCompleta}</p>
           </article>
         </section>
@@ -1719,9 +1717,9 @@ function GameDetailsPage() {
         <section id="game-community" className="game-details-reviews">
           <div className="game-details-section-heading">
             <div>
-              <span className="game-details-panel-kicker">Comunidade</span>
-              <h2>Avaliacoes e comentarios</h2>
-              <p>Veja como a comunidade descreve a experiencia deste jogo.</p>
+              <span className="game-details-panel-kicker">{t('game.details.community')}</span>
+              <h2>{t('game.details.reviewsHeading')}</h2>
+              <p>{t('game.details.reviewsDescription')}</p>
             </div>
           </div>
 
@@ -1733,13 +1731,13 @@ function GameDetailsPage() {
                   <p>{reviewFormDescription}</p>
                 </div>
                 {currentUserReview ? (
-                  <span className="game-details-review-form-badge">Review ja publicada</span>
+                  <span className="game-details-review-form-badge">{t('game.details.reviewAlreadyPublished')}</span>
                 ) : null}
               </div>
 
               <div className="game-details-form-block">
-                <label className="game-details-form-label">Sua nota</label>
-                <div className="game-details-rating-grid" role="radiogroup" aria-label="Escolha sua nota">
+                <label className="game-details-form-label">{t('game.details.yourScore')}</label>
+                <div className="game-details-rating-grid" role="radiogroup" aria-label={t('game.details.scoreAria')}>
                   {REVIEW_SCORE_OPTIONS.map(score => (
                     <button
                       key={score}
@@ -1756,20 +1754,20 @@ function GameDetailsPage() {
 
               <div className="game-details-form-block">
                 <label htmlFor="game-review-text" className="game-details-form-label">
-                  Comentario <span className="game-details-form-caption">(opcional)</span>
+                  {t('game.details.commentOptional')} <span className="game-details-form-caption">({t('common.optional')})</span>
                 </label>
                 <textarea
                   id="game-review-text"
                   className="game-details-textarea"
                   value={textoReview}
                   onChange={event => setTextoReview(event.target.value)}
-                  placeholder="Compartilhe sua opiniao sobre jogabilidade, historia, visual ou comunidade, se quiser."
+                  placeholder={t('game.details.reviewPlaceholder')}
                 />
               </div>
 
               <div className="game-details-review-form-footer">
                 <span className="game-details-form-helper">
-                  Sua review fica vinculada automaticamente a este jogo e aparece no seu perfil.
+                  {t('game.details.reviewHelper')}
                 </span>
                 <button
                   type="submit"
@@ -1777,23 +1775,23 @@ function GameDetailsPage() {
                   className="game-button game-details-primary-button game-details-submit-button"
                 >
                   {submitting
-                    ? 'Salvando...'
+                    ? t('game.details.submittingReview')
                     : currentUserReview
-                      ? 'Atualizar review'
-                      : 'Publicar review'}
+                      ? t('game.details.updateReview')
+                      : t('game.details.submitReview')}
                 </button>
               </div>
             </form>
           ) : (
             <div className="game-details-login-card">
               <div>
-                <span className="game-details-panel-kicker">Participar</span>
-                <h3>Entre para avaliar este jogo</h3>
-                <p>Faca login para publicar reviews, comentar e curtir as avaliacoes da comunidade.</p>
+                <span className="game-details-panel-kicker">{t('game.details.participate')}</span>
+                <h3>{t('game.details.loginToReview')}</h3>
+                <p>{t('game.details.loginToReviewText')}</p>
               </div>
 
               <Link to="/login" className="game-button game-details-primary-button">
-                Fazer login
+                {t('auth.login.submit')}
               </Link>
             </div>
           )}
@@ -1805,20 +1803,20 @@ function GameDetailsPage() {
           <div className="game-details-review-list">
             {reviewsError && reviews.length === 0 ? (
               <div className="game-details-empty-card">
-                <h3>As reviews nao puderam ser carregadas</h3>
+                <h3>{t('game.details.reviewLoadErrorTitle')}</h3>
                 <p>{reviewsError}</p>
                 <button
                   type="button"
                   className="game-button game-details-secondary-button"
                   onClick={() => void refreshReviews(game.id)}
                 >
-                  Tentar novamente
+                  {t('common.tryAgain')}
                 </button>
               </div>
             ) : reviews.length === 0 ? (
               <div className="game-details-empty-card">
-                <h3>Nenhuma avaliacao por enquanto</h3>
-                <p>Seja a primeira pessoa a compartilhar uma opiniao sobre este titulo.</p>
+                <h3>{t('game.details.noReviewsTitle')}</h3>
+                <p>{t('game.details.noReviewsText')}</p>
               </div>
             ) : (
               <>
@@ -1834,22 +1832,22 @@ function GameDetailsPage() {
                 const visibleComments = review.comentarios.slice(0, visibleCommentCount)
                 const hiddenCommentsCount = review.comentarios.length - visibleComments.length
                 const likeButtonLabel = !user
-                  ? 'Faca login para curtir'
+                  ? t('game.details.loginToLike')
                   : review.canLike
                     ? review.likedByCurrentUser
-                      ? 'Descurtir review'
-                      : 'Curtir review'
-                    : 'Sua propria review'
+                      ? t('game.details.unlikeReview')
+                      : t('game.details.likeReview')
+                    : t('game.details.ownReview')
                 const dislikeButtonLabel = !user
-                  ? 'Faca login para usar "Não gostei"'
+                  ? t('game.details.loginToDislike')
                   : review.canDislike
                     ? review.dislikedByCurrentUser
-                      ? 'Remover "Não gostei" da review'
-                      : 'Marcar "Não gostei" nesta review'
-                    : 'Sua propria review'
+                      ? t('game.details.removeDislikeReview')
+                      : t('game.details.dislikeReview')
+                    : t('game.details.ownReview')
                 const reportButtonLabel = review.currentUserReport
-                  ? 'Ver detalhes da sua denuncia desta review'
-                  : 'Denunciar review'
+                  ? t('game.details.viewReportReview')
+                  : t('game.details.reportReview')
 
                 return (
                   <article key={review.id} className="game-review-card">
@@ -1858,7 +1856,7 @@ function GameDetailsPage() {
                         <Link
                           to={avaliadorProfilePath}
                           className="game-review-user-link"
-                          aria-label={`Abrir perfil de ${avaliadorNome}`}
+                          aria-label={t('game.details.openProfileAria', { name: avaliadorNome })}
                         >
                           <UserAvatar
                             name={avaliadorNome}
@@ -1942,13 +1940,17 @@ function GameDetailsPage() {
                           </span>
                           <span>
                             {isReactionPending
-                              ? 'Atualizando...'
+                              ? t('common.updating')
                               : review.likedByCurrentUser
-                                ? 'Curtido'
-                                : 'Curtir'}
+                                ? t('game.details.liked')
+                                : t('game.details.like')}
                           </span>
                         </button>
-                        <span>{review.curtidas} curtidas</span>
+                        <span>
+                          {review.curtidas === 1
+                            ? t('game.details.likes.one')
+                            : t('game.details.likes.many', { count: formatNumber(review.curtidas) })}
+                        </span>
 
                         <button
                           type="button"
@@ -1963,19 +1965,23 @@ function GameDetailsPage() {
                           </span>
                           <span>
                             {isReactionPending
-                              ? 'Atualizando...'
+                              ? t('common.updating')
                               : review.dislikedByCurrentUser
-                                ? 'Não gostei'
-                                : 'Não gostei'}
+                                ? t('game.details.dislike')
+                                : t('game.details.dislike')}
                           </span>
                         </button>
-                        <span>{review.dislikes} não gostaram</span>
+                        <span>
+                          {review.dislikes === 1
+                            ? t('game.details.dislikes.one')
+                            : t('game.details.dislikes.many', { count: formatNumber(review.dislikes) })}
+                        </span>
                       </div>
 
                       <span>
                         {review.comentarios.length === 1
-                          ? '1 comentario'
-                          : `${review.comentarios.length} comentarios`}
+                          ? t('game.details.comments.one')
+                          : t('game.details.comments.many', { count: formatNumber(review.comentarios.length) })}
                       </span>
                       {isOwnerReview ? (
                         <button
@@ -1984,7 +1990,7 @@ function GameDetailsPage() {
                           onClick={() => void handleDeleteReview(review)}
                           disabled={isDeletePending}
                         >
-                          {isDeletePending ? 'Apagando...' : 'Apagar review'}
+                          {isDeletePending ? t('common.deleting') : t('game.details.deleteReview')}
                         </button>
                       ) : null}
                     </div>
@@ -2003,22 +2009,22 @@ function GameDetailsPage() {
                             )
                             const canReportComment = Boolean(user && !isOwnerComment)
                             const commentLikeButtonLabel = !user
-                              ? 'Faca login para curtir'
+                              ? t('game.details.loginToLike')
                               : comentario.canLike
                                 ? comentario.likedByCurrentUser
-                                  ? 'Descurtir comentario'
-                                  : 'Curtir comentario'
-                                : 'Seu proprio comentario'
+                                  ? t('game.details.unlikeComment')
+                                  : t('game.details.likeComment')
+                                : t('game.details.ownComment')
                             const commentDislikeButtonLabel = !user
-                              ? 'Faca login para usar "Não gostei"'
+                              ? t('game.details.loginToDislike')
                               : comentario.canDislike
                                 ? comentario.dislikedByCurrentUser
-                                  ? 'Remover "Não gostei" do comentario'
-                                  : 'Marcar "Não gostei" neste comentario'
-                                : 'Seu proprio comentario'
+                                  ? t('game.details.removeDislikeComment')
+                                  : t('game.details.dislikeComment')
+                                : t('game.details.ownComment')
                             const commentReportButtonLabel = comentario.currentUserReport
-                              ? 'Ver detalhes da sua denuncia deste comentario'
-                              : 'Denunciar comentario'
+                              ? t('game.details.viewReportComment')
+                              : t('game.details.reportComment')
 
                             return (
                               <div key={comentario.id} className="game-review-comment-card">
@@ -2027,7 +2033,7 @@ function GameDetailsPage() {
                                     <Link
                                       to={autorComentarioProfilePath}
                                       className="game-review-comment-author-link"
-                                      aria-label={`Abrir perfil de ${autorComentario}`}
+                                      aria-label={t('game.details.openProfileAria', { name: autorComentario })}
                                     >
                                       <UserAvatar
                                         name={autorComentario}
@@ -2076,8 +2082,8 @@ function GameDetailsPage() {
                                         </span>
                                         <span>
                                           {isCommentReactionPending
-                                            ? 'Atualizando...'
-                                            : `Curtir (${comentario.curtidas})`}
+                                            ? t('common.updating')
+                                            : t('game.details.likeWithCount', { count: formatNumber(comentario.curtidas) })}
                                         </span>
                                       </button>
 
@@ -2100,10 +2106,10 @@ function GameDetailsPage() {
                                         </span>
                                         <span>
                                           {isCommentReactionPending
-                                            ? 'Atualizando...'
+                                            ? t('common.updating')
                                             : comentario.dislikedByCurrentUser
-                                              ? `Não gostei (${comentario.dislikes})`
-                                              : `Não gostei (${comentario.dislikes})`}
+                                              ? t('game.details.dislikeWithCount', { count: formatNumber(comentario.dislikes) })
+                                              : t('game.details.dislikeWithCount', { count: formatNumber(comentario.dislikes) })}
                                         </span>
                                       </button>
 
@@ -2133,7 +2139,7 @@ function GameDetailsPage() {
                                             void handleDeleteComment(review.id, comentario)
                                           }
                                         >
-                                          Apagar
+                                          {t('game.details.deleteComment')}
                                         </button>
                                       ) : null}
                                     </div>
@@ -2152,9 +2158,9 @@ function GameDetailsPage() {
                           type="button"
                           className="game-review-comments-expand-button"
                           onClick={() => handleExpandComments(review.id, review.comentarios.length)}
-                          aria-label={`Ver mais comentarios. ${hiddenCommentsCount} restantes.`}
+                          aria-label={t('game.details.moreCommentsAria', { count: formatNumber(hiddenCommentsCount) })}
                         >
-                          Ver mais comentarios
+                          {t('game.details.moreComments')}
                         </button>
                       ) : null}
 
@@ -2172,7 +2178,7 @@ function GameDetailsPage() {
                                 [review.id]: event.target.value,
                               }))
                             }
-                            placeholder="Adicione um comentario para continuar a conversa."
+                            placeholder={t('game.details.commentPlaceholder')}
                             required
                           />
 
@@ -2181,7 +2187,7 @@ function GameDetailsPage() {
                             disabled={submittingComentario[review.id]}
                             className="game-review-comment-button"
                           >
-                            {submittingComentario[review.id] ? 'Enviando...' : 'Comentar'}
+                            {submittingComentario[review.id] ? t('common.sending') : t('game.details.commentSubmit')}
                           </button>
                         </form>
                       ) : null}
@@ -2194,9 +2200,9 @@ function GameDetailsPage() {
                     type="button"
                     className="game-details-reviews-expand-button"
                     onClick={handleExpandReviews}
-                    aria-label={`Ver mais reviews. ${hiddenReviewsCount} restantes.`}
+                    aria-label={t('game.details.moreReviewsAria', { count: formatNumber(hiddenReviewsCount) })}
                   >
-                    Ver mais reviews
+                    {t('game.details.moreReviews')}
                   </button>
                 ) : null}
               </>
@@ -2210,8 +2216,8 @@ function GameDetailsPage() {
             targetType={activeReportTarget.targetType}
             targetLabel={
               activeReportTarget.targetType === 'review'
-                ? `a review de ${activeReportTarget.authorName}`
-                : `o comentario de ${activeReportTarget.authorName}`
+                ? t('game.details.reviewTarget', { author: activeReportTarget.authorName })
+                : t('game.details.commentTarget', { author: activeReportTarget.authorName })
             }
             currentReport={activeReportTarget.currentReport}
             feedback={reportModalFeedback}

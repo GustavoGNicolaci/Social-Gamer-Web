@@ -1552,15 +1552,23 @@ body.light .game-details-score-chip,
 body.light .game-details-muted-chip,
 body.light .game-details-secondary-button,
 body.light .game-details-profile-status-button,
-body.light .game-details-rating-button,
-body.light .game-review-reaction-button,
-body.light .game-review-comment-reaction-button,
-body.light .game-review-report-button,
-body.light .game-review-comments-expand-button,
-body.light .game-details-reviews-expand-button {
+body.light .game-details-rating-button {
   border-color: var(--border);
   background: var(--secondary);
   color: var(--secondary-foreground);
+}
+
+body.light .game-review-reaction-button,
+body.light .game-review-comment-reaction-button,
+body.light .game-review-report-button,
+body.light .game-review-comment-delete-button,
+body.light .game-review-delete-button,
+body.light .game-review-comments-expand-button,
+body.light .game-details-reviews-expand-button {
+  border-color: #94a3b8;
+  background: #f8fafc;
+  color: #0f172a;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
 }
 
 body.light .game-details-primary-button,
@@ -1596,19 +1604,75 @@ body.light .game-review-card:hover,
 body.light .game-review-reaction-button:hover:not(:disabled),
 body.light .game-review-comment-reaction-button:hover:not(:disabled),
 body.light .game-review-report-button:hover,
+body.light .game-review-comment-delete-button:hover:not(:disabled),
+body.light .game-review-delete-button:hover:not(:disabled),
 body.light .game-review-comments-expand-button:hover,
 body.light .game-details-reviews-expand-button:hover {
-  border-color: var(--ring);
-  background: var(--surface-hover);
+  border-color: #2563eb;
+  background: #dbeafe;
+  color: #111827;
   box-shadow: 0 14px 28px var(--shadow-color);
 }
 
+body.light .game-review-reaction-button:active:not(:disabled),
+body.light .game-review-comment-reaction-button:active:not(:disabled),
+body.light .game-review-report-button:active,
+body.light .game-review-comment-delete-button:active:not(:disabled),
+body.light .game-review-delete-button:active:not(:disabled),
+body.light .game-review-comments-expand-button:active,
+body.light .game-details-reviews-expand-button:active {
+  transform: translateY(0) scale(0.98);
+  background: #bfdbfe;
+}
+
 body.light .game-details-profile-status-button.is-selected,
-body.light .game-review-reaction-button.is-active,
-body.light .game-review-comment-reaction-button.is-liked,
-body.light .game-review-comment-reaction-button.is-disliked {
+body.light .game-review-reaction-button.is-active {
   border-color: var(--ring);
   background: var(--surface-active);
+}
+
+body.light .game-review-reaction-button.is-like.is-active,
+body.light .game-review-comment-reaction-button.is-liked {
+  border-color: #be185d;
+  background: #fce7f3;
+  color: #831843;
+}
+
+body.light .game-review-reaction-button.is-dislike.is-active,
+body.light .game-review-comment-reaction-button.is-disliked {
+  border-color: #1d4ed8;
+  background: #dbeafe;
+  color: #1e3a8a;
+}
+
+body.light .game-review-report-button.is-reported {
+  border-color: #b45309;
+  background: #fef3c7;
+  color: #78350f;
+}
+
+body.light .game-review-comment-delete-button,
+body.light .game-review-delete-button {
+  border-color: #dc2626;
+  background: #fee2e2;
+  color: #7f1d1d;
+}
+
+body.light .game-review-comment-delete-button:hover:not(:disabled),
+body.light .game-review-delete-button:hover:not(:disabled) {
+  border-color: #b91c1c;
+  background: #fecaca;
+  color: #7f1d1d;
+}
+
+body.light .game-review-reaction-button:disabled,
+body.light .game-review-comment-reaction-button:disabled,
+body.light .game-review-comment-delete-button:disabled,
+body.light .game-review-delete-button:disabled {
+  border-color: #cbd5e1;
+  background: #f1f5f9;
+  color: #64748b;
+  opacity: 0.78;
 }
 
 body.light .game-details-feedback.is-success {

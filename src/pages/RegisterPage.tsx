@@ -4,32 +4,24 @@ import AuthShell from '../components/auth/AuthShell'
 import AuthStatusBanner from '../components/auth/AuthStatusBanner'
 import PasswordRequirementsPanel from '../components/auth/PasswordRequirementsPanel'
 import { useAuth, type RegisterFieldErrors } from '../contexts/AuthContext'
-import {
-  INVALID_EMAIL_MESSAGE,
-  REQUIRED_EMAIL_MESSAGE,
-  isValidEmailAddress,
-} from '../utils/authErrorMessages'
+import { useI18n } from '../i18n/I18nContext'
+import { isValidEmailAddress } from '../utils/authErrorMessages'
 import { getPasswordValidationError } from '../utils/passwordValidation'
 
-const CONFIRM_PASSWORD_REQUIRED_MESSAGE = 'Confirme sua senha.'
-const CONFIRM_PASSWORD_MISMATCH_MESSAGE = 'As senhas nao coincidem.'
-const EMAIL_CONFIRMATION_MESSAGE =
-  'Enviamos um link de confirmacao para o seu email. Confira sua caixa de entrada para concluir o cadastro.'
-const HERO_HIGHLIGHTS = [
-  'Perfil publico com identidade propria.',
-  'Wishlist, favoritos e status em um unico lugar.',
-  'Senha forte com validacao em tempo real.',
-]
-
-const getConfirmPasswordMismatchError = (password: string, confirmPassword: string) => {
+const getConfirmPasswordMismatchError = (
+  password: string,
+  confirmPassword: string,
+  mismatchMessage: string
+) => {
   if (!confirmPassword) {
     return null
   }
 
-  return password === confirmPassword ? null : CONFIRM_PASSWORD_MISMATCH_MESSAGE
+  return password === confirmPassword ? null : mismatchMessage
 }
 
 function RegisterPage() {
+  const { t } = useI18n()
   const navigate = useNavigate()
   const { register, user } = useAuth()
   const usernameErrorId = useId()
@@ -87,7 +79,8 @@ function RegisterPage() {
       if (shouldRevalidateConfirmPassword) {
         const confirmPasswordError = getConfirmPasswordMismatchError(
           nextFormData.password,
-          nextFormData.confirmPassword
+          nextFormData.confirmPassword,
+          t('auth.passwordMismatch')
         )
 
         if (confirmPasswordError) {
@@ -114,13 +107,13 @@ function RegisterPage() {
     const normalizedEmail = formData.email.trim().toLowerCase()
 
     if (!formData.username.trim()) {
-      nextErrors.username = 'Nome de usuario e obrigatorio.'
+      nextErrors.username = t('auth.usernameRequired')
     }
 
     if (!normalizedEmail) {
-      nextErrors.email = REQUIRED_EMAIL_MESSAGE
+      nextErrors.email = t('auth.emailRequired')
     } else if (!isValidEmailAddress(normalizedEmail)) {
-      nextErrors.email = INVALID_EMAIL_MESSAGE
+      nextErrors.email = t('auth.invalidEmail')
     }
 
     const passwordError = getPasswordValidationError(formData.password)
@@ -130,9 +123,9 @@ function RegisterPage() {
     }
 
     if (!formData.confirmPassword) {
-      nextErrors.confirmPassword = CONFIRM_PASSWORD_REQUIRED_MESSAGE
+      nextErrors.confirmPassword = t('auth.confirmPasswordRequired')
     } else if (formData.password !== formData.confirmPassword) {
-      nextErrors.confirmPassword = CONFIRM_PASSWORD_MISMATCH_MESSAGE
+      nextErrors.confirmPassword = t('auth.passwordMismatch')
     }
 
     return nextErrors
@@ -197,19 +190,23 @@ function RegisterPage() {
 
   return (
     <AuthShell
-      title="Criar Conta"
-      subtitle="Monte seu perfil gamer e comece a organizar sua jornada."
-      heroEyebrow="Social Gamer"
-      heroTitle="Crie seu espaco no Social Gamer"
-      heroDescription="Cadastre-se para acompanhar sua biblioteca, montar listas e publicar reviews com uma experiencia simples e segura."
-      heroHighlights={HERO_HIGHLIGHTS}
+      title={t('auth.register.title')}
+      subtitle={t('auth.register.subtitle')}
+      heroEyebrow={t('common.appName')}
+      heroTitle={t('auth.register.heroTitle')}
+      heroDescription={t('auth.register.heroDescription')}
+      heroHighlights={[
+        t('auth.register.highlight1'),
+        t('auth.register.highlight2'),
+        t('auth.register.highlight3'),
+      ]}
       layout="auth"
       footer={
         <div className="auth-link-groups">
           <div className="auth-link-row">
-            <span>Ja tem conta?</span>
+            <span>{t('auth.register.hasAccount')}</span>
             <Link to="/login" className="auth-link">
-              Fazer login
+              {t('auth.login.submit')}
             </Link>
           </div>
         </div>
@@ -217,8 +214,8 @@ function RegisterPage() {
     >
       {showEmailConfirmation ? (
         <div className="auth-empty-state">
-          <AuthStatusBanner tone="success">{EMAIL_CONFIRMATION_MESSAGE}</AuthStatusBanner>
-          <p>Depois de confirmar seu email, volte para o login para acessar sua conta.</p>
+          <AuthStatusBanner tone="success">{t('auth.register.emailConfirmation')}</AuthStatusBanner>
+          <p>{t('auth.register.afterConfirm')}</p>
         </div>
       ) : (
         <>
@@ -227,13 +224,13 @@ function RegisterPage() {
           <form className="auth-form" onSubmit={handleRegister}>
             <div className="auth-form-grid auth-form-grid--dual">
               <div className="auth-field">
-                <label htmlFor="register-username">Nome de usuario</label>
+                <label htmlFor="register-username">{t('common.username')}</label>
                 <input
                   type="text"
                   id="register-username"
                   name="username"
                   className={`auth-input${errors.username ? ' is-error' : ''}`}
-                  placeholder="Seu username"
+                  placeholder={t('common.username')}
                   autoComplete="username"
                   value={formData.username}
                   onChange={handleInputChange}
@@ -249,13 +246,13 @@ function RegisterPage() {
               </div>
 
               <div className="auth-field">
-                <label htmlFor="register-name">Nome completo (opcional)</label>
+                <label htmlFor="register-name">{t('common.fullNameOptional')}</label>
                 <input
                   type="text"
                   id="register-name"
                   name="name"
                   className={`auth-input${errors.name ? ' is-error' : ''}`}
-                  placeholder="Nome completo (opcional)"
+                  placeholder={t('common.fullNameOptional')}
                   autoComplete="name"
                   value={formData.name}
                   onChange={handleInputChange}
@@ -272,7 +269,7 @@ function RegisterPage() {
             </div>
 
             <div className="auth-field">
-              <label htmlFor="register-email">Email</label>
+              <label htmlFor="register-email">{t('common.email')}</label>
               <input
                 type="email"
                 id="register-email"
@@ -296,13 +293,13 @@ function RegisterPage() {
             <div className="auth-password-section">
               <div className="auth-password-fields">
                 <div className="auth-field">
-                  <label htmlFor="register-password">Senha</label>
+                  <label htmlFor="register-password">{t('common.password')}</label>
                   <input
                     type="password"
                     id="register-password"
                     name="password"
                     className={`auth-input${errors.password ? ' is-error' : ''}`}
-                    placeholder="Crie uma senha forte"
+                    placeholder={t('auth.createPasswordPlaceholder')}
                     autoComplete="new-password"
                     value={formData.password}
                     onChange={handleInputChange}
@@ -320,13 +317,13 @@ function RegisterPage() {
                 </div>
 
                 <div className="auth-field">
-                  <label htmlFor="register-confirm-password">Confirmar senha</label>
+                  <label htmlFor="register-confirm-password">{t('auth.confirmPassword')}</label>
                   <input
                     type="password"
                     id="register-confirm-password"
                     name="confirmPassword"
                     className={`auth-input${errors.confirmPassword ? ' is-error' : ''}`}
-                    placeholder="Repita a senha"
+                    placeholder={t('auth.confirmPasswordPlaceholder')}
                     autoComplete="new-password"
                     value={formData.confirmPassword}
                     onChange={handleInputChange}
@@ -358,7 +355,7 @@ function RegisterPage() {
                 className="auth-button auth-button--primary"
                 disabled={isSubmitting}
               >
-                {isSubmitting ? 'Criando conta...' : 'Criar conta'}
+                {isSubmitting ? t('auth.register.submitting') : t('auth.register.submit')}
               </button>
             </div>
           </form>

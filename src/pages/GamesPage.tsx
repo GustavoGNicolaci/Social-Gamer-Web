@@ -15,6 +15,8 @@ import {
   type GameRatingSummary,
 } from '../services/reviewService'
 import { supabase } from '../supabase-client'
+import { formatLocalizedDate, formatLocalizedNumber, getRuntimeLocale } from '../i18n'
+import { useI18n } from '../i18n/I18nContext'
 import './GamesPage.css'
 
 interface Game {
@@ -62,12 +64,12 @@ const CATALOG_GAME_SELECT =
 
 const CATALOG_SORT_OPTIONS: Array<{
   value: CatalogSortOption
-  label: string
+  labelKey: string
 }> = [
-  { value: 'release-desc', label: 'Lancamento: mais novos primeiro' },
-  { value: 'release-asc', label: 'Lancamento: mais antigos primeiro' },
-  { value: 'rating-desc', label: 'Nota: maior nota primeiro' },
-  { value: 'rating-asc', label: 'Nota: menor nota primeiro' },
+  { value: 'release-desc', labelKey: 'catalog.sort.releaseDesc' },
+  { value: 'release-asc', labelKey: 'catalog.sort.releaseAsc' },
+  { value: 'rating-desc', labelKey: 'catalog.sort.ratingDesc' },
+  { value: 'rating-asc', labelKey: 'catalog.sort.ratingAsc' },
 ]
 
 function normalizeList(value: string[] | string | null | undefined) {
@@ -80,17 +82,12 @@ function formatList(value: string[] | string | null | undefined, fallback: strin
   return items.length > 0 ? items.join(', ') : fallback
 }
 
-function formatDate(value: string | null | undefined, fallback = 'Nao informada') {
-  if (!value) return fallback
-
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return fallback
-
-  return date.toLocaleDateString('pt-BR')
+function formatDate(value: string | null | undefined, fallback?: string) {
+  return formatLocalizedDate(value, { fallback })
 }
 
 function formatCatalogRating(value: number) {
-  return value.toLocaleString('pt-BR', {
+  return formatLocalizedNumber(value, {
     minimumFractionDigits: 0,
     maximumFractionDigits: 1,
   })
@@ -109,14 +106,14 @@ function getGamesGridColumns(viewportWidth: number) {
   return 5
 }
 
-function getFacetLabelPrefix(category: FacetCategory) {
-  if (category === 'genre') return 'Genero'
-  if (category === 'platform') return 'Plataforma'
-  return 'Studio'
+function getFacetLabelPrefix(category: FacetCategory, t: (key: string) => string) {
+  if (category === 'genre') return t('catalog.filter.genrePrefix')
+  if (category === 'platform') return t('catalog.filter.platformPrefix')
+  return t('catalog.filter.developerPrefix')
 }
 
 function sortAlphabetically(values: string[]) {
-  return values.sort((left, right) => left.localeCompare(right, 'pt-BR'))
+  return values.sort((left, right) => left.localeCompare(right, getRuntimeLocale()))
 }
 
 function getCatalogSortOption(value: string | null): CatalogSortOption {
@@ -133,7 +130,7 @@ function getSortableTimestamp(value: string | null | undefined) {
 }
 
 function compareGamesByTitle(leftGame: Game, rightGame: Game) {
-  const titleDelta = leftGame.titulo.localeCompare(rightGame.titulo, 'pt-BR')
+  const titleDelta = leftGame.titulo.localeCompare(rightGame.titulo, getRuntimeLocale())
   if (titleDelta !== 0) return titleDelta
 
   return leftGame.id - rightGame.id
@@ -208,13 +205,17 @@ function sortCatalogGames(
   })
 }
 
-function buildFacetToken(category: FacetCategory, value: string): CatalogFilterToken {
+function buildFacetToken(category: FacetCategory, value: string, t: (key: string) => string): CatalogFilterToken {
   return {
     key: `${category}-${value.toLowerCase()}`,
     category,
     value,
-    label: `${getFacetLabelPrefix(category)}: ${value}`,
+    label: `${getFacetLabelPrefix(category, t)}: ${value}`,
   }
+}
+
+function getFacetTokenLabel(token: CatalogFilterToken, t: (key: string) => string) {
+  return `${getFacetLabelPrefix(token.category as FacetCategory, t)}: ${token.value}`
 }
 
 function buildVisibleFacetOptions(options: string[], inputValue: string, limit?: number) {
@@ -228,10 +229,12 @@ function buildVisibleFacetOptions(options: string[], inputValue: string, limit?:
 }
 
 function ActiveChip({ label, onRemove }: ActiveChipProps) {
+  const { t } = useI18n()
+
   return (
     <span className="gp-chip">
       <span>{label}</span>
-      <button type="button" aria-label={`Remover filtro ${label}`} onClick={onRemove}>
+      <button type="button" aria-label={t('catalog.removeFilter', { label })} onClick={onRemove}>
         x
       </button>
     </span>
@@ -243,14 +246,15 @@ function StaticChip({ label }: { label: string }) {
 }
 
 const GameCard = memo(function GameCard({ game, ratingSummary, onShowGenres }: GameCardProps) {
+  const { t } = useI18n()
   const genres = normalizeList(game.generos)
   const displayedGenres = genres.slice(0, 2)
   const hasMoreGenres = genres.length > 2
   const averageRating = ratingSummary?.averageRating ?? null
   const ratingAriaLabel =
     averageRating === null
-      ? `Sem nota para ${game.titulo}`
-      : `Media ${formatCatalogRating(averageRating)} de 10 para ${game.titulo}`
+      ? t('catalog.noRatingFor', { title: game.titulo })
+      : t('catalog.averageFor', { rating: formatCatalogRating(averageRating), title: game.titulo })
 
   return (
     <article className="gp-game">
@@ -258,7 +262,7 @@ const GameCard = memo(function GameCard({ game, ratingSummary, onShowGenres }: G
         {game.capa_url ? (
           <GameCoverImage
             src={game.capa_url}
-            alt={`Capa do jogo ${game.titulo}`}
+            alt={t('catalog.coverAlt', { title: game.titulo })}
             sizes="(max-width: 480px) 100vw, (max-width: 768px) 50vw, (max-width: 992px) 33vw, (max-width: 1200px) 25vw, 20vw"
           />
         ) : (
@@ -266,7 +270,7 @@ const GameCard = memo(function GameCard({ game, ratingSummary, onShowGenres }: G
         )}
 
         <div className="gp-cover-top">
-          <span className="gp-date">{formatDate(game.data_lancamento)}</span>
+          <span className="gp-date">{formatDate(game.data_lancamento, t('common.notProvided'))}</span>
         </div>
 
         <div className="gp-cover-rating">
@@ -287,7 +291,7 @@ const GameCard = memo(function GameCard({ game, ratingSummary, onShowGenres }: G
               </span>
             ))
           ) : (
-            <span className="gp-muted">Generos nao informados.</span>
+            <span className="gp-muted">{t('catalog.noGenres')}</span>
           )}
 
           {hasMoreGenres ? (
@@ -299,38 +303,40 @@ const GameCard = memo(function GameCard({ game, ratingSummary, onShowGenres }: G
 
         <div className="gp-meta">
           <div className="gp-meta-row">
-            <span>Studio</span>
-            <strong title={formatList(game.desenvolvedora, 'Nao informada')}>
-              {formatList(game.desenvolvedora, 'Nao informada')}
+            <span>{t('common.studio')}</span>
+            <strong title={formatList(game.desenvolvedora, t('common.notProvided'))}>
+              {formatList(game.desenvolvedora, t('common.notProvided'))}
             </strong>
           </div>
           <div className="gp-meta-row">
-            <span>Plataformas</span>
-            <strong title={formatList(game.plataformas, 'Nao informadas')}>
-              {formatList(game.plataformas, 'Nao informadas')}
+            <span>{t('common.platforms')}</span>
+            <strong title={formatList(game.plataformas, t('common.notProvidedPlural'))}>
+              {formatList(game.plataformas, t('common.notProvidedPlural'))}
             </strong>
           </div>
         </div>
       </div>
 
       <Link to={`/games/${game.id}`} className="game-button gp-btn--primary">
-        Ver detalhes
+        {t('common.viewDetails')}
       </Link>
     </article>
   )
 })
 
 function PaginationControls({ currentPage, totalPages, onChangePage }: PaginationProps) {
+  const { t } = useI18n()
+
   if (totalPages <= 1) return null
 
   return (
-    <nav className="gp-pagination" aria-label="Paginacao dos jogos">
+    <nav className="gp-pagination" aria-label={t('catalog.pagination')}>
       <button
         type="button"
         onClick={() => onChangePage(Math.max(currentPage - 1, 1))}
         disabled={currentPage === 1}
       >
-        Anterior
+        {t('catalog.previous')}
       </button>
 
       {Array.from({ length: totalPages }, (_, index) => index + 1).map(page => (
@@ -350,7 +356,7 @@ function PaginationControls({ currentPage, totalPages, onChangePage }: Paginatio
         onClick={() => onChangePage(Math.min(currentPage + 1, totalPages))}
         disabled={currentPage === totalPages}
       >
-        Proxima
+        {t('catalog.next')}
       </button>
     </nav>
   )
@@ -358,6 +364,7 @@ function PaginationControls({ currentPage, totalPages, onChangePage }: Paginatio
 
 function GamesPage() {
   const { user } = useAuth()
+  const { t, formatNumber } = useI18n()
   const [searchParams, setSearchParams] = useSearchParams()
   const [games, setGames] = useState<Game[]>([])
   const [ratingSummariesByGameId, setRatingSummariesByGameId] = useState<Map<number, GameRatingSummary>>(
@@ -513,9 +520,9 @@ function GamesPage() {
         )
       }
 
-      return [...currentFilters, buildFacetToken(category, value)]
+      return [...currentFilters, buildFacetToken(category, value, t)]
     })
-  }, [])
+  }, [t])
 
   const isFacetFilterActive = useCallback(
     (category: FacetCategory, value: string) =>
@@ -572,21 +579,21 @@ function GamesPage() {
         ? [
             {
               key: `navbar-query-${navbarQuery.toLowerCase()}`,
-              label: `Busca na navbar: ${navbarQuery}`,
+              label: t('catalog.globalSearchChip', { query: navbarQuery }),
               onRemove: () => updateNavbarQuery(''),
             },
           ]
         : []),
       ...facetFilters.map(filter => ({
         key: filter.key,
-        label: filter.label,
+        label: getFacetTokenLabel(filter, t),
         onRemove: () =>
           setFacetFilters(currentFilters =>
             currentFilters.filter(currentFilter => currentFilter.key !== filter.key)
           ),
       })),
     ],
-    [facetFilters, navbarQuery, updateNavbarQuery]
+    [facetFilters, navbarQuery, t, updateNavbarQuery]
   )
 
   const genreFilterTokens = useMemo(
@@ -665,8 +672,12 @@ function GamesPage() {
   const visibleEnd = Math.min(endIndex, sortedGames.length)
   const rangeLabel =
     sortedGames.length === 0
-      ? 'Nenhum item para exibir'
-      : `Mostrando ${visibleStart}-${visibleEnd} de ${sortedGames.length}`
+      ? t('catalog.rangeEmpty')
+      : t('catalog.range', {
+          start: formatNumber(visibleStart),
+          end: formatNumber(visibleEnd),
+          total: formatNumber(sortedGames.length),
+        })
 
   const gridStyle = useMemo(
     () => ({
@@ -680,23 +691,23 @@ function GamesPage() {
       {
         key: 'genre-modal',
         category: 'genre' as const,
-        title: 'Generos',
+        title: t('common.genres'),
         options: modalGenreOptions,
       },
       {
         key: 'platform-modal',
         category: 'platform' as const,
-        title: 'Plataformas',
+        title: t('common.platforms'),
         options: modalPlatformOptions,
       },
       {
         key: 'developer-modal',
         category: 'developer' as const,
-        title: 'Studios',
+        title: t('common.studios'),
         options: modalDeveloperOptions,
       },
     ],
-    [modalDeveloperOptions, modalGenreOptions, modalPlatformOptions]
+    [modalDeveloperOptions, modalGenreOptions, modalPlatformOptions, t]
   )
 
   const requiresAllRatingSummaries = catalogSort === 'rating-desc' || catalogSort === 'rating-asc'
@@ -723,7 +734,7 @@ function GamesPage() {
 
       if (ratingSummariesResult.error) {
         console.error('Erro ao buscar notas do catalogo:', ratingSummariesResult.error)
-        setRatingsError('Nao foi possivel carregar as notas do catalogo agora.')
+        setRatingsError(t('catalog.ratingsError'))
       } else {
         setRatingsError(null)
       }
@@ -746,7 +757,7 @@ function GamesPage() {
     return () => {
       isMounted = false
     }
-  }, [loading, ratingSummariesByGameId, ratingSummaryTargetIds, user?.id])
+  }, [loading, ratingSummariesByGameId, ratingSummaryTargetIds, t, user?.id])
 
   const handleShowGenres = useCallback((genres: string[]) => {
     setSelectedGameGenres(genres)
@@ -758,11 +769,10 @@ function GamesPage() {
       <div className="page-container">
         <div className="page-content games-page">
           <section className="gp-card">
-            <span className="gp-badge">Catalogo</span>
-            <h1>Carregando jogos</h1>
+            <span className="gp-badge">{t('common.catalog')}</span>
+            <h1>{t('catalog.loadingTitle')}</h1>
             <p className="gp-muted">
-              Estamos preparando o catalogo com a busca global sincronizada e um painel dedicado
-              para filtros.
+              {t('catalog.loadingText')}
             </p>
           </section>
         </div>
@@ -776,25 +786,24 @@ function GamesPage() {
         <section className="gp-panel">
           <div className="gp-panel-head">
             <div className="gp-panel-copy">
-              <span className="gp-badge">Catalogo</span>
-              <h1>Jogos</h1>
+              <span className="gp-badge">{t('common.catalog')}</span>
+              <h1>{t('common.games')}</h1>
               <p className="gp-muted">
-                A busca da navbar continua global, e os filtros desta pagina ficam concentrados no
-                modal para deixar o catalogo mais limpo.
+                {t('catalog.pageText')}
               </p>
             </div>
 
             <div className="gp-panel-summary">
               <label className="gp-sort-control">
-                <span>Ordenar por</span>
+                <span>{t('catalog.sortBy')}</span>
                 <select
                   value={catalogSort}
                   onChange={event => updateCatalogSort(event.target.value as CatalogSortOption)}
-                  aria-label="Ordenar catalogo de jogos"
+                  aria-label={t('catalog.sortAria')}
                 >
                   {CATALOG_SORT_OPTIONS.map(option => (
                     <option key={option.value} value={option.value}>
-                      {option.label}
+                      {t(option.labelKey)}
                     </option>
                   ))}
                 </select>
@@ -805,7 +814,7 @@ function GamesPage() {
                 className="game-button gp-btn--secondary"
                 onClick={() => setShowFiltersModal(true)}
               >
-                Ver todos os filtros
+                {t('catalog.allFilters')}
               </button>
             </div>
           </div>
@@ -821,7 +830,7 @@ function GamesPage() {
 
             <p className="gp-panel-footnote">
               {navbarQuery
-                ? `Busca global ativa: "${navbarQuery}". ${rangeLabel}`
+                ? t('catalog.globalSearchActive', { query: navbarQuery, range: rangeLabel })
                 : rangeLabel}
             </p>
 
@@ -831,18 +840,17 @@ function GamesPage() {
 
         {gamesToDisplay.length === 0 ? (
           <article className="gp-empty">
-            <span className="gp-badge">Sem resultados</span>
-            <h3>Nenhum jogo combinou com a busca e os filtros atuais</h3>
+            <span className="gp-badge">{t('common.noResults')}</span>
+            <h3>{t('catalog.emptyTitle')}</h3>
             <p className="gp-muted">
-              Ajuste a busca global da navbar ou use o modal de filtros para voltar ao catalogo
-              completo.
+              {t('catalog.emptyText')}
             </p>
             <button
               type="button"
               className="game-button gp-btn--secondary"
               onClick={() => setShowFiltersModal(true)}
             >
-              Ver todos os filtros
+              {t('catalog.allFilters')}
             </button>
           </article>
         ) : (
@@ -877,17 +885,17 @@ function GamesPage() {
             >
               <div className="gp-modal-head">
                 <div>
-                  <span className="gp-badge">Todos os filtros</span>
-                  <h3>Explore todas as opcoes disponiveis</h3>
+                  <span className="gp-badge">{t('catalog.allFilters')}</span>
+                  <h3>{t('catalog.filtersTitle')}</h3>
                   <p className="gp-muted">
-                    Filtre por genero, plataforma ou studio dentro do contexto atual da busca.
+                    {t('catalog.filtersText')}
                   </p>
                 </div>
 
                 <button
                   type="button"
                   className="gp-modal-close"
-                  aria-label="Fechar modal de filtros"
+                  aria-label={t('catalog.closeFilters')}
                   onClick={() => setShowFiltersModal(false)}
                 >
                   x
@@ -910,7 +918,7 @@ function GamesPage() {
                 <input
                   type="text"
                   value={filtersModalSearch}
-                  placeholder="Pesquisar entre todos os filtros..."
+                  placeholder={t('catalog.searchFiltersPlaceholder')}
                   onChange={event => setFiltersModalSearch(event.target.value)}
                 />
               </label>
@@ -928,7 +936,7 @@ function GamesPage() {
                   <section key={group.key} className="gp-modal-section">
                     <div className="gp-modal-section-head">
                       <h4>{group.title}</h4>
-                      <span>{group.options.length} opcoes</span>
+                      <span>{t('catalog.optionCount', { count: formatNumber(group.options.length) })}</span>
                     </div>
 
                     {group.options.length > 0 ? (
@@ -946,7 +954,7 @@ function GamesPage() {
                       </div>
                     ) : (
                       <p className="gp-filter-empty">
-                        Nenhuma opcao encontrada para este termo.
+                        {t('catalog.noFilterOption')}
                       </p>
                     )}
                   </section>
@@ -955,7 +963,7 @@ function GamesPage() {
 
               <div className="gp-modal-actions">
                 <button type="button" className="game-button gp-btn--secondary" onClick={clearAllFilters}>
-                  Limpar tudo
+                  {t('common.clearAll')}
                 </button>
 
                 <button
@@ -963,7 +971,7 @@ function GamesPage() {
                   className="game-button gp-btn--primary"
                   onClick={() => setShowFiltersModal(false)}
                 >
-                  Aplicar filtros
+                  {t('common.applyFilters')}
                 </button>
               </div>
             </div>
@@ -975,17 +983,17 @@ function GamesPage() {
             <div className="gp-modal-card" onClick={event => event.stopPropagation()}>
               <div className="gp-modal-head">
                 <div>
-                  <span className="gp-badge">Categorias</span>
-                  <h3>Todos os generos deste jogo</h3>
+                  <span className="gp-badge">{t('catalog.categories')}</span>
+                  <h3>{t('catalog.allGameGenres')}</h3>
                   <p className="gp-muted">
-                    Veja a lista completa de tags relacionadas ao titulo selecionado.
+                    {t('catalog.allGameGenresText')}
                   </p>
                 </div>
 
                 <button
                   type="button"
                   className="gp-modal-close"
-                  aria-label="Fechar modal de generos"
+                  aria-label={t('catalog.closeGenres')}
                   onClick={() => setShowGenresModal(false)}
                 >
                   x
@@ -1006,7 +1014,7 @@ function GamesPage() {
                   className="game-button gp-btn--secondary"
                   onClick={() => setShowGenresModal(false)}
                 >
-                  Fechar
+                  {t('common.close')}
                 </button>
               </div>
             </div>

@@ -1,32 +1,31 @@
-export function formatCompactDate(value: string | null | undefined, fallback = 'Agora') {
-  if (!value) return fallback
+import { formatLocalizedDate, formatLocalizedNumber, translate } from '../../i18n'
 
-  const parsedDate = new Date(value)
-  if (Number.isNaN(parsedDate.getTime())) return fallback
-
-  return parsedDate.toLocaleDateString('pt-BR', {
+export function formatCompactDate(
+  value: string | null | undefined,
+  fallback = translate('common.loadingShort')
+) {
+  return formatLocalizedDate(value, {
+    fallback,
     day: '2-digit',
     month: 'short',
   })
 }
 
-export function formatFullDate(value: string | null | undefined, fallback = 'Data nao informada') {
-  if (!value) return fallback
-
-  const parsedDate = new Date(value)
-  if (Number.isNaN(parsedDate.getTime())) return fallback
-
-  return parsedDate.toLocaleDateString('pt-BR')
+export function formatFullDate(
+  value: string | null | undefined,
+  fallback = translate('common.noDate')
+) {
+  return formatLocalizedDate(value, { fallback })
 }
 
 export function formatCount(value: number) {
-  return value.toLocaleString('pt-BR')
+  return formatLocalizedNumber(value)
 }
 
 export function formatRating(value: number | null | undefined) {
   if (typeof value !== 'number' || !Number.isFinite(value)) return null
 
-  return value.toLocaleString('pt-BR', {
+  return formatLocalizedNumber(value, {
     minimumFractionDigits: 0,
     maximumFractionDigits: 1,
   })
@@ -36,3 +35,6 @@ export function getInitial(value: string, fallback = 'J') {
   const firstCharacter = value.trim().charAt(0)
   return firstCharacter ? firstCharacter.toUpperCase() : fallback
 }
+
+export const getDefaultRelativeDateFallback = () => translate('common.loadingShort')
+export const getDefaultDateFallback = () => translate('common.noDate')

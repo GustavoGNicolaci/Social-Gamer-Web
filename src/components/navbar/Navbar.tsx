@@ -3,6 +3,8 @@ import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { GameCoverImage } from '../GameCoverImage'
 import { UserAvatar } from '../UserAvatar'
 import { useAuth } from '../../contexts/AuthContext'
+import { useI18n } from '../../i18n/I18nContext'
+import type { TranslationParams } from '../../i18n'
 import { searchCatalogGamesByTitle, type CatalogGamePreview } from '../../services/gameCatalogService'
 import { followUser, searchUsers, unfollowUser, type UserSearchResult, type UserServiceError } from '../../services/userService'
 import { getPublicProfilePath } from '../../utils/profileRoutes'
@@ -13,6 +15,8 @@ const SEARCH_DEBOUNCE_DELAY = 220
 type NavbarSearchItem =
   | { kind: 'game'; id: string; game: CatalogGamePreview }
   | { kind: 'user'; id: string; user: UserSearchResult }
+
+type TranslateFunction = (key: string, params?: TranslationParams) => string
 
 function normalizeList(value: string[] | string | null | undefined) {
   if (!value) return []
@@ -30,11 +34,11 @@ function getCompactYear(value: string | null | undefined) {
   return Number.isNaN(parsedDate.getTime()) ? null : String(parsedDate.getFullYear())
 }
 
-function getGameMetaLine(game: CatalogGamePreview) {
+function getGameMetaLine(game: CatalogGamePreview, t: TranslateFunction) {
   const studio = normalizeList(game.desenvolvedora)[0]
   const primaryPlatform = normalizeList(game.plataformas)[0]
   const year = getCompactYear(game.data_lancamento)
-  return [studio || primaryPlatform || 'Ver detalhes do jogo', year].filter(Boolean).join(' - ')
+  return [studio || primaryPlatform || t('navbar.search.gameMetaFallback'), year].filter(Boolean).join(' - ')
 }
 
 function iconMenuUser() {
@@ -147,33 +151,36 @@ function iconChevron() {
   )
 }
 
-function getCatalogSearchErrorMessage(error: { code?: string; message: string; details?: string | null; hint?: string | null } | null) {
-  if (!error) return 'Nao foi possivel buscar jogos agora.'
+function getCatalogSearchErrorMessage(
+  error: { code?: string; message: string; details?: string | null; hint?: string | null } | null,
+  t: TranslateFunction
+) {
+  if (!error) return t('error.genericSearchGames')
   const fullMessage = [error.message, error.details, error.hint].filter(Boolean).join(' ').toLowerCase()
   if (error.code === '42501' || fullMessage.includes('permission denied') || fullMessage.includes('row-level security') || fullMessage.includes('policy')) {
-    return 'Nao foi possivel buscar jogos por permissao. Verifique as policies da tabela jogos no Supabase.'
+    return t('error.permissionSearchGames')
   }
-  return 'Nao foi possivel buscar jogos agora.'
+  return t('error.genericSearchGames')
 }
 
-function getUserSearchErrorMessage(error: UserServiceError | null) {
-  if (!error) return 'Nao foi possivel buscar usuarios agora.'
+function getUserSearchErrorMessage(error: UserServiceError | null, t: TranslateFunction) {
+  if (!error) return t('navbar.search.userError')
   const fullMessage = [error.message, error.details, error.hint].filter(Boolean).join(' ').toLowerCase()
   if (error.code === '42501' || fullMessage.includes('permission denied') || fullMessage.includes('row-level security') || fullMessage.includes('policy')) {
-    return 'Nao foi possivel buscar usuarios por permissao. Verifique as policies das tabelas usuarios e seguidores no Supabase.'
+    return t('navbar.search.userPermissionError')
   }
-  return error.message || 'Nao foi possivel buscar usuarios agora.'
+  return error.message || t('navbar.search.userError')
 }
 
-function getFollowActionErrorMessage(error: UserServiceError | null, action: 'follow' | 'unfollow') {
-  if (!error) return action === 'follow' ? 'Nao foi possivel seguir este usuario agora.' : 'Nao foi possivel deixar de seguir este usuario agora.'
+function getFollowActionErrorMessage(error: UserServiceError | null, action: 'follow' | 'unfollow', t: TranslateFunction) {
+  if (!error) return action === 'follow' ? t('navbar.search.followError') : t('navbar.search.unfollowError')
   const fullMessage = [error.message, error.details, error.hint].filter(Boolean).join(' ').toLowerCase()
   if (error.code === '42501' || fullMessage.includes('permission denied') || fullMessage.includes('row-level security') || fullMessage.includes('policy')) {
     return action === 'follow'
-      ? 'Nao foi possivel seguir este usuario por permissao. Verifique as policies INSERT da tabela seguidores.'
-      : 'Nao foi possivel deixar de seguir este usuario por permissao. Verifique as policies DELETE da tabela seguidores.'
+      ? t('navbar.search.followPermissionError')
+      : t('navbar.search.unfollowPermissionError')
   }
-  return error.message || getUserSearchErrorMessage(error)
+  return error.message || getUserSearchErrorMessage(error, t)
 }
 
 function isCompactSearchViewport(viewportWidth: number) {
@@ -198,6 +205,7 @@ function Navbar() {
   const [followPendingIds, setFollowPendingIds] = useState<string[]>([])
 
   const { user, profile, logout } = useAuth()
+  const { t } = useI18n()
   const navigate = useNavigate()
   const location = useLocation()
   const menuRef = useRef<HTMLDivElement | null>(null)
@@ -207,11 +215,13 @@ function Navbar() {
   const searchTimeoutRef = useRef<number | null>(null)
   const searchRequestIdRef = useRef(0)
 
-  const displayName = profile?.username || user?.email || 'Perfil'
+  const displayName = profile?.username || user?.email || t('common.profile')
   const profileLabel = profile?.nome_completo?.trim() || displayName
   const ownProfilePath = profile?.username ? getPublicProfilePath(profile.username) : '/profile'
-  const themeToggleLabel = theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'
-  const themeStatusLabel = `Tema atual: ${theme === 'dark' ? 'escuro' : 'claro'}`
+  const themeToggleLabel = theme === 'dark' ? t('navbar.theme.light') : t('navbar.theme.dark')
+  const themeStatusLabel = t('navbar.theme.current', {
+    theme: theme === 'dark' ? t('navbar.theme.darkName') : t('navbar.theme.lightName'),
+  })
   const searchResultsId = 'navbar-search-results'
   const trimmedSearchQuery = searchQuery.trim()
 
@@ -407,8 +417,8 @@ function Navbar() {
       setGameResults(gamesResult.data)
       setUserResults(usersResult.data)
       setCompletedSearchQuery(nextQuery)
-      setGameSearchError(gamesResult.error ? getCatalogSearchErrorMessage(gamesResult.error) : null)
-      setUserSearchError(usersResult.error ? getUserSearchErrorMessage(usersResult.error) : null)
+      setGameSearchError(gamesResult.error ? getCatalogSearchErrorMessage(gamesResult.error, t) : null)
+      setUserSearchError(usersResult.error ? getUserSearchErrorMessage(usersResult.error, t) : null)
       setSearchLoading(false)
       setActiveResultIndex(-1)
       setShowSearchDropdown(true)
@@ -465,7 +475,7 @@ function Navbar() {
     setFollowPendingIds(currentIds => (currentIds.includes(searchUser.id) ? currentIds : [...currentIds, searchUser.id]))
     const result = isFollowing ? await unfollowUser(user.id, searchUser.id) : await followUser(user.id, searchUser.id)
     if (result.error) {
-      setUserActionError(getFollowActionErrorMessage(result.error, isFollowing ? 'unfollow' : 'follow'))
+      setUserActionError(getFollowActionErrorMessage(result.error, isFollowing ? 'unfollow' : 'follow', t))
       setFollowPendingIds(currentIds => currentIds.filter(currentId => currentId !== searchUser.id))
       return
     }
@@ -489,55 +499,55 @@ function Navbar() {
       <div className="navbar-container">
         <Link to="/" className="navbar-logo">
           <span className="navbar-logo-icon">SG</span>
-          <span className="navbar-logo-copy">
-            <span className="navbar-logo-title">Social Gamer</span>
-            <span className="navbar-logo-subtitle">Reviews e comunidade</span>
+            <span className="navbar-logo-copy">
+              <span className="navbar-logo-title">Social Gamer</span>
+            <span className="navbar-logo-subtitle">{t('navbar.subtitle')}</span>
           </span>
         </Link>
         <div className="navbar-center">
           <div className="navbar-links">
-            <NavLink to="/" className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>Home</NavLink>
-            <NavLink to="/games" className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>Games</NavLink>
+            <NavLink to="/" className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>{t('common.home')}</NavLink>
+            <NavLink to="/games" className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>{t('common.games')}</NavLink>
           </div>
           <div ref={searchRef} className={`navbar-search-shell${showMobileSearch ? ' is-open' : ''}${shouldShowSearchDropdown ? ' has-dropdown' : ''}`}>
-            <button type="button" className={`navbar-search-toggle${showMobileSearch ? ' is-open' : ''}`} aria-label={showMobileSearch ? 'Fechar busca global' : 'Abrir busca global'} aria-expanded={showMobileSearch} aria-controls="navbar-search-panel" onClick={handleMobileSearchToggle}>Buscar</button>
+            <button type="button" className={`navbar-search-toggle${showMobileSearch ? ' is-open' : ''}`} aria-label={showMobileSearch ? t('navbar.search.close') : t('navbar.search.open')} aria-expanded={showMobileSearch} aria-controls="navbar-search-panel" onClick={handleMobileSearchToggle}>{t('common.search')}</button>
             <div id="navbar-search-panel" className="navbar-search-panel">
               <label className="navbar-search-field" htmlFor="navbar-search-input">
                 <span className="navbar-search-field-icon" aria-hidden="true">/</span>
-                <input ref={searchInputRef} id="navbar-search-input" type="text" value={searchQuery} className="navbar-search-input" placeholder="Buscar jogos ou usuarios..." autoComplete="off" role="combobox" aria-autocomplete="list" aria-expanded={shouldShowSearchDropdown} aria-controls={searchResultsId} aria-activedescendant={activeResultId} onChange={event => handleSearchChange(event.target.value)} onFocus={handleSearchFocus} onKeyDown={handleSearchKeyDown} />
+                <input ref={searchInputRef} id="navbar-search-input" type="text" value={searchQuery} className="navbar-search-input" placeholder={t('navbar.search.placeholder')} autoComplete="off" role="combobox" aria-autocomplete="list" aria-expanded={shouldShowSearchDropdown} aria-controls={searchResultsId} aria-activedescendant={activeResultId} onChange={event => handleSearchChange(event.target.value)} onFocus={handleSearchFocus} onKeyDown={handleSearchKeyDown} />
               </label>
-              {trimmedSearchQuery.length === 1 ? <p className="navbar-search-helper">Continue digitando para ver jogos e usuarios.</p> : null}
+              {trimmedSearchQuery.length === 1 ? <p className="navbar-search-helper">{t('navbar.search.keepTyping')}</p> : null}
               {shouldShowSearchDropdown ? (
                 <div className="navbar-search-dropdown" id={searchResultsId} role="listbox">
-                  {searchLoading ? <p className="navbar-search-state">Buscando jogos e usuarios...</p> : shouldShowEmptyState ? <p className="navbar-search-state">Nenhum jogo ou usuario encontrado para esse termo.</p> : (
+                  {searchLoading ? <p className="navbar-search-state">{t('navbar.search.loading')}</p> : shouldShowEmptyState ? <p className="navbar-search-state">{t('navbar.search.empty')}</p> : (
                     <>
-                      <section className="navbar-search-group" aria-label="Resultados de jogos">
-                        <div className="navbar-search-group-head"><span className="navbar-search-group-title">Jogos</span></div>
-                        {gameSearchError && gameResults.length === 0 ? <p className="navbar-search-state is-error">{gameSearchError}</p> : gameResults.length === 0 ? <p className="navbar-search-state">Nenhum jogo encontrado.</p> : gameResults.map((game, index) => (
+                      <section className="navbar-search-group" aria-label={t('navbar.search.gameResults')}>
+                        <div className="navbar-search-group-head"><span className="navbar-search-group-title">{t('navbar.search.games')}</span></div>
+                        {gameSearchError && gameResults.length === 0 ? <p className="navbar-search-state is-error">{gameSearchError}</p> : gameResults.length === 0 ? <p className="navbar-search-state">{t('navbar.search.noGame')}</p> : gameResults.map((game, index) => (
                           <button key={game.id} id={`navbar-search-option-game-${game.id}`} type="button" role="option" aria-selected={index === activeResultIndex} className={`navbar-search-option${index === activeResultIndex ? ' is-active' : ''}`} onMouseEnter={() => setActiveResultIndex(index)} onClick={() => handleSelectGame(game)}>
-                            <div className="navbar-search-option-cover">{game.capa_url ? <GameCoverImage src={game.capa_url} alt={`Capa do jogo ${game.titulo}`} width={60} height={60} sizes="60px" /> : <div className="navbar-search-option-fallback">{getInitial(game.titulo)}</div>}</div>
-                            <div className="navbar-search-option-copy"><strong>{game.titulo}</strong><span>{getGameMetaLine(game)}</span></div>
+                            <div className="navbar-search-option-cover">{game.capa_url ? <GameCoverImage src={game.capa_url} alt={t('catalog.coverAlt', { title: game.titulo })} width={60} height={60} sizes="60px" /> : <div className="navbar-search-option-fallback">{getInitial(game.titulo)}</div>}</div>
+                            <div className="navbar-search-option-copy"><strong>{game.titulo}</strong><span>{getGameMetaLine(game, t)}</span></div>
                           </button>
                         ))}
                       </section>
-                      <section className="navbar-search-group" aria-label="Resultados de usuarios">
-                        <div className="navbar-search-group-head"><span className="navbar-search-group-title">Usuarios</span></div>
+                      <section className="navbar-search-group" aria-label={t('navbar.search.userResults')}>
+                        <div className="navbar-search-group-head"><span className="navbar-search-group-title">{t('navbar.search.users')}</span></div>
                         {userActionError ? <p className="navbar-search-state is-error">{userActionError}</p> : null}
-                        {userSearchError && userResults.length === 0 ? <p className="navbar-search-state is-error">{userSearchError}</p> : userResults.length === 0 ? <p className="navbar-search-state">Nenhum usuario encontrado.</p> : userResults.map((searchUser, index) => {
+                        {userSearchError && userResults.length === 0 ? <p className="navbar-search-state is-error">{userSearchError}</p> : userResults.length === 0 ? <p className="navbar-search-state">{t('navbar.search.noUser')}</p> : userResults.map((searchUser, index) => {
                           const resultIndex = gameResults.length + index
                           const isOwnResult = Boolean(user && searchUser.id === user.id)
                           const isFollowPending = followPendingIds.includes(searchUser.id)
-                          const followButtonLabel = isFollowPending ? (searchUser.isFollowing ? 'Atualizando...' : 'Seguindo...') : searchUser.isFollowing ? 'Deixar de seguir' : 'Seguir'
+                          const followButtonLabel = isFollowPending ? (searchUser.isFollowing ? t('common.updating') : t('navbar.search.following')) : searchUser.isFollowing ? t('common.unfollow') : t('common.follow')
                           const searchUserFullName = searchUser.nome_completo?.trim() || ''
                           const searchUserDisplayName = searchUserFullName || searchUser.username
                           return (
                             <div key={searchUser.id} id={`navbar-search-option-user-${searchUser.id}`} role="option" aria-selected={resultIndex === activeResultIndex} className={`navbar-search-option navbar-search-option-user${resultIndex === activeResultIndex ? ' is-active' : ''}`} onMouseEnter={() => setActiveResultIndex(resultIndex)} onClick={() => handleSelectUser(searchUser)}>
                               <div className="navbar-search-option-cover">
-                                <UserAvatar name={searchUserDisplayName} avatarPath={searchUser.avatar_path} imageClassName="navbar-search-user-avatar" fallbackClassName="navbar-search-option-fallback navbar-search-user-avatar-fallback" alt={`Foto de perfil de ${searchUserDisplayName}`} />
+                                <UserAvatar name={searchUserDisplayName} avatarPath={searchUser.avatar_path} imageClassName="navbar-search-user-avatar" fallbackClassName="navbar-search-option-fallback navbar-search-user-avatar-fallback" alt={t('navbar.search.profilePhotoAlt', { name: searchUserDisplayName })} />
                               </div>
                               <div className="navbar-search-option-copy navbar-search-option-copy-user"><strong>@{searchUser.username}</strong>{searchUserFullName ? <span>{searchUserFullName}</span> : null}</div>
                               <div className="navbar-search-user-actions">
-                                {user && !isOwnResult ? <button type="button" className={`navbar-search-follow-button${searchUser.isFollowing ? ' is-following' : ''}`} onClick={event => { event.stopPropagation(); void handleToggleFollowFromSearch(searchUser) }} disabled={isFollowPending}>{followButtonLabel}</button> : <span className="navbar-search-user-link">{isOwnResult ? 'Seu perfil' : 'Ver perfil'}</span>}
+                                {user && !isOwnResult ? <button type="button" className={`navbar-search-follow-button${searchUser.isFollowing ? ' is-following' : ''}`} onClick={event => { event.stopPropagation(); void handleToggleFollowFromSearch(searchUser) }} disabled={isFollowPending}>{followButtonLabel}</button> : <span className="navbar-search-user-link">{isOwnResult ? t('navbar.search.ownProfile') : t('common.viewProfile')}</span>}
                               </div>
                             </div>
                           )
@@ -553,27 +563,27 @@ function Navbar() {
         <div className="navbar-actions">
           {user ? (
             <div ref={menuRef} className={`navbar-profile-menu${showMenu ? ' is-open' : ''}`} onMouseEnter={handleMenuMouseEnter} onMouseLeave={handleMenuMouseLeave} onBlur={handleMenuBlur}>
-              <button type="button" className={`navbar-profile-trigger${showMenu ? ' is-open' : ''}`} aria-expanded={showMenu} aria-haspopup="menu" aria-label={showMenu ? 'Fechar menu do perfil' : 'Abrir menu do perfil'} onClick={() => { clearMenuCloseTimeout(); setShowMenu(currentValue => !currentValue) }}>
+              <button type="button" className={`navbar-profile-trigger${showMenu ? ' is-open' : ''}`} aria-expanded={showMenu} aria-haspopup="menu" aria-label={showMenu ? t('navbar.profile.closeMenu') : t('navbar.profile.openMenu')} onClick={() => { clearMenuCloseTimeout(); setShowMenu(currentValue => !currentValue) }}>
                 <span className="navbar-avatar-shell">
-                  <UserAvatar name={profileLabel} avatarPath={profile?.avatar_path} imageClassName="navbar-avatar-img" fallbackClassName="navbar-avatar-placeholder" alt={`Foto de perfil de ${profileLabel}`} />
+                  <UserAvatar name={profileLabel} avatarPath={profile?.avatar_path} imageClassName="navbar-avatar-img" fallbackClassName="navbar-avatar-placeholder" alt={t('navbar.search.profilePhotoAlt', { name: profileLabel })} />
                   <span className="navbar-avatar-badge" aria-hidden="true">
                     <span className="navbar-avatar-badge-icon">{iconAvatarBadge()}</span>
                   </span>
                 </span>
-                <span className="navbar-profile-copy"><span className="navbar-profile-eyebrow">Seu perfil</span><span className="navbar-profile-name">{displayName}</span></span>
+                <span className="navbar-profile-copy"><span className="navbar-profile-eyebrow">{t('navbar.profile.eyebrow')}</span><span className="navbar-profile-name">{displayName}</span></span>
                 <span className="navbar-profile-chevron" aria-hidden="true">{iconChevron()}</span>
               </button>
               {showMenu ? (
-                <div className="navbar-dropdown" role="menu" aria-label="Menu do perfil">
-                  <Link to={ownProfilePath} className="navbar-dropdown-item" role="menuitem" onClick={closeMenu}><span className="navbar-dropdown-icon" aria-hidden="true">{iconMenuUser()}</span><span className="navbar-dropdown-copy"><span className="navbar-dropdown-title">Perfil</span><span className="navbar-dropdown-hint">Abrir seu perfil pela rota publica da aplicacao</span></span></Link>
-                  <Link to="/configuracoes/conta" className="navbar-dropdown-item" role="menuitem" onClick={closeMenu}><span className="navbar-dropdown-icon" aria-hidden="true">{iconMenuSettings()}</span><span className="navbar-dropdown-copy"><span className="navbar-dropdown-title">Configuracoes</span><span className="navbar-dropdown-hint">Privacidade, senha e exclusao da conta</span></span></Link>
+                <div className="navbar-dropdown" role="menu" aria-label={t('navbar.profile.menuLabel')}>
+                  <Link to={ownProfilePath} className="navbar-dropdown-item" role="menuitem" onClick={closeMenu}><span className="navbar-dropdown-icon" aria-hidden="true">{iconMenuUser()}</span><span className="navbar-dropdown-copy"><span className="navbar-dropdown-title">{t('common.profile')}</span><span className="navbar-dropdown-hint">{t('navbar.profile.profileHint')}</span></span></Link>
+                  <Link to="/configuracoes/conta" className="navbar-dropdown-item" role="menuitem" onClick={closeMenu}><span className="navbar-dropdown-icon" aria-hidden="true">{iconMenuSettings()}</span><span className="navbar-dropdown-copy"><span className="navbar-dropdown-title">{t('common.settings')}</span><span className="navbar-dropdown-hint">{t('navbar.profile.settingsHint')}</span></span></Link>
                   <button className="navbar-dropdown-item" type="button" role="menuitem" onClick={() => { setTheme(prev => (prev === 'dark' ? 'light' : 'dark')); closeMenu() }}><span className="navbar-dropdown-icon" aria-hidden="true">{iconMenuTheme()}</span><span className="navbar-dropdown-copy"><span className="navbar-dropdown-title">{themeToggleLabel}</span><span className="navbar-dropdown-hint">{themeStatusLabel}</span></span></button>
-                  <button className="navbar-dropdown-item is-danger" type="button" role="menuitem" onClick={async () => { await logout(); closeMenu(); navigate('/') }}><span className="navbar-dropdown-icon" aria-hidden="true">{iconMenuLogout()}</span><span className="navbar-dropdown-copy"><span className="navbar-dropdown-title">Sair</span><span className="navbar-dropdown-hint">Encerrar sessao atual</span></span></button>
+                  <button className="navbar-dropdown-item is-danger" type="button" role="menuitem" onClick={async () => { await logout(); closeMenu(); navigate('/') }}><span className="navbar-dropdown-icon" aria-hidden="true">{iconMenuLogout()}</span><span className="navbar-dropdown-copy"><span className="navbar-dropdown-title">{t('common.logout')}</span><span className="navbar-dropdown-hint">{t('navbar.logoutHint')}</span></span></button>
                 </div>
               ) : null}
             </div>
           ) : (
-            <Link to="/login" className="navbar-button auth-btn"><span className="navbar-auth-label-full">Login/Registro</span><span className="navbar-auth-label-short">Entrar</span></Link>
+            <Link to="/login" className="navbar-button auth-btn"><span className="navbar-auth-label-full">{t('navbar.auth.full')}</span><span className="navbar-auth-label-short">{t('navbar.auth.short')}</span></Link>
           )}
         </div>
       </div>
