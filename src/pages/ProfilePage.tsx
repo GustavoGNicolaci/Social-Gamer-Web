@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } f
 import { Link, useParams } from 'react-router-dom'
 import { UserAvatar } from '../components/UserAvatar'
 import { ProfileConnectionsModal } from '../components/profile/ProfileConnectionsModal'
+import { ProfileCommunitiesSection } from '../components/profile/ProfileCommunitiesSection'
 import { ProfileGameStatusSection } from '../components/profile/ProfileGameStatusSection'
 import { ProfileReportModal } from '../components/profile/ProfileReportModal'
 import { ProfileReviewsSection } from '../components/profile/ProfileReviewsSection'
@@ -64,7 +65,13 @@ import './ProfilePage.css'
 type FeedbackTone = 'success' | 'error'
 type FollowFeedbackTone = 'error' | 'info'
 type ReportFeedbackTone = 'success' | 'error' | 'info'
-type ProfileTab = 'status' | 'wishlist' | 'reviews'
+type ProfileTab =
+  | 'status'
+  | 'wishlist'
+  | 'reviews'
+  | 'communities'
+  | 'communityPosts'
+  | 'savedCommunityPosts'
 type LoadedProfileTabs = Record<ProfileTab, boolean>
 
 interface ProfilePageState {
@@ -126,6 +133,9 @@ const createEmptyLoadedProfileTabs = (): LoadedProfileTabs => ({
   status: false,
   wishlist: false,
   reviews: false,
+  communities: false,
+  communityPosts: false,
+  savedCommunityPosts: false,
 })
 
 const PROFILE_STATUS_PAGE_SIZE = 12
@@ -1045,7 +1055,9 @@ export function ProfilePage() {
       return
     }
 
-    void loadReviewsPage()
+    if (activeTab === 'reviews') {
+      void loadReviewsPage()
+    }
   }, [
     activeProfile,
     activeTab,
@@ -2191,6 +2203,44 @@ export function ProfilePage() {
                 >
                   <span>Reviews</span>
                 </button>
+
+                <button
+                  id="profile-tab-communities"
+                  type="button"
+                  role="tab"
+                  className={`profile-tab-button${activeTab === 'communities' ? ' is-active' : ''}`}
+                  aria-selected={activeTab === 'communities'}
+                  aria-controls="profile-panel-communities"
+                  onClick={() => setActiveTab('communities')}
+                >
+                  <span>Comunidades</span>
+                </button>
+
+                <button
+                  id="profile-tab-community-posts"
+                  type="button"
+                  role="tab"
+                  className={`profile-tab-button${activeTab === 'communityPosts' ? ' is-active' : ''}`}
+                  aria-selected={activeTab === 'communityPosts'}
+                  aria-controls="profile-panel-community-posts"
+                  onClick={() => setActiveTab('communityPosts')}
+                >
+                  <span>Posts em comunidades</span>
+                </button>
+
+                {isOwnerView ? (
+                  <button
+                    id="profile-tab-saved-community-posts"
+                    type="button"
+                    role="tab"
+                    className={`profile-tab-button${activeTab === 'savedCommunityPosts' ? ' is-active' : ''}`}
+                    aria-selected={activeTab === 'savedCommunityPosts'}
+                    aria-controls="profile-panel-saved-community-posts"
+                    onClick={() => setActiveTab('savedCommunityPosts')}
+                  >
+                    <span>Posts salvos</span>
+                  </button>
+                ) : null}
               </div>
 
               <div
@@ -2272,6 +2322,62 @@ export function ProfilePage() {
                   />
                 ) : null}
               </div>
+
+              <div
+                id="profile-panel-communities"
+                className="profile-tab-panel"
+                role="tabpanel"
+                aria-labelledby="profile-tab-communities"
+                hidden={activeTab !== 'communities'}
+              >
+                {activeTab === 'communities' ? (
+                  <ProfileCommunitiesSection
+                    key={`profile-communities-${activeProfile.id}`}
+                    profileId={activeProfile.id}
+                    currentUserId={user?.id}
+                    isOwnerView={Boolean(isOwnerView)}
+                    kind="communities"
+                  />
+                ) : null}
+              </div>
+
+              <div
+                id="profile-panel-community-posts"
+                className="profile-tab-panel"
+                role="tabpanel"
+                aria-labelledby="profile-tab-community-posts"
+                hidden={activeTab !== 'communityPosts'}
+              >
+                {activeTab === 'communityPosts' ? (
+                  <ProfileCommunitiesSection
+                    key={`profile-community-posts-${activeProfile.id}`}
+                    profileId={activeProfile.id}
+                    currentUserId={user?.id}
+                    isOwnerView={Boolean(isOwnerView)}
+                    kind="posts"
+                  />
+                ) : null}
+              </div>
+
+              {isOwnerView ? (
+                <div
+                  id="profile-panel-saved-community-posts"
+                  className="profile-tab-panel"
+                  role="tabpanel"
+                  aria-labelledby="profile-tab-saved-community-posts"
+                  hidden={activeTab !== 'savedCommunityPosts'}
+                >
+                  {activeTab === 'savedCommunityPosts' ? (
+                    <ProfileCommunitiesSection
+                      key={`profile-saved-community-posts-${activeProfile.id}`}
+                      profileId={activeProfile.id}
+                      currentUserId={user?.id}
+                      isOwnerView={Boolean(isOwnerView)}
+                      kind="saved"
+                    />
+                  ) : null}
+                </div>
+              ) : null}
             </section>
           ) : null}
         </div>

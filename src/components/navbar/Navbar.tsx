@@ -508,6 +508,7 @@ function Navbar() {
           <div className="navbar-links">
             <NavLink to="/" className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>{t('common.home')}</NavLink>
             <NavLink to="/games" className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>{t('common.games')}</NavLink>
+            <NavLink to="/comunidades" className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>Comunidades</NavLink>
           </div>
           <div ref={searchRef} className={`navbar-search-shell${showMobileSearch ? ' is-open' : ''}${shouldShowSearchDropdown ? ' has-dropdown' : ''}`}>
             <button type="button" className={`navbar-search-toggle${showMobileSearch ? ' is-open' : ''}`} aria-label={showMobileSearch ? t('navbar.search.close') : t('navbar.search.open')} aria-expanded={showMobileSearch} aria-controls="navbar-search-panel" onClick={handleMobileSearchToggle}>{t('common.search')}</button>

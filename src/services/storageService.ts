@@ -2,6 +2,8 @@ import { supabase } from '../supabase-client'
 
 const BUCKET_NAME = 'user-uploads'
 const AVATAR_FOLDER = 'avatars'
+const COMMUNITY_BANNER_FOLDER = 'communities'
+const COMMUNITY_POST_FOLDER = 'community-posts'
 const DEFAULT_IMAGE_FOLDER = 'images'
 const MAX_AVATAR_SIZE_MB = 5
 
@@ -319,6 +321,44 @@ export async function uploadAvatarImage(
 
   const avatarPath = buildStoragePath(userId, AVATAR_FOLDER, file.name)
   return await uploadValidatedFile(file, avatarPath)
+}
+
+export async function uploadCommunityBannerImage(
+  file: File,
+  userId: string,
+  maxSizeMB = MAX_AVATAR_SIZE_MB
+): Promise<StorageUploadResult | null> {
+  if (!file.type.startsWith('image/')) {
+    console.error('Community banner file is not an image')
+    return null
+  }
+
+  const sizeInMB = file.size / (1024 * 1024)
+  if (sizeInMB > maxSizeMB) {
+    console.error(`Community banner file size exceeds ${maxSizeMB}MB limit`)
+    return null
+  }
+
+  return await uploadFile(file, userId, COMMUNITY_BANNER_FOLDER)
+}
+
+export async function uploadCommunityPostImage(
+  file: File,
+  userId: string,
+  maxSizeMB = MAX_AVATAR_SIZE_MB
+): Promise<StorageUploadResult | null> {
+  if (!file.type.startsWith('image/')) {
+    console.error('Community post file is not an image')
+    return null
+  }
+
+  const sizeInMB = file.size / (1024 * 1024)
+  if (sizeInMB > maxSizeMB) {
+    console.error(`Community post file size exceeds ${maxSizeMB}MB limit`)
+    return null
+  }
+
+  return await uploadFile(file, userId, COMMUNITY_POST_FOLDER)
 }
 
 export async function downloadFile(filePath: string): Promise<Blob | null> {

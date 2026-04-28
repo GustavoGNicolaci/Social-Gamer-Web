@@ -7,6 +7,8 @@ import './App.css'
 const HomePage = lazy(() => import('./pages/HomePage'))
 const GamesPage = lazy(() => import('./pages/GamesPage'))
 const GameDetailsPage = lazy(() => import('./pages/GameDetailsPage'))
+const CommunitiesPage = lazy(() => import('./pages/CommunitiesPage'))
+const CommunityDetailsPage = lazy(() => import('./pages/CommunityDetailsPage'))
 const ProfilePage = lazy(() =>
   import('./pages/ProfilePage').then(module => ({ default: module.ProfilePage }))
 )
@@ -39,6 +41,8 @@ function App() {
           <Route path="/" element={<HomePage />} />
           <Route path="/games" element={<GamesPage />} />
           <Route path="/games/:id" element={<GameDetailsPage />} />
+          <Route path="/comunidades" element={<CommunitiesPage />} />
+          <Route path="/comunidades/:id" element={<CommunityDetailsPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/u/:username" element={<ProfilePage />} />
           <Route path="/configuracoes/conta" element={<AccountSettingsPage />} />
