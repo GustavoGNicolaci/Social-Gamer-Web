@@ -5,6 +5,7 @@ interface CommunityConfirmModalProps {
   description: string
   confirmLabel: string
   cancelLabel?: string
+  submittingLabel?: string
   tone?: 'danger' | 'default'
   isSubmitting?: boolean
   onConfirm: () => void
@@ -16,6 +17,7 @@ export function CommunityConfirmModal({
   description,
   confirmLabel,
   cancelLabel = 'Cancelar',
+  submittingLabel = 'Processando...',
   tone = 'default',
   isSubmitting = false,
   onConfirm,
@@ -48,11 +50,11 @@ export function CommunityConfirmModal({
           <button
             type="button"
             className={`community-confirm-primary is-${tone}`}
-            onClick={onConfirm}
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? 'Processando...' : confirmLabel}
-          </button>
+          onClick={onConfirm}
+          disabled={isSubmitting}
+        >
+          {isSubmitting ? submittingLabel : confirmLabel}
+        </button>
         </div>
       </div>
     </div>

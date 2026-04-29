@@ -2,11 +2,15 @@ import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FormE
 import { Link, useNavigate } from 'react-router-dom'
 import { GameCoverImage } from '../components/GameCoverImage'
 import { useAuth } from '../contexts/AuthContext'
+import { useI18n } from '../i18n/I18nContext'
 import {
+  COMMUNITY_CATEGORY_VALUES,
   createCommunity,
   getCommunities,
+  type CommunityCategoryValue,
   type CommunityPostingPermission,
   type CommunitySummary,
+  type CommunityVisibility,
 } from '../services/communityService'
 import {
   searchCatalogGamesByTitle,
@@ -19,9 +23,10 @@ interface CommunityDraft {
   nome: string
   descricao: string
   tipo: string
-  categoria: string
+  categoria: CommunityCategoryValue | ''
   regras: string
   permissaoPostagem: CommunityPostingPermission
+  visibilidade: CommunityVisibility
 }
 
 type FeedbackTone = 'success' | 'error' | 'info'
@@ -38,30 +43,32 @@ const initialDraft: CommunityDraft = {
   categoria: '',
   regras: '',
   permissaoPostagem: 'todos_membros',
+  visibilidade: 'publica',
 }
 
-const POSTING_PERMISSION_OPTIONS: Array<{ value: CommunityPostingPermission; label: string }> = [
-  { value: 'todos_membros', label: 'Todos os membros' },
-  { value: 'somente_admins', label: 'Lider e administradores' },
-  { value: 'somente_lider', label: 'Somente lider' },
+const POSTING_PERMISSION_OPTIONS: CommunityPostingPermission[] = [
+  'todos_membros',
+  'somente_admins',
+  'somente_lider',
 ]
 
 function getCommunityImage(community: CommunitySummary) {
   return resolvePublicFileUrl(community.banner_path) || community.jogo?.capa_url || null
 }
 
-function getCommunityMeta(community: CommunitySummary) {
-  return [community.tipo, community.categoria, community.jogo?.titulo].filter(Boolean).join(' / ')
-}
-
-function uniqueSorted(values: Array<string | null>) {
-  return Array.from(new Set(values.filter((value): value is string => Boolean(value)))).sort((a, b) =>
-    a.localeCompare(b, 'pt-BR')
-  )
+function getCommunityCategoryLabel(
+  category: string | null,
+  t: (key: string, params?: Record<string, string | number>) => string
+) {
+  if (!category) return ''
+  return COMMUNITY_CATEGORY_VALUES.includes(category as CommunityCategoryValue)
+    ? t(`communities.category.${category}`)
+    : category
 }
 
 function CommunitiesPage() {
   const { user } = useAuth()
+  const { t, formatNumber } = useI18n()
   const navigate = useNavigate()
 
   const [communities, setCommunities] = useState<CommunitySummary[]>([])
@@ -69,18 +76,20 @@ function CommunitiesPage() {
   const [feedback, setFeedback] = useState<FeedbackState | null>(null)
   const [search, setSearch] = useState('')
   const [tipoFilter, setTipoFilter] = useState('')
-  const [categoriaFilter, setCategoriaFilter] = useState('')
+  const [categoriaFilter, setCategoriaFilter] = useState<CommunityCategoryValue | ''>('')
   const [draft, setDraft] = useState<CommunityDraft>(initialDraft)
   const [bannerFile, setBannerFile] = useState<File | null>(null)
+  const [bannerPreviewUrl, setBannerPreviewUrl] = useState<string | null>(null)
   const [selectedGame, setSelectedGame] = useState<CatalogGamePreview | null>(null)
   const [gameSearch, setGameSearch] = useState('')
   const [gameResults, setGameResults] = useState<CatalogGamePreview[]>([])
   const [gameSearchLoading, setGameSearchLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
-  const tipoOptions = useMemo(() => uniqueSorted(communities.map(community => community.tipo)), [communities])
-  const categoriaOptions = useMemo(
-    () => uniqueSorted(communities.map(community => community.categoria)),
+  const tipoOptions = useMemo(
+    () =>
+      Array.from(new Set(communities.map(community => community.tipo).filter(Boolean) as string[]))
+        .sort((a, b) => a.localeCompare(b)),
     [communities]
   )
 
@@ -132,6 +141,17 @@ function CommunitiesPage() {
     }
   }, [gameSearch])
 
+  useEffect(() => {
+    if (!bannerFile) {
+      setBannerPreviewUrl(null)
+      return
+    }
+
+    const previewUrl = URL.createObjectURL(bannerFile)
+    setBannerPreviewUrl(previewUrl)
+    return () => URL.revokeObjectURL(previewUrl)
+  }, [bannerFile])
+
   const updateDraft = <K extends keyof CommunityDraft>(field: K, value: CommunityDraft[K]) => {
     setDraft(currentDraft => ({
       ...currentDraft,
@@ -149,7 +169,7 @@ function CommunitiesPage() {
 
     const normalizedName = draft.nome.trim()
     if (normalizedName.length < 3) {
-      setFeedback({ tone: 'error', message: 'Informe um nome com pelo menos 3 caracteres.' })
+      setFeedback({ tone: 'error', message: t('communities.create.nameMin') })
       return
     }
 
@@ -161,7 +181,7 @@ function CommunitiesPage() {
       if (bannerFile) {
         const uploadResult = await uploadCommunityBannerImage(bannerFile, user.id)
         if (!uploadResult) {
-          setFeedback({ tone: 'error', message: 'Nao foi possivel enviar o banner.' })
+          setFeedback({ tone: 'error', message: t('communities.create.bannerUploadError') })
           setSubmitting(false)
           return
         }
@@ -174,15 +194,16 @@ function CommunitiesPage() {
         bannerPath,
         tipo: draft.tipo,
         jogoId: selectedGame?.id || null,
-        categoria: draft.categoria,
+        categoria: draft.categoria || null,
         regras: draft.regras,
         permissaoPostagem: draft.permissaoPostagem,
+        visibilidade: draft.visibilidade,
       })
 
       if (result.error || !result.data) {
         setFeedback({
           tone: 'error',
-          message: result.error?.message || 'Nao foi possivel criar a comunidade.',
+          message: result.error?.message || t('communities.create.error'),
         })
         return
       }
@@ -203,12 +224,9 @@ function CommunitiesPage() {
         <div className="communities-page">
           <section className="communities-hero">
             <div>
-              <span className="communities-kicker">Comunidades</span>
-              <h1>Espacos para jogar junto, discutir e organizar ideias</h1>
-              <p>
-                Crie ou participe de comunidades sobre jogos, generos, desafios, noticias e qualquer
-                assunto que combine com a proposta do Social Gamer.
-              </p>
+              <span className="communities-kicker">{t('communities.kicker')}</span>
+              <h1>{t('communities.heroTitle')}</h1>
+              <p>{t('communities.heroText')}</p>
             </div>
           </section>
 
@@ -216,19 +234,19 @@ function CommunitiesPage() {
             <div className="communities-main">
               <div className="communities-toolbar">
                 <label className="communities-field">
-                  <span>Buscar</span>
+                  <span>{t('common.search')}</span>
                   <input
                     type="search"
                     value={search}
                     onChange={event => setSearch(event.target.value)}
-                    placeholder="Nome ou descricao"
+                    placeholder={t('communities.searchPlaceholder')}
                   />
                 </label>
 
                 <label className="communities-field">
-                  <span>Tema</span>
+                  <span>{t('communities.field.theme')}</span>
                   <select value={tipoFilter} onChange={event => setTipoFilter(event.target.value)}>
-                    <option value="">Todos</option>
+                    <option value="">{t('communities.filter.allThemes')}</option>
                     {tipoOptions.map(option => (
                       <option key={option} value={option}>
                         {option}
@@ -238,15 +256,15 @@ function CommunitiesPage() {
                 </label>
 
                 <label className="communities-field">
-                  <span>Categoria</span>
+                  <span>{t('communities.field.category')}</span>
                   <select
                     value={categoriaFilter}
-                    onChange={event => setCategoriaFilter(event.target.value)}
+                    onChange={event => setCategoriaFilter(event.target.value as CommunityCategoryValue | '')}
                   >
-                    <option value="">Todas</option>
-                    {categoriaOptions.map(option => (
+                    <option value="">{t('communities.filter.allCategories')}</option>
+                    {COMMUNITY_CATEGORY_VALUES.map(option => (
                       <option key={option} value={option}>
-                        {option}
+                        {t(`communities.category.${option}`)}
                       </option>
                     ))}
                   </select>
@@ -258,16 +276,19 @@ function CommunitiesPage() {
               ) : null}
 
               {loading ? (
-                <div className="communities-state-card">Carregando comunidades...</div>
+                <div className="communities-state-card">{t('communities.loading')}</div>
               ) : communities.length === 0 ? (
                 <div className="communities-state-card">
-                  Nenhuma comunidade encontrada com esses filtros.
+                  {t('communities.empty')}
                 </div>
               ) : (
                 <div className="communities-grid">
                   {communities.map(community => {
                     const imageUrl = getCommunityImage(community)
-                    const meta = getCommunityMeta(community)
+                    const categoryLabel = getCommunityCategoryLabel(community.categoria, t)
+                    const meta = [community.tipo, categoryLabel, community.jogo?.titulo]
+                      .filter(Boolean)
+                      .join(' / ')
 
                     return (
                       <Link
@@ -286,16 +307,19 @@ function CommunitiesPage() {
                         </div>
 
                         <div className="community-card-copy">
-                          {meta ? <span>{meta}</span> : <span>Comunidade geral</span>}
+                          <div className="community-card-meta-row">
+                            <span>{meta || t('communities.general')}</span>
+                            <span>{t(`communities.visibility.${community.visibilidade}`)}</span>
+                          </div>
                           <h2>{community.nome}</h2>
-                          <p>{community.descricao || 'Sem descricao informada.'}</p>
+                          <p>{community.descricao || t('communities.noDescription')}</p>
                         </div>
 
                         <div className="community-card-stats">
-                          <strong>{community.membros_count}</strong>
-                          <span>membros</span>
-                          <strong>{community.posts_count}</strong>
-                          <span>posts</span>
+                          <strong>{formatNumber(community.membros_count)}</strong>
+                          <span>{t('communities.members')}</span>
+                          <strong>{formatNumber(community.posts_count)}</strong>
+                          <span>{t('communities.posts')}</span>
                         </div>
                       </Link>
                     )
@@ -306,21 +330,21 @@ function CommunitiesPage() {
 
             <aside className="communities-create-panel">
               <div className="communities-panel-head">
-                <span className="communities-kicker">Criar</span>
-                <h2>Nova comunidade</h2>
+                <span className="communities-kicker">{t('communities.create.kicker')}</span>
+                <h2>{t('communities.create.title')}</h2>
               </div>
 
               {!user ? (
                 <div className="communities-login-card">
-                  <p>Entre na sua conta para criar uma comunidade e virar lider dela.</p>
+                  <p>{t('communities.create.loginText')}</p>
                   <Link to="/login" className="communities-primary-link">
-                    Fazer login
+                    {t('common.login')}
                   </Link>
                 </div>
               ) : (
                 <form className="communities-form" onSubmit={handleSubmit}>
                   <label className="communities-field">
-                    <span>Nome</span>
+                    <span>{t('communities.field.name')}</span>
                     <input
                       value={draft.nome}
                       onChange={event => updateDraft('nome', event.target.value)}
@@ -330,7 +354,7 @@ function CommunitiesPage() {
                   </label>
 
                   <label className="communities-field">
-                    <span>Descricao</span>
+                    <span>{t('communities.field.description')}</span>
                     <textarea
                       value={draft.descricao}
                       onChange={event => updateDraft('descricao', event.target.value)}
@@ -340,38 +364,46 @@ function CommunitiesPage() {
 
                   <div className="communities-form-grid">
                     <label className="communities-field">
-                      <span>Tema</span>
+                      <span>{t('communities.field.theme')}</span>
                       <input
                         value={draft.tipo}
                         onChange={event => updateDraft('tipo', event.target.value)}
-                        placeholder="RPG, e-sports..."
+                        placeholder={t('communities.field.themePlaceholder')}
                       />
                     </label>
 
                     <label className="communities-field">
-                      <span>Categoria</span>
-                      <input
+                      <span>{t('communities.field.category')}</span>
+                      <select
                         value={draft.categoria}
-                        onChange={event => updateDraft('categoria', event.target.value)}
-                        placeholder="Guias, memes..."
-                      />
+                        onChange={event =>
+                          updateDraft('categoria', event.target.value as CommunityCategoryValue | '')
+                        }
+                      >
+                        <option value="">{t('communities.field.categoryPlaceholder')}</option>
+                        {COMMUNITY_CATEGORY_VALUES.map(option => (
+                          <option key={option} value={option}>
+                            {t(`communities.category.${option}`)}
+                          </option>
+                        ))}
+                      </select>
                     </label>
                   </div>
 
                   <label className="communities-field">
-                    <span>Jogo relacionado</span>
+                    <span>{t('communities.field.relatedGame')}</span>
                     <input
                       value={selectedGame ? selectedGame.titulo : gameSearch}
                       onChange={event => {
                         setSelectedGame(null)
                         setGameSearch(event.target.value)
                       }}
-                      placeholder="Buscar jogo"
+                      placeholder={t('communities.field.relatedGamePlaceholder')}
                     />
                   </label>
 
                   {gameSearchLoading ? (
-                    <p className="communities-helper">Buscando jogos...</p>
+                    <p className="communities-helper">{t('communities.create.searchingGames')}</p>
                   ) : gameResults.length > 0 && !selectedGame ? (
                     <div className="communities-game-results">
                       {gameResults.map(game => (
@@ -402,27 +434,42 @@ function CommunitiesPage() {
                     </div>
                   ) : null}
 
-                  <label className="communities-field">
-                    <span>Quem pode postar</span>
-                    <select
-                      value={draft.permissaoPostagem}
-                      onChange={event =>
-                        updateDraft(
-                          'permissaoPostagem',
-                          event.target.value as CommunityPostingPermission
-                        )
-                      }
-                    >
-                      {POSTING_PERMISSION_OPTIONS.map(option => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                  <div className="communities-form-grid">
+                    <label className="communities-field">
+                      <span>{t('communities.field.postingPermission')}</span>
+                      <select
+                        value={draft.permissaoPostagem}
+                        onChange={event =>
+                          updateDraft(
+                            'permissaoPostagem',
+                            event.target.value as CommunityPostingPermission
+                          )
+                        }
+                      >
+                        {POSTING_PERMISSION_OPTIONS.map(option => (
+                          <option key={option} value={option}>
+                            {t(`communities.permission.${option}`)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label className="communities-field">
+                      <span>{t('communities.field.visibility')}</span>
+                      <select
+                        value={draft.visibilidade}
+                        onChange={event =>
+                          updateDraft('visibilidade', event.target.value as CommunityVisibility)
+                        }
+                      >
+                        <option value="publica">{t('communities.visibility.publica')}</option>
+                        <option value="privada">{t('communities.visibility.privada')}</option>
+                      </select>
+                    </label>
+                  </div>
 
                   <label className="communities-field">
-                    <span>Regras</span>
+                    <span>{t('communities.field.rules')}</span>
                     <textarea
                       value={draft.regras}
                       onChange={event => updateDraft('regras', event.target.value)}
@@ -431,12 +478,18 @@ function CommunitiesPage() {
                   </label>
 
                   <label className="communities-field">
-                    <span>Banner opcional</span>
+                    <span>{t('communities.field.banner')}</span>
                     <input type="file" accept="image/*" onChange={handleBannerChange} />
                   </label>
 
+                  {bannerPreviewUrl ? (
+                    <div className="community-banner-preview">
+                      <img src={bannerPreviewUrl} alt={t('communities.create.bannerPreview')} />
+                    </div>
+                  ) : null}
+
                   <button type="submit" className="communities-primary-button" disabled={submitting}>
-                    {submitting ? 'Criando...' : 'Criar comunidade'}
+                    {submitting ? t('communities.create.creating') : t('communities.create.submit')}
                   </button>
                 </form>
               )}

@@ -2,37 +2,61 @@ import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FormE
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { CommunityConfirmModal } from '../components/communities/CommunityConfirmModal'
 import { CommunityPostCard } from '../components/communities/CommunityPostCard'
+import { CommunityReportModal } from '../components/communities/CommunityReportModal'
 import { UserAvatar } from '../components/UserAvatar'
 import { useAuth } from '../contexts/AuthContext'
+import { useI18n } from '../i18n/I18nContext'
 import {
+  COMMUNITY_CATEGORY_VALUES,
+  approveCommunityJoinRequest,
   createCommunityComment,
   createCommunityPost,
   deleteCommunity,
   deleteCommunityComment,
   deleteCommunityPost,
   getCommunityById,
+  getCommunityJoinRequests,
   getCommunityMembers,
   getCommunityPosts,
+  getCommunityReports,
   joinCommunity,
   leaveCommunity,
+  rejectCommunityJoinRequest,
   removeCommunityMember,
+  submitCommunityReport,
   toggleCommunityPostReaction,
   toggleCommunityPostSave,
   transferCommunityLeadership,
   updateCommunity,
   updateCommunityMemberRole,
+  updateCommunityModeratedDetails,
   updateCommunityPostingPermission,
+  updateCommunityReportStatus,
+  type CommunityCategoryValue,
+  type CommunityJoinRequest,
   type CommunityMember,
   type CommunityPost,
   type CommunityPostingPermission,
   type CommunityReactionType,
+  type CommunityReport,
+  type CommunityReportReason,
+  type CommunityReportStatus,
+  type CommunityReportTargetType,
   type CommunitySummary,
+  type CommunityVisibility,
 } from '../services/communityService'
-import { resolvePublicFileUrl, uploadCommunityPostImage } from '../services/storageService'
+import {
+  resolvePublicFileUrl,
+  uploadCommunityBannerImage,
+  uploadCommunityPostImage,
+} from '../services/storageService'
 import { getOptionalPublicProfilePath } from '../utils/profileRoutes'
 import './CommunitiesPage.css'
 
 type FeedbackTone = 'success' | 'error' | 'info'
+type CommunityTab = 'posts' | 'members' | 'about' | 'moderation' | 'settings'
+type RequestFilter = 'pendente' | 'all'
+type ReportFilter = CommunityReportStatus | 'all'
 
 interface FeedbackState {
   tone: FeedbackTone
@@ -43,8 +67,9 @@ interface SettingsDraft {
   nome: string
   descricao: string
   tipo: string
-  categoria: string
+  categoria: CommunityCategoryValue | ''
   regras: string
+  visibilidade: CommunityVisibility
 }
 
 type ConfirmState =
@@ -55,37 +80,41 @@ type ConfirmState =
   | { kind: 'kick-member'; member: CommunityMember }
   | { kind: 'transfer-leadership'; member: CommunityMember }
   | { kind: 'posting-permission'; permission: CommunityPostingPermission }
+  | { kind: 'promote-member'; member: CommunityMember }
+  | { kind: 'demote-admin'; member: CommunityMember }
 
-const POSTING_PERMISSION_LABELS: Record<CommunityPostingPermission, string> = {
-  todos_membros: 'Todos os membros',
-  somente_admins: 'Lider e administradores',
-  somente_lider: 'Somente lider',
+interface ReportTarget {
+  type: CommunityReportTargetType
+  id: string
+  label: string
 }
 
-const POSTING_PERMISSION_DESCRIPTIONS: Record<CommunityPostingPermission, string> = {
-  todos_membros: 'Qualquer membro pode criar posts.',
-  somente_admins: 'Apenas lider e administradores podem criar posts.',
-  somente_lider: 'Apenas o lider pode criar posts.',
+interface LightboxState {
+  url: string
+  alt: string
 }
+
+const POST_PAGE_SIZE = 8
 
 function createSettingsDraft(community: CommunitySummary | null): SettingsDraft {
   return {
     nome: community?.nome || '',
     descricao: community?.descricao || '',
     tipo: community?.tipo || '',
-    categoria: community?.categoria || '',
+    categoria: COMMUNITY_CATEGORY_VALUES.includes(community?.categoria as CommunityCategoryValue)
+      ? (community?.categoria as CommunityCategoryValue)
+      : '',
     regras: community?.regras || '',
+    visibilidade: community?.visibilidade || 'publica',
   }
-}
-
-function getRoleLabel(role: string | null | undefined) {
-  if (role === 'lider') return 'Lider'
-  if (role === 'admin') return 'Administrador'
-  return 'Membro'
 }
 
 function getMemberName(member: CommunityMember) {
   return member.usuario?.username || member.usuario?.nome_completo || 'usuario'
+}
+
+function getAuthorName(author: { username?: string | null; nome_completo?: string | null } | null) {
+  return author?.username || author?.nome_completo || 'usuario'
 }
 
 function getCommunityBanner(community: CommunitySummary | null) {
@@ -93,170 +122,314 @@ function getCommunityBanner(community: CommunitySummary | null) {
   return resolvePublicFileUrl(community.banner_path) || community.jogo?.capa_url || null
 }
 
-function getNoPostPermissionMessage(permission: CommunityPostingPermission) {
-  if (permission === 'somente_admins') {
-    return 'Apenas o lider e administradores podem criar posts nesta comunidade.'
-  }
-
-  if (permission === 'somente_lider') {
-    return 'Apenas o lider pode criar posts nesta comunidade.'
-  }
-
-  return 'Entre na comunidade para criar posts.'
-}
-
-function getConfirmCopy(confirmState: ConfirmState | null) {
-  if (!confirmState) return null
-
-  if (confirmState.kind === 'delete-community') {
-    return {
-      title: 'Excluir comunidade',
-      description: 'A comunidade sera ocultada com exclusao logica. Esta acao so pode ser feita pelo lider.',
-      confirmLabel: 'Excluir comunidade',
-      tone: 'danger' as const,
-    }
-  }
-
-  if (confirmState.kind === 'leave-community') {
-    return {
-      title: 'Sair da comunidade',
-      description: 'Ao sair, voce nao podera mais criar posts, comentar, reagir ou salvar posts aqui.',
-      confirmLabel: 'Sair',
-      tone: 'default' as const,
-    }
-  }
-
-  if (confirmState.kind === 'delete-post') {
-    return {
-      title: 'Deletar post',
-      description: 'O post sera ocultado da comunidade e as contagens serao atualizadas.',
-      confirmLabel: 'Deletar post',
-      tone: 'danger' as const,
-    }
-  }
-
-  if (confirmState.kind === 'delete-comment') {
-    return {
-      title: 'Excluir comentario',
-      description: 'O comentario sera removido da visualizacao do post.',
-      confirmLabel: 'Excluir comentario',
-      tone: 'danger' as const,
-    }
-  }
-
-  if (confirmState.kind === 'kick-member') {
-    return {
-      title: 'Expulsar membro',
-      description: `Remover @${getMemberName(confirmState.member)} da comunidade?`,
-      confirmLabel: 'Expulsar',
-      tone: 'danger' as const,
-    }
-  }
-
-  if (confirmState.kind === 'transfer-leadership') {
-    return {
-      title: 'Transferir lideranca',
-      description: `@${getMemberName(confirmState.member)} virara lider. Voce continuara como administrador.`,
-      confirmLabel: 'Transferir',
-      tone: 'danger' as const,
-    }
-  }
-
-  return {
-    title: 'Alterar quem pode postar',
-    description: `Nova regra: ${POSTING_PERMISSION_LABELS[confirmState.permission]}.`,
-    confirmLabel: 'Alterar regra',
-    tone: 'default' as const,
-  }
+function getReportPreview(report: CommunityReport) {
+  if (report.targetText) return report.targetText
+  if (report.targetImagePath) return 'Imagem'
+  return ''
 }
 
 function CommunityDetailsPage() {
   const { id } = useParams()
   const communityId = id || ''
   const { user } = useAuth()
+  const { t, formatDate, formatNumber } = useI18n()
   const navigate = useNavigate()
 
   const [community, setCommunity] = useState<CommunitySummary | null>(null)
   const [members, setMembers] = useState<CommunityMember[]>([])
   const [posts, setPosts] = useState<CommunityPost[]>([])
+  const [joinRequests, setJoinRequests] = useState<CommunityJoinRequest[]>([])
+  const [reports, setReports] = useState<CommunityReport[]>([])
   const [loading, setLoading] = useState(true)
+  const [membersLoading, setMembersLoading] = useState(false)
   const [postsLoading, setPostsLoading] = useState(false)
+  const [moderationLoading, setModerationLoading] = useState(false)
   const [feedback, setFeedback] = useState<FeedbackState | null>(null)
+  const [activeTab, setActiveTab] = useState<CommunityTab>('posts')
   const [postText, setPostText] = useState('')
   const [postImageFile, setPostImageFile] = useState<File | null>(null)
   const [postSubmitting, setPostSubmitting] = useState(false)
   const [settingsDraft, setSettingsDraft] = useState<SettingsDraft>(() => createSettingsDraft(null))
   const [settingsSaving, setSettingsSaving] = useState(false)
+  const [bannerFile, setBannerFile] = useState<File | null>(null)
+  const [bannerPreviewUrl, setBannerPreviewUrl] = useState<string | null>(null)
   const [postingPermissionDraft, setPostingPermissionDraft] =
     useState<CommunityPostingPermission>('todos_membros')
   const [confirmState, setConfirmState] = useState<ConfirmState | null>(null)
   const [confirmSubmitting, setConfirmSubmitting] = useState(false)
+  const [memberSearch, setMemberSearch] = useState('')
+  const [debouncedMemberSearch, setDebouncedMemberSearch] = useState('')
+  const [postsPage, setPostsPage] = useState(1)
+  const [postsTotalCount, setPostsTotalCount] = useState<number | null>(null)
+  const [requestFilter, setRequestFilter] = useState<RequestFilter>('pendente')
+  const [reportFilter, setReportFilter] = useState<ReportFilter>('all')
+  const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null)
+  const [reportSubmitting, setReportSubmitting] = useState(false)
+  const [lightbox, setLightbox] = useState<LightboxState | null>(null)
 
   const isLeader = community?.currentUserRole === 'lider'
   const isModerator = community?.currentUserRole === 'lider' || community?.currentUserRole === 'admin'
   const canPost = Boolean(user && community?.canPost)
   const bannerUrl = getCommunityBanner(community)
-  const confirmCopy = getConfirmCopy(confirmState)
+  const canViewContent = Boolean(community?.canViewContent)
+  const totalPostPages = postsTotalCount ? Math.max(1, Math.ceil(postsTotalCount / POST_PAGE_SIZE)) : 1
 
-  const sidebarMembers = useMemo(() => {
+  const visibleTabs = useMemo<CommunityTab[]>(() => {
+    if (!canViewContent) return []
+    return [
+      'posts',
+      'members',
+      'about',
+      ...(isModerator ? (['moderation', 'settings'] as CommunityTab[]) : []),
+    ]
+  }, [canViewContent, isModerator])
+
+  const sortedMembers = useMemo(() => {
     const roleOrder: Record<string, number> = { lider: 0, admin: 1, membro: 2 }
     return [...members].sort((left, right) => {
       const roleDelta = (roleOrder[left.cargo] ?? 3) - (roleOrder[right.cargo] ?? 3)
       if (roleDelta !== 0) return roleDelta
-      return getMemberName(left).localeCompare(getMemberName(right), 'pt-BR')
+      return getMemberName(left).localeCompare(getMemberName(right))
     })
   }, [members])
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => setDebouncedMemberSearch(memberSearch), 220)
+    return () => window.clearTimeout(timeoutId)
+  }, [memberSearch])
+
+  useEffect(() => {
+    if (!bannerFile) {
+      setBannerPreviewUrl(null)
+      return
+    }
+
+    const previewUrl = URL.createObjectURL(bannerFile)
+    setBannerPreviewUrl(previewUrl)
+    return () => URL.revokeObjectURL(previewUrl)
+  }, [bannerFile])
+
+  useEffect(() => {
+    if (!lightbox) return
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setLightbox(null)
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [lightbox])
+
+  useEffect(() => {
+    if (visibleTabs.length > 0 && !visibleTabs.includes(activeTab)) {
+      setActiveTab(visibleTabs[0])
+    }
+  }, [activeTab, visibleTabs])
+
+  const getRoleLabel = useCallback(
+    (role: string | null | undefined) => {
+      if (role === 'lider') return t('communities.role.lider')
+      if (role === 'admin') return t('communities.role.admin')
+      return t('communities.role.membro')
+    },
+    [t]
+  )
+
+  const getNoPostPermissionMessage = useCallback(
+    (permission: CommunityPostingPermission) => {
+      if (permission === 'somente_admins') return t('communities.post.noPermissionAdmins')
+      if (permission === 'somente_lider') return t('communities.post.noPermissionLeader')
+      return t('communities.post.joinToPost')
+    },
+    [t]
+  )
+
+  const getConfirmCopy = useCallback(
+    (state: ConfirmState | null) => {
+      if (!state) return null
+
+      if (state.kind === 'delete-community') {
+        return {
+          title: t('communities.confirm.deleteCommunity.title'),
+          description: t('communities.confirm.deleteCommunity.description'),
+          confirmLabel: t('communities.confirm.deleteCommunity.confirm'),
+          tone: 'danger' as const,
+        }
+      }
+
+      if (state.kind === 'leave-community') {
+        return {
+          title: t('communities.confirm.leave.title'),
+          description: t('communities.confirm.leave.description'),
+          confirmLabel: t('communities.confirm.leave.confirm'),
+          tone: 'default' as const,
+        }
+      }
+
+      if (state.kind === 'delete-post') {
+        return {
+          title: t('communities.confirm.deletePost.title'),
+          description: t('communities.confirm.deletePost.description'),
+          confirmLabel: t('communities.confirm.deletePost.confirm'),
+          tone: 'danger' as const,
+        }
+      }
+
+      if (state.kind === 'delete-comment') {
+        return {
+          title: t('communities.confirm.deleteComment.title'),
+          description: t('communities.confirm.deleteComment.description'),
+          confirmLabel: t('communities.confirm.deleteComment.confirm'),
+          tone: 'danger' as const,
+        }
+      }
+
+      if (state.kind === 'kick-member') {
+        return {
+          title: t('communities.confirm.kick.title'),
+          description: t('communities.confirm.kick.description', { user: `@${getMemberName(state.member)}` }),
+          confirmLabel: t('communities.confirm.kick.confirm'),
+          tone: 'danger' as const,
+        }
+      }
+
+      if (state.kind === 'transfer-leadership') {
+        return {
+          title: t('communities.confirm.transfer.title'),
+          description: t('communities.confirm.transfer.description', { user: `@${getMemberName(state.member)}` }),
+          confirmLabel: t('communities.confirm.transfer.confirm'),
+          tone: 'danger' as const,
+        }
+      }
+
+      if (state.kind === 'posting-permission') {
+        return {
+          title: t('communities.confirm.posting.title'),
+          description: t('communities.confirm.posting.description', {
+            permission: t(`communities.permission.${state.permission}`),
+          }),
+          confirmLabel: t('communities.confirm.posting.confirm'),
+          tone: 'default' as const,
+        }
+      }
+
+      if (state.kind === 'promote-member') {
+        return {
+          title: t('communities.confirm.promote.title'),
+          description: t('communities.confirm.promote.description', { user: `@${getMemberName(state.member)}` }),
+          confirmLabel: t('communities.confirm.promote.confirm'),
+          tone: 'default' as const,
+        }
+      }
+
+      return {
+        title: t('communities.confirm.demote.title'),
+        description: t('communities.confirm.demote.description', { user: `@${getMemberName(state.member)}` }),
+        confirmLabel: t('communities.confirm.demote.confirm'),
+        tone: 'danger' as const,
+      }
+    },
+    [t]
+  )
 
   const loadCommunityData = useCallback(async () => {
     if (!communityId) return
 
     setLoading(true)
-    const [communityResult, membersResult] = await Promise.all([
-      getCommunityById(communityId, user?.id),
-      getCommunityMembers(communityId),
-    ])
+    const communityResult = await getCommunityById(communityId, user?.id)
+    const nextCommunity = communityResult.data
 
-    setCommunity(communityResult.data)
-    setMembers(membersResult.data)
-    setSettingsDraft(createSettingsDraft(communityResult.data))
-    setPostingPermissionDraft(communityResult.data?.permissao_postagem || 'todos_membros')
+    setCommunity(nextCommunity)
+    setSettingsDraft(createSettingsDraft(nextCommunity))
+    setPostingPermissionDraft(nextCommunity?.permissao_postagem || 'todos_membros')
     setFeedback(
-      communityResult.error || membersResult.error
+      communityResult.error
         ? {
             tone: 'error',
-            message:
-              communityResult.error?.message ||
-              membersResult.error?.message ||
-              'Nao foi possivel carregar a comunidade.',
+            message: communityResult.error.message || t('communities.details.loadError'),
           }
         : null
     )
     setLoading(false)
-  }, [communityId, user?.id])
+  }, [communityId, t, user?.id])
+
+  const loadMembers = useCallback(async () => {
+    if (!communityId || !community?.canViewContent) {
+      setMembers([])
+      return
+    }
+
+    setMembersLoading(true)
+    const result = await getCommunityMembers(communityId, {
+      search: debouncedMemberSearch,
+      limit: 250,
+    })
+    setMembers(result.data)
+    if (result.error) setFeedback({ tone: 'error', message: result.error.message })
+    setMembersLoading(false)
+  }, [community?.canViewContent, communityId, debouncedMemberSearch])
 
   const loadPosts = useCallback(async () => {
-    if (!communityId) return
+    if (!communityId || !community?.canViewContent) {
+      setPosts([])
+      setPostsTotalCount(null)
+      return
+    }
 
     setPostsLoading(true)
-    const result = await getCommunityPosts(communityId, user?.id, community?.currentUserRole)
+    const result = await getCommunityPosts(communityId, user?.id, community.currentUserRole, {
+      page: postsPage,
+      pageSize: POST_PAGE_SIZE,
+    })
     setPosts(result.data)
-    if (result.error) {
-      setFeedback({ tone: 'error', message: result.error.message })
-    }
+    setPostsTotalCount(result.totalCount)
+    if (result.error) setFeedback({ tone: 'error', message: result.error.message })
     setPostsLoading(false)
-  }, [community?.currentUserRole, communityId, user?.id])
+  }, [community?.canViewContent, community?.currentUserRole, communityId, postsPage, user?.id])
+
+  const loadModeration = useCallback(async () => {
+    if (!communityId || !isModerator) {
+      setJoinRequests([])
+      setReports([])
+      return
+    }
+
+    setModerationLoading(true)
+    const [requestsResult, reportsResult] = await Promise.all([
+      getCommunityJoinRequests(communityId, requestFilter),
+      getCommunityReports(communityId, { status: reportFilter }),
+    ])
+    setJoinRequests(requestsResult.data)
+    setReports(reportsResult.data)
+    if (requestsResult.error || reportsResult.error) {
+      setFeedback({
+        tone: 'error',
+        message: requestsResult.error?.message || reportsResult.error?.message || t('communities.moderation.loadError'),
+      })
+    }
+    setModerationLoading(false)
+  }, [communityId, isModerator, reportFilter, requestFilter, t])
 
   useEffect(() => {
     void loadCommunityData()
   }, [loadCommunityData])
 
   useEffect(() => {
+    void loadMembers()
+  }, [loadMembers])
+
+  useEffect(() => {
     void loadPosts()
   }, [loadPosts])
 
+  useEffect(() => {
+    void loadModeration()
+  }, [loadModeration])
+
   const reloadAll = async () => {
     await loadCommunityData()
+    await loadMembers()
     await loadPosts()
+    await loadModeration()
   }
 
   const handleJoin = async () => {
@@ -266,7 +439,14 @@ function CommunityDetailsPage() {
       setFeedback({ tone: 'error', message: result.error.message })
       return
     }
-    setFeedback({ tone: 'success', message: 'Voce entrou na comunidade.' })
+
+    setFeedback({
+      tone: result.data === 'requested' || result.data === 'already_pending' ? 'info' : 'success',
+      message:
+        result.data === 'requested' || result.data === 'already_pending'
+          ? t('communities.private.requestSent')
+          : t('communities.joined'),
+    })
     await reloadAll()
   }
 
@@ -280,7 +460,7 @@ function CommunityDetailsPage() {
 
     const normalizedText = postText.trim()
     if (!normalizedText && !postImageFile) {
-      setFeedback({ tone: 'error', message: 'Escreva um texto ou selecione uma imagem.' })
+      setFeedback({ tone: 'error', message: t('communities.post.emptyError') })
       return
     }
 
@@ -292,7 +472,7 @@ function CommunityDetailsPage() {
       if (postImageFile) {
         const uploadResult = await uploadCommunityPostImage(postImageFile, user.id)
         if (!uploadResult) {
-          setFeedback({ tone: 'error', message: 'Nao foi possivel enviar a imagem do post.' })
+          setFeedback({ tone: 'error', message: t('communities.post.imageUploadError') })
           return
         }
         imagePath = uploadResult.path
@@ -306,7 +486,8 @@ function CommunityDetailsPage() {
 
       setPostText('')
       setPostImageFile(null)
-      setFeedback({ tone: 'success', message: 'Post publicado.' })
+      setPostsPage(1)
+      setFeedback({ tone: 'success', message: t('communities.post.published') })
       await reloadAll()
     } finally {
       setPostSubmitting(false)
@@ -362,31 +543,58 @@ function CommunityDetailsPage() {
     await loadPosts()
   }
 
+  const handleBannerChange = (event: ChangeEvent<HTMLInputElement>) => {
+    setBannerFile(event.target.files?.[0] || null)
+  }
+
   const handleSaveSettings = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (!community || !isLeader || settingsSaving) return
+    if (!community || !isModerator || settingsSaving) return
 
     setSettingsSaving(true)
-    const result = await updateCommunity({
-      comunidadeId: community.id,
-      nome: settingsDraft.nome,
-      descricao: settingsDraft.descricao,
-      tipo: settingsDraft.tipo,
-      categoria: settingsDraft.categoria,
-      regras: settingsDraft.regras,
-      bannerPath: community.banner_path,
-      jogoId: community.jogo_id,
-      permissaoPostagem: community.permissao_postagem,
-    })
+    setFeedback(null)
 
-    if (result.error) {
-      setFeedback({ tone: 'error', message: result.error.message })
-    } else {
-      setFeedback({ tone: 'success', message: 'Comunidade atualizada.' })
-      await loadCommunityData()
+    try {
+      let bannerPath = community.banner_path
+      if (bannerFile && user) {
+        const uploadResult = await uploadCommunityBannerImage(bannerFile, user.id)
+        if (!uploadResult) {
+          setFeedback({ tone: 'error', message: t('communities.settings.bannerUploadError') })
+          return
+        }
+        bannerPath = uploadResult.path
+      }
+
+      const result = isLeader
+        ? await updateCommunity({
+            comunidadeId: community.id,
+            nome: settingsDraft.nome,
+            descricao: settingsDraft.descricao,
+            tipo: settingsDraft.tipo,
+            categoria: settingsDraft.categoria || null,
+            regras: settingsDraft.regras,
+            bannerPath,
+            jogoId: community.jogo_id,
+            permissaoPostagem: community.permissao_postagem,
+            visibilidade: settingsDraft.visibilidade,
+          })
+        : await updateCommunityModeratedDetails({
+            comunidadeId: community.id,
+            descricao: settingsDraft.descricao,
+            regras: settingsDraft.regras,
+            bannerPath,
+          })
+
+      if (result.error) {
+        setFeedback({ tone: 'error', message: result.error.message })
+      } else {
+        setBannerFile(null)
+        setFeedback({ tone: 'success', message: t('communities.settings.saved') })
+        await loadCommunityData()
+      }
+    } finally {
+      setSettingsSaving(false)
     }
-
-    setSettingsSaving(false)
   }
 
   const executeConfirmAction = async () => {
@@ -405,25 +613,25 @@ function CommunityDetailsPage() {
       if (confirmState.kind === 'leave-community') {
         const result = await leaveCommunity(community.id)
         if (result.error) throw result.error
-        setFeedback({ tone: 'success', message: 'Voce saiu da comunidade.' })
+        setFeedback({ tone: 'success', message: t('communities.left') })
       }
 
       if (confirmState.kind === 'delete-post') {
         const result = await deleteCommunityPost(confirmState.post.id)
         if (result.error) throw result.error
-        setFeedback({ tone: 'success', message: 'Post deletado.' })
+        setFeedback({ tone: 'success', message: t('communities.post.deleted') })
       }
 
       if (confirmState.kind === 'delete-comment') {
         const result = await deleteCommunityComment(confirmState.commentId)
         if (result.error) throw result.error
-        setFeedback({ tone: 'success', message: 'Comentario excluido.' })
+        setFeedback({ tone: 'success', message: t('communities.comment.deleted') })
       }
 
       if (confirmState.kind === 'kick-member') {
         const result = await removeCommunityMember(community.id, confirmState.member.usuario_id)
         if (result.error) throw result.error
-        setFeedback({ tone: 'success', message: 'Membro removido.' })
+        setFeedback({ tone: 'success', message: t('communities.member.removed') })
       }
 
       if (confirmState.kind === 'transfer-leadership') {
@@ -432,13 +640,30 @@ function CommunityDetailsPage() {
           confirmState.member.usuario_id
         )
         if (result.error) throw result.error
-        setFeedback({ tone: 'success', message: 'Lideranca transferida.' })
+        setFeedback({ tone: 'success', message: t('communities.member.transferred') })
       }
 
       if (confirmState.kind === 'posting-permission') {
         const result = await updateCommunityPostingPermission(community.id, confirmState.permission)
         if (result.error) throw result.error
-        setFeedback({ tone: 'success', message: 'Regra de postagem atualizada.' })
+        setFeedback({ tone: 'success', message: t('communities.settings.postingSaved') })
+      }
+
+      if (confirmState.kind === 'promote-member' || confirmState.kind === 'demote-admin') {
+        const nextRole = confirmState.kind === 'promote-member' ? 'admin' : 'membro'
+        const result = await updateCommunityMemberRole(
+          community.id,
+          confirmState.member.usuario_id,
+          nextRole
+        )
+        if (result.error) throw result.error
+        setFeedback({
+          tone: 'success',
+          message:
+            nextRole === 'admin'
+              ? t('communities.member.promoted')
+              : t('communities.member.demoted'),
+        })
       }
 
       setConfirmState(null)
@@ -446,38 +671,76 @@ function CommunityDetailsPage() {
     } catch (error) {
       const message = error && typeof error === 'object' && 'message' in error
         ? String(error.message)
-        : 'Nao foi possivel concluir a acao.'
+        : t('communities.actionError')
       setFeedback({ tone: 'error', message })
     } finally {
       setConfirmSubmitting(false)
     }
   }
 
-  const handlePromoteOrDemote = async (member: CommunityMember) => {
-    if (!community) return
-    const nextRole = member.cargo === 'admin' ? 'membro' : 'admin'
-    const result = await updateCommunityMemberRole(community.id, member.usuario_id, nextRole)
+  const handleApproveRequest = async (request: CommunityJoinRequest) => {
+    const result = await approveCommunityJoinRequest(request.id)
+    if (result.error) {
+      setFeedback({ tone: 'error', message: result.error.message })
+      return
+    }
+    setFeedback({ tone: 'success', message: t('communities.moderation.requestApproved') })
+    await reloadAll()
+  }
+
+  const handleRejectRequest = async (request: CommunityJoinRequest) => {
+    const result = await rejectCommunityJoinRequest(request.id)
+    if (result.error) {
+      setFeedback({ tone: 'error', message: result.error.message })
+      return
+    }
+    setFeedback({ tone: 'success', message: t('communities.moderation.requestRejected') })
+    await loadModeration()
+  }
+
+  const handleReportSubmit = async (payload: { reason: CommunityReportReason; description: string }) => {
+    if (!community || !reportTarget) return
+    setReportSubmitting(true)
+    const result = await submitCommunityReport({
+      communityId: community.id,
+      targetType: reportTarget.type,
+      targetId: reportTarget.id,
+      reason: payload.reason,
+      description: payload.description,
+    })
+    setReportSubmitting(false)
+
     if (result.error) {
       setFeedback({ tone: 'error', message: result.error.message })
       return
     }
 
-    setFeedback({
-      tone: 'success',
-      message: nextRole === 'admin' ? 'Membro promovido a administrador.' : 'Administrador removido.',
-    })
-    await loadCommunityData()
+    setReportTarget(null)
+    setFeedback({ tone: 'success', message: t('communities.report.sent') })
+    await loadModeration()
+  }
+
+  const handleReportStatusChange = async (report: CommunityReport, status: CommunityReportStatus) => {
+    const result = await updateCommunityReportStatus(report.id, status)
+    if (result.error) {
+      setFeedback({ tone: 'error', message: result.error.message })
+      return
+    }
+    setFeedback({ tone: 'success', message: t('communities.moderation.reportUpdated') })
+    await loadModeration()
   }
 
   const updateSettingsDraft = <K extends keyof SettingsDraft>(field: K, value: SettingsDraft[K]) => {
     setSettingsDraft(currentDraft => ({ ...currentDraft, [field]: value }))
   }
 
+  const confirmCopy = getConfirmCopy(confirmState)
+
   if (loading) {
     return (
       <div className="page-container">
         <div className="page-content">
-          <div className="communities-state-card">Carregando comunidade...</div>
+          <div className="communities-state-card">{t('communities.details.loading')}</div>
         </div>
       </div>
     )
@@ -488,10 +751,10 @@ function CommunityDetailsPage() {
       <div className="page-container">
         <div className="page-content">
           <div className="communities-state-card">
-            Comunidade nao encontrada ou removida.
+            {t('communities.details.notFound')}
             <div className="community-details-actions">
               <Link to="/comunidades" className="communities-primary-link">
-                Voltar para comunidades
+                {t('communities.details.back')}
               </Link>
             </div>
           </div>
@@ -500,29 +763,514 @@ function CommunityDetailsPage() {
     )
   }
 
+  const renderMemberCard = (member: CommunityMember) => {
+    const memberName = getMemberName(member)
+    const memberPath = getOptionalPublicProfilePath(member.usuario?.username)
+    const canKick = isModerator && member.cargo === 'membro'
+    const canManageAdmin = isLeader && member.cargo !== 'lider'
+    const canTransfer = isLeader && member.usuario_id !== user?.id
+    const authorContent = (
+      <>
+        <UserAvatar
+          name={memberName}
+          avatarPath={member.usuario?.avatar_path}
+          imageClassName="community-member-avatar"
+          fallbackClassName="community-member-avatar-fallback"
+        />
+        <span>
+          <strong>@{memberName}</strong>
+          <span>{getRoleLabel(member.cargo)}</span>
+        </span>
+      </>
+    )
+
+    return (
+      <article key={member.usuario_id} className="community-member-card">
+        <div className="community-member-header">
+          {memberPath ? (
+            <Link to={memberPath} className="community-member-author">
+              {authorContent}
+            </Link>
+          ) : (
+            <div className="community-member-author">{authorContent}</div>
+          )}
+        </div>
+
+        {canKick || canManageAdmin || canTransfer ? (
+          <div className="community-member-actions">
+            {canManageAdmin ? (
+              <button
+                type="button"
+                className="community-secondary-button"
+                onClick={() =>
+                  setConfirmState({
+                    kind: member.cargo === 'admin' ? 'demote-admin' : 'promote-member',
+                    member,
+                  })
+                }
+              >
+                {member.cargo === 'admin'
+                  ? t('communities.member.removeAdmin')
+                  : t('communities.member.promoteAdmin')}
+              </button>
+            ) : null}
+
+            {canTransfer ? (
+              <button
+                type="button"
+                className="community-secondary-button"
+                onClick={() => setConfirmState({ kind: 'transfer-leadership', member })}
+              >
+                {t('communities.member.transferLeadership')}
+              </button>
+            ) : null}
+
+            {canKick ? (
+              <button
+                type="button"
+                className="community-danger-button"
+                onClick={() => setConfirmState({ kind: 'kick-member', member })}
+              >
+                {t('communities.member.kick')}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+      </article>
+    )
+  }
+
+  const renderPostsTab = () => (
+    <div className="community-feed">
+      <section className="community-section">
+        <h2>{t('communities.post.createTitle')}</h2>
+        {canPost ? (
+          <form className="community-post-form" onSubmit={handleCreatePost}>
+            <textarea
+              value={postText}
+              onChange={event => setPostText(event.target.value)}
+              placeholder={t('communities.post.placeholder')}
+              maxLength={4000}
+              disabled={postSubmitting}
+            />
+            <label className="communities-field">
+              <span>{t('communities.post.optionalImage')}</span>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handlePostImageChange}
+                disabled={postSubmitting}
+              />
+            </label>
+            <button type="submit" disabled={postSubmitting}>
+              {postSubmitting ? t('communities.post.publishing') : t('communities.post.publish')}
+            </button>
+          </form>
+        ) : (
+          <p>
+            {user
+              ? getNoPostPermissionMessage(community.permissao_postagem)
+              : t('communities.post.loginToInteract')}
+          </p>
+        )}
+      </section>
+
+      {postsLoading ? (
+        <div className="communities-state-card">{t('communities.post.loading')}</div>
+      ) : posts.length === 0 ? (
+        <div className="communities-state-card">{t('communities.post.empty')}</div>
+      ) : (
+        <>
+          {posts.map(post => (
+            <CommunityPostCard
+              key={post.id}
+              post={post}
+              currentUserId={user?.id}
+              currentUserRole={community.currentUserRole}
+              onToggleReaction={handleToggleReaction}
+              onToggleSave={handleToggleSave}
+              onCreateComment={handleCreateComment}
+              onDeletePost={postToDelete =>
+                setConfirmState({ kind: 'delete-post', post: postToDelete })
+              }
+              onDeleteComment={(postWithComment, commentId) =>
+                setConfirmState({
+                  kind: 'delete-comment',
+                  post: postWithComment,
+                  commentId,
+                })
+              }
+              onReport={setReportTarget}
+              onOpenImage={(url, alt) => setLightbox({ url, alt })}
+            />
+          ))}
+
+          <nav className="community-pagination" aria-label={t('communities.post.pagination')}>
+            <button
+              type="button"
+              className="community-secondary-button"
+              disabled={postsPage <= 1}
+              onClick={() => setPostsPage(currentPage => Math.max(1, currentPage - 1))}
+            >
+              {t('communities.post.previousPage')}
+            </button>
+            <span>{t('communities.post.pageLabel', { page: postsPage, total: totalPostPages })}</span>
+            <button
+              type="button"
+              className="community-secondary-button"
+              disabled={postsPage >= totalPostPages}
+              onClick={() => setPostsPage(currentPage => currentPage + 1)}
+            >
+              {t('communities.post.nextPage')}
+            </button>
+          </nav>
+        </>
+      )}
+    </div>
+  )
+
+  const renderMembersTab = () => (
+    <section className="community-section">
+      <div className="community-section-head">
+        <div>
+          <h2>{t('communities.tabs.members')}</h2>
+          <p>{t('communities.membersCount', { count: formatNumber(members.length) })}</p>
+        </div>
+        <label className="communities-field community-member-search">
+          <span>{t('communities.members.search')}</span>
+          <input
+            type="search"
+            value={memberSearch}
+            onChange={event => setMemberSearch(event.target.value)}
+            placeholder={t('communities.members.searchPlaceholder')}
+          />
+        </label>
+      </div>
+
+      {membersLoading ? (
+        <div className="communities-state-card">{t('communities.members.loading')}</div>
+      ) : sortedMembers.length === 0 ? (
+        <div className="communities-state-card">{t('communities.members.empty')}</div>
+      ) : (
+        <div className="community-member-list is-grid">
+          {sortedMembers.map(renderMemberCard)}
+        </div>
+      )}
+    </section>
+  )
+
+  const renderAboutTab = () => (
+    <section className="community-section">
+      <h2>{t('communities.tabs.about')}</h2>
+      <div className="community-about-grid">
+        <div>
+          <h3>{t('communities.about.description')}</h3>
+          <p>{community.descricao || t('communities.noDescription')}</p>
+        </div>
+        <div>
+          <h3>{t('communities.about.rules')}</h3>
+          <p>{community.regras || t('communities.about.noRules')}</p>
+        </div>
+        <div>
+          <h3>{t('communities.about.details')}</h3>
+          <p>{t('communities.about.membersPosts', {
+            members: formatNumber(community.membros_count),
+            posts: formatNumber(community.posts_count),
+          })}</p>
+          {community.jogo ? <p>{t('communities.about.relatedGame', { game: community.jogo.titulo })}</p> : null}
+          {community.tipo ? <p>{t('communities.about.theme', { theme: community.tipo })}</p> : null}
+          {community.categoria ? (
+            <p>{t('communities.about.category', {
+              category: COMMUNITY_CATEGORY_VALUES.includes(community.categoria as CommunityCategoryValue)
+                ? t(`communities.category.${community.categoria}`)
+                : community.categoria,
+            })}</p>
+          ) : null}
+          <p>{t('communities.about.visibility', { visibility: t(`communities.visibility.${community.visibilidade}`) })}</p>
+        </div>
+      </div>
+    </section>
+  )
+
+  const renderModerationTab = () => (
+    <div className="community-moderation-grid">
+      <section className="community-section">
+        <div className="community-section-head">
+          <div>
+            <h2>{t('communities.moderation.requests')}</h2>
+            <p>{t('communities.moderation.requestsHelp')}</p>
+          </div>
+          <label className="communities-field community-compact-select">
+            <span>{t('common.status')}</span>
+            <select
+              value={requestFilter}
+              onChange={event => setRequestFilter(event.target.value as RequestFilter)}
+            >
+              <option value="pendente">{t('communities.requestStatus.pendente')}</option>
+              <option value="all">{t('communities.moderation.all')}</option>
+            </select>
+          </label>
+        </div>
+
+        {moderationLoading ? (
+          <div className="communities-state-card">{t('communities.moderation.loading')}</div>
+        ) : joinRequests.length === 0 ? (
+          <div className="communities-state-card">{t('communities.moderation.noRequests')}</div>
+        ) : (
+          <div className="community-moderation-list">
+            {joinRequests.map(request => {
+              const userName = request.usuario?.username || request.usuario?.nome_completo || t('common.profile')
+              return (
+                <article key={request.id} className="community-moderation-card">
+                  <div>
+                    <strong>@{userName}</strong>
+                    <span>{t(`communities.requestStatus.${request.status}`)}</span>
+                  </div>
+                  <small>{formatDate(request.created_at, { fallback: t('common.noDate') })}</small>
+                  {request.status === 'pendente' ? (
+                    <div className="community-member-actions">
+                      <button
+                        type="button"
+                        className="community-secondary-button"
+                        onClick={() => void handleApproveRequest(request)}
+                      >
+                        {t('communities.moderation.approve')}
+                      </button>
+                      <button
+                        type="button"
+                        className="community-danger-button"
+                        onClick={() => void handleRejectRequest(request)}
+                      >
+                        {t('communities.moderation.reject')}
+                      </button>
+                    </div>
+                  ) : null}
+                </article>
+              )
+            })}
+          </div>
+        )}
+      </section>
+
+      <section className="community-section">
+        <div className="community-section-head">
+          <div>
+            <h2>{t('communities.moderation.reports')}</h2>
+            <p>{t('communities.moderation.reportsHelp')}</p>
+          </div>
+          <label className="communities-field community-compact-select">
+            <span>{t('common.status')}</span>
+            <select
+              value={reportFilter}
+              onChange={event => setReportFilter(event.target.value as ReportFilter)}
+            >
+              <option value="all">{t('communities.moderation.all')}</option>
+              <option value="pending">{t('report.status.pending')}</option>
+              <option value="under_review">{t('report.status.under_review')}</option>
+              <option value="resolved">{t('report.status.resolved')}</option>
+              <option value="dismissed">{t('report.status.dismissed')}</option>
+            </select>
+          </label>
+        </div>
+
+        {moderationLoading ? (
+          <div className="communities-state-card">{t('communities.moderation.loading')}</div>
+        ) : reports.length === 0 ? (
+          <div className="communities-state-card">{t('communities.moderation.noReports')}</div>
+        ) : (
+          <div className="community-moderation-list">
+            {reports.map(report => {
+              const reporterName = getAuthorName(report.denunciante)
+              const targetAuthorName = getAuthorName(report.targetAuthor)
+              return (
+                <article key={report.id} className="community-moderation-card">
+                  <div className="community-report-card-head">
+                    <div>
+                      <strong>{t(`communities.report.type.${report.tipo_conteudo}`)}</strong>
+                      <span>{t('communities.moderation.reportBy', { user: `@${reporterName}` })}</span>
+                    </div>
+                    <select
+                      value={report.status}
+                      onChange={event =>
+                        void handleReportStatusChange(report, event.target.value as CommunityReportStatus)
+                      }
+                    >
+                      <option value="pending">{t('report.status.pending')}</option>
+                      <option value="under_review">{t('report.status.under_review')}</option>
+                      <option value="resolved">{t('report.status.resolved')}</option>
+                      <option value="dismissed">{t('report.status.dismissed')}</option>
+                    </select>
+                  </div>
+                  <p>{t('communities.moderation.reason', { reason: t(`report.reason.${report.motivo}`) })}</p>
+                  <p>{t('communities.moderation.targetAuthor', { user: `@${targetAuthorName}` })}</p>
+                  {getReportPreview(report) ? <blockquote>{getReportPreview(report)}</blockquote> : null}
+                  {report.descricao ? <p>{report.descricao}</p> : null}
+                </article>
+              )
+            })}
+          </div>
+        )}
+      </section>
+    </div>
+  )
+
+  const renderSettingsTab = () => (
+    <div className="community-settings-layout">
+      <section className="community-settings-card">
+        <h2>{t('communities.tabs.settings')}</h2>
+        <form className="community-settings-form" onSubmit={handleSaveSettings}>
+          <label className="communities-field">
+            <span>{t('communities.field.name')}</span>
+            <input
+              value={settingsDraft.nome}
+              onChange={event => updateSettingsDraft('nome', event.target.value)}
+              maxLength={80}
+              required
+              disabled={!isLeader}
+            />
+          </label>
+          <label className="communities-field">
+            <span>{t('communities.field.description')}</span>
+            <textarea
+              value={settingsDraft.descricao}
+              onChange={event => updateSettingsDraft('descricao', event.target.value)}
+              maxLength={600}
+            />
+          </label>
+          <div className="communities-form-grid">
+            <label className="communities-field">
+              <span>{t('communities.field.theme')}</span>
+              <input
+                value={settingsDraft.tipo}
+                onChange={event => updateSettingsDraft('tipo', event.target.value)}
+                disabled={!isLeader}
+              />
+            </label>
+            <label className="communities-field">
+              <span>{t('communities.field.category')}</span>
+              <select
+                value={settingsDraft.categoria}
+                onChange={event => updateSettingsDraft('categoria', event.target.value as CommunityCategoryValue | '')}
+                disabled={!isLeader}
+              >
+                <option value="">{t('communities.field.categoryPlaceholder')}</option>
+                {COMMUNITY_CATEGORY_VALUES.map(option => (
+                  <option key={option} value={option}>
+                    {t(`communities.category.${option}`)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <label className="communities-field">
+            <span>{t('communities.field.rules')}</span>
+            <textarea
+              value={settingsDraft.regras}
+              onChange={event => updateSettingsDraft('regras', event.target.value)}
+              maxLength={3000}
+            />
+          </label>
+          <div className="communities-form-grid">
+            <label className="communities-field">
+              <span>{t('communities.field.visibility')}</span>
+              <select
+                value={settingsDraft.visibilidade}
+                onChange={event => updateSettingsDraft('visibilidade', event.target.value as CommunityVisibility)}
+                disabled={!isLeader}
+              >
+                <option value="publica">{t('communities.visibility.publica')}</option>
+                <option value="privada">{t('communities.visibility.privada')}</option>
+              </select>
+            </label>
+            <label className="communities-field">
+              <span>{t('communities.field.banner')}</span>
+              <input type="file" accept="image/*" onChange={handleBannerChange} />
+            </label>
+          </div>
+          {bannerPreviewUrl ? (
+            <div className="community-banner-preview">
+              <img src={bannerPreviewUrl} alt={t('communities.settings.bannerPreview')} />
+            </div>
+          ) : null}
+          <button type="submit" className="community-settings-button" disabled={settingsSaving}>
+            {settingsSaving ? t('common.saving') : t('communities.settings.saveInfo')}
+          </button>
+        </form>
+      </section>
+
+      <section className="community-settings-card">
+        <h2>{t('communities.settings.postingTitle')}</h2>
+        <p>{t(`communities.permissionDescription.${community.permissao_postagem}`)}</p>
+        <label className="communities-field">
+          <span>{t('communities.settings.postingRule')}</span>
+          <select
+            value={postingPermissionDraft}
+            onChange={event =>
+              setPostingPermissionDraft(event.target.value as CommunityPostingPermission)
+            }
+          >
+            <option value="todos_membros">{t('communities.permission.todos_membros')}</option>
+            <option value="somente_admins">{t('communities.permission.somente_admins')}</option>
+            <option value="somente_lider">{t('communities.permission.somente_lider')}</option>
+          </select>
+        </label>
+        <button
+          type="button"
+          className="community-settings-button"
+          disabled={postingPermissionDraft === community.permissao_postagem}
+          onClick={() =>
+            setConfirmState({
+              kind: 'posting-permission',
+              permission: postingPermissionDraft,
+            })
+          }
+        >
+          {t('communities.settings.changePosting')}
+        </button>
+      </section>
+
+      {isLeader ? (
+        <section className="community-settings-card is-danger-zone">
+          <h2>{t('common.dangerZone')}</h2>
+          <p>{t('communities.settings.dangerText')}</p>
+          <button
+            type="button"
+            className="community-danger-button"
+            onClick={() => setConfirmState({ kind: 'delete-community' })}
+          >
+            {t('communities.settings.deleteCommunity')}
+          </button>
+        </section>
+      ) : null}
+    </div>
+  )
+
   return (
     <div className="page-container">
       <div className="page-content">
         <div className="community-details-page">
           <section className="community-details-hero">
             <div className="community-details-copy">
-              <span className="communities-kicker">Comunidade</span>
+              <span className="communities-kicker">{t('communities.kicker')}</span>
               <h1>{community.nome}</h1>
-              <p>{community.descricao || 'Sem descricao informada.'}</p>
+              <p>{community.descricao || t('communities.noDescription')}</p>
 
               <div className="community-details-actions">
                 <span className="community-role-badge">
-                  {community.currentUserRole ? getRoleLabel(community.currentUserRole) : 'Visitante'}
+                  {community.currentUserRole ? getRoleLabel(community.currentUserRole) : t('communities.role.visitor')}
                 </span>
                 <span className="community-permission-badge">
-                  {POSTING_PERMISSION_LABELS[community.permissao_postagem]}
+                  {t(`communities.permission.${community.permissao_postagem}`)}
+                </span>
+                <span className="community-permission-badge">
+                  {t(`communities.visibility.${community.visibilidade}`)}
                 </span>
               </div>
 
               <div className="community-details-actions">
                 {!user ? (
                   <Link to="/login" className="communities-primary-link">
-                    Fazer login para participar
+                    {t('communities.loginToJoin')}
                   </Link>
                 ) : community.currentUserRole ? (
                   community.currentUserRole !== 'lider' ? (
@@ -531,24 +1279,20 @@ function CommunityDetailsPage() {
                       className="community-secondary-button"
                       onClick={() => setConfirmState({ kind: 'leave-community' })}
                     >
-                      Sair da comunidade
+                      {t('communities.leave')}
                     </button>
                   ) : null
+                ) : community.currentUserJoinRequestStatus === 'pendente' ? (
+                  <button type="button" className="community-secondary-button" disabled>
+                    {t('communities.private.requestSent')}
+                  </button>
                 ) : (
                   <button type="button" className="communities-primary-button" onClick={handleJoin}>
-                    Entrar na comunidade
+                    {community.visibilidade === 'privada'
+                      ? t('communities.private.requestJoin')
+                      : t('communities.join')}
                   </button>
                 )}
-
-                {isLeader ? (
-                  <button
-                    type="button"
-                    className="community-danger-button"
-                    onClick={() => setConfirmState({ kind: 'delete-community' })}
-                  >
-                    Excluir comunidade
-                  </button>
-                ) : null}
               </div>
             </div>
 
@@ -567,266 +1311,74 @@ function CommunityDetailsPage() {
             <p className={`communities-feedback is-${feedback.tone}`}>{feedback.message}</p>
           ) : null}
 
-          <section className="community-details-grid">
-            <main className="community-feed">
-              <section className="community-section">
-                <h2>Criar post</h2>
-                {canPost ? (
-                  <form className="community-post-form" onSubmit={handleCreatePost}>
-                    <textarea
-                      value={postText}
-                      onChange={event => setPostText(event.target.value)}
-                      placeholder="Compartilhe texto, imagem ou os dois."
-                      maxLength={4000}
-                      disabled={postSubmitting}
-                    />
-                    <label className="communities-field">
-                      <span>Imagem opcional</span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handlePostImageChange}
-                        disabled={postSubmitting}
-                      />
-                    </label>
-                    <button type="submit" disabled={postSubmitting}>
-                      {postSubmitting ? 'Publicando...' : 'Publicar'}
-                    </button>
-                  </form>
-                ) : (
-                  <p>
-                    {user
-                      ? getNoPostPermissionMessage(community.permissao_postagem)
-                      : 'Entre na comunidade para comentar, reagir, salvar e criar posts.'}
-                  </p>
-                )}
-              </section>
-
-              {postsLoading ? (
-                <div className="communities-state-card">Carregando posts...</div>
-              ) : posts.length === 0 ? (
-                <div className="communities-state-card">
-                  Ainda nao ha posts nesta comunidade.
-                </div>
-              ) : (
-                posts.map(post => (
-                  <CommunityPostCard
-                    key={post.id}
-                    post={post}
-                    currentUserId={user?.id}
-                    currentUserRole={community.currentUserRole}
-                    onToggleReaction={handleToggleReaction}
-                    onToggleSave={handleToggleSave}
-                    onCreateComment={handleCreateComment}
-                    onDeletePost={postToDelete =>
-                      setConfirmState({ kind: 'delete-post', post: postToDelete })
-                    }
-                    onDeleteComment={(postWithComment, commentId) =>
-                      setConfirmState({
-                        kind: 'delete-comment',
-                        post: postWithComment,
-                        commentId,
-                      })
-                    }
-                  />
-                ))
-              )}
-            </main>
-
-            <aside className="community-sidebar">
-              <section className="community-section">
-                <h2>Sobre</h2>
-                <p>{community.regras || 'Esta comunidade ainda nao cadastrou regras.'}</p>
-                <p>
-                  {community.membros_count} membros / {community.posts_count} posts
-                </p>
-                {community.jogo ? <p>Jogo relacionado: {community.jogo.titulo}</p> : null}
-                {community.tipo ? <p>Tema: {community.tipo}</p> : null}
-                {community.categoria ? <p>Categoria: {community.categoria}</p> : null}
-              </section>
-
-              {isModerator ? (
-                <section className="community-settings-card">
-                  <h2>Quem pode postar</h2>
-                  <p>{POSTING_PERMISSION_DESCRIPTIONS[community.permissao_postagem]}</p>
-                  <label className="communities-field">
-                    <span>Regra</span>
-                    <select
-                      value={postingPermissionDraft}
-                      onChange={event =>
-                        setPostingPermissionDraft(event.target.value as CommunityPostingPermission)
-                      }
-                    >
-                      {Object.entries(POSTING_PERMISSION_LABELS).map(([value, label]) => (
-                        <option key={value} value={value}>
-                          {label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+          {!canViewContent ? (
+            <section className="community-section">
+              <h2>{t('communities.private.title')}</h2>
+              <p>{t('communities.private.text')}</p>
+            </section>
+          ) : (
+            <>
+              <nav className="community-tabs" aria-label={t('communities.tabs.label')}>
+                {visibleTabs.map(tab => (
                   <button
+                    key={tab}
                     type="button"
-                    className="community-settings-button"
-                    disabled={postingPermissionDraft === community.permissao_postagem}
-                    onClick={() =>
-                      setConfirmState({
-                        kind: 'posting-permission',
-                        permission: postingPermissionDraft,
-                      })
-                    }
+                    className={activeTab === tab ? 'is-active' : ''}
+                    onClick={() => setActiveTab(tab)}
                   >
-                    Alterar regra
+                    {t(`communities.tabs.${tab}`)}
                   </button>
-                </section>
-              ) : null}
+                ))}
+              </nav>
 
-              {isLeader ? (
-                <section className="community-settings-card">
-                  <h2>Configuracoes</h2>
-                  <form className="community-settings-form" onSubmit={handleSaveSettings}>
-                    <label className="communities-field">
-                      <span>Nome</span>
-                      <input
-                        value={settingsDraft.nome}
-                        onChange={event => updateSettingsDraft('nome', event.target.value)}
-                        maxLength={80}
-                        required
-                      />
-                    </label>
-                    <label className="communities-field">
-                      <span>Descricao</span>
-                      <textarea
-                        value={settingsDraft.descricao}
-                        onChange={event => updateSettingsDraft('descricao', event.target.value)}
-                        maxLength={600}
-                      />
-                    </label>
-                    <div className="communities-form-grid">
-                      <label className="communities-field">
-                        <span>Tema</span>
-                        <input
-                          value={settingsDraft.tipo}
-                          onChange={event => updateSettingsDraft('tipo', event.target.value)}
-                        />
-                      </label>
-                      <label className="communities-field">
-                        <span>Categoria</span>
-                        <input
-                          value={settingsDraft.categoria}
-                          onChange={event => updateSettingsDraft('categoria', event.target.value)}
-                        />
-                      </label>
-                    </div>
-                    <label className="communities-field">
-                      <span>Regras</span>
-                      <textarea
-                        value={settingsDraft.regras}
-                        onChange={event => updateSettingsDraft('regras', event.target.value)}
-                        maxLength={3000}
-                      />
-                    </label>
-                    <button type="submit" className="community-settings-button" disabled={settingsSaving}>
-                      {settingsSaving ? 'Salvando...' : 'Salvar informacoes'}
-                    </button>
-                  </form>
-                </section>
-              ) : null}
-
-              <section className="community-section">
-                <h2>Membros</h2>
-                <div className="community-member-list">
-                  {sidebarMembers.map(member => {
-                    const memberName = getMemberName(member)
-                    const memberPath = getOptionalPublicProfilePath(member.usuario?.username)
-                    const canKick = isModerator && member.cargo === 'membro'
-                    const canManageAdmin = isLeader && member.cargo !== 'lider'
-                    const canTransfer = isLeader && member.usuario_id !== user?.id
-
-                    return (
-                      <article key={member.usuario_id} className="community-member-card">
-                        <div className="community-member-header">
-                          {memberPath ? (
-                            <Link to={memberPath} className="community-member-author">
-                              <UserAvatar
-                                name={memberName}
-                                avatarPath={member.usuario?.avatar_path}
-                                imageClassName="community-member-avatar"
-                                fallbackClassName="community-member-avatar-fallback"
-                              />
-                              <span>
-                                <strong>@{memberName}</strong>
-                                <span>{getRoleLabel(member.cargo)}</span>
-                              </span>
-                            </Link>
-                          ) : (
-                            <div className="community-member-author">
-                              <UserAvatar
-                                name={memberName}
-                                avatarPath={member.usuario?.avatar_path}
-                                imageClassName="community-member-avatar"
-                                fallbackClassName="community-member-avatar-fallback"
-                              />
-                              <span>
-                                <strong>@{memberName}</strong>
-                                <span>{getRoleLabel(member.cargo)}</span>
-                              </span>
-                            </div>
-                          )}
-                        </div>
-
-                        {(canKick || canManageAdmin || canTransfer) ? (
-                          <div className="community-member-actions">
-                            {canManageAdmin ? (
-                              <button
-                                type="button"
-                                className="community-secondary-button"
-                                onClick={() => void handlePromoteOrDemote(member)}
-                              >
-                                {member.cargo === 'admin' ? 'Remover admin' : 'Promover admin'}
-                              </button>
-                            ) : null}
-
-                            {canTransfer ? (
-                              <button
-                                type="button"
-                                className="community-secondary-button"
-                                onClick={() =>
-                                  setConfirmState({ kind: 'transfer-leadership', member })
-                                }
-                              >
-                                Transferir lideranca
-                              </button>
-                            ) : null}
-
-                            {canKick ? (
-                              <button
-                                type="button"
-                                className="community-danger-button"
-                                onClick={() => setConfirmState({ kind: 'kick-member', member })}
-                              >
-                                Expulsar
-                              </button>
-                            ) : null}
-                          </div>
-                        ) : null}
-                      </article>
-                    )
-                  })}
-                </div>
+              <section className="community-tab-panel">
+                {activeTab === 'posts' ? renderPostsTab() : null}
+                {activeTab === 'members' ? renderMembersTab() : null}
+                {activeTab === 'about' ? renderAboutTab() : null}
+                {activeTab === 'moderation' && isModerator ? renderModerationTab() : null}
+                {activeTab === 'settings' && isModerator ? renderSettingsTab() : null}
               </section>
-            </aside>
-          </section>
+            </>
+          )}
 
           {confirmCopy && confirmState ? (
             <CommunityConfirmModal
               title={confirmCopy.title}
               description={confirmCopy.description}
               confirmLabel={confirmCopy.confirmLabel}
+              cancelLabel={t('common.cancel')}
+              submittingLabel={t('common.updating')}
               tone={confirmCopy.tone}
               isSubmitting={confirmSubmitting}
               onClose={() => setConfirmState(null)}
               onConfirm={() => void executeConfirmAction()}
             />
+          ) : null}
+
+          {reportTarget ? (
+            <CommunityReportModal
+              targetType={reportTarget.type}
+              targetLabel={reportTarget.label}
+              isSubmitting={reportSubmitting}
+              onClose={() => setReportTarget(null)}
+              onSubmit={handleReportSubmit}
+            />
+          ) : null}
+
+          {lightbox ? (
+            <div className="community-lightbox" role="presentation" onMouseDown={() => setLightbox(null)}>
+              <div className="community-lightbox-content" onMouseDown={event => event.stopPropagation()}>
+                <button
+                  type="button"
+                  className="community-lightbox-close"
+                  onClick={() => setLightbox(null)}
+                  aria-label={t('common.close')}
+                >
+                  X
+                </button>
+                <img src={lightbox.url} alt={lightbox.alt} />
+              </div>
+            </div>
           ) : null}
         </div>
       </div>

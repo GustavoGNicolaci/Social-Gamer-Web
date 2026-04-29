@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useI18n } from '../../i18n/I18nContext'
 import {
   getCommunitiesByUserId,
   getCommunityPostsByUserId,
@@ -34,51 +35,44 @@ function getPostImage(post: CommunityPost) {
   return resolvePublicFileUrl(post.imagem_path)
 }
 
-function formatDate(value: string) {
-  const parsedDate = new Date(value)
-  if (Number.isNaN(parsedDate.getTime())) return 'Data nao informada'
-
-  return parsedDate.toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  })
-}
-
-function getSectionCopy(kind: ProfileCommunitiesKind, isOwnerView: boolean) {
+function getSectionCopy(
+  kind: ProfileCommunitiesKind,
+  isOwnerView: boolean,
+  t: (key: string, params?: Record<string, string | number>) => string
+) {
   if (kind === 'communities') {
     return {
-      kicker: 'Comunidades',
-      title: isOwnerView ? 'Suas comunidades' : 'Comunidades deste perfil',
+      kicker: t('profileCommunities.communities.kicker'),
+      title: isOwnerView ? t('profileCommunities.communities.ownerTitle') : t('profileCommunities.communities.publicTitle'),
       text: isOwnerView
-        ? 'Espacos dos quais voce participa.'
-        : 'Espacos em que este usuario participa.',
+        ? t('profileCommunities.communities.ownerText')
+        : t('profileCommunities.communities.publicText'),
       empty: isOwnerView
-        ? 'Voce ainda nao participa de comunidades.'
-        : 'Este perfil ainda nao participa de comunidades visiveis.',
+        ? t('profileCommunities.communities.ownerEmpty')
+        : t('profileCommunities.communities.publicEmpty'),
     }
   }
 
   if (kind === 'saved') {
     return {
-      kicker: 'Posts salvos',
-      title: 'Posts salvos',
-      text: 'Posts de comunidades que voce marcou para rever depois.',
+      kicker: t('profileCommunities.saved.kicker'),
+      title: t('profileCommunities.saved.title'),
+      text: t('profileCommunities.saved.text'),
       empty: isOwnerView
-        ? 'Voce ainda nao salvou posts de comunidades.'
-        : 'Posts salvos ficam visiveis apenas para o dono do perfil.',
+        ? t('profileCommunities.saved.ownerEmpty')
+        : t('profileCommunities.saved.publicEmpty'),
     }
   }
 
   return {
-    kicker: 'Posts',
-    title: isOwnerView ? 'Seus posts em comunidades' : 'Posts deste perfil',
+    kicker: t('profileCommunities.posts.kicker'),
+    title: isOwnerView ? t('profileCommunities.posts.ownerTitle') : t('profileCommunities.posts.publicTitle'),
     text: isOwnerView
-      ? 'Publicacoes que voce criou nas comunidades.'
-      : 'Publicacoes criadas por este usuario nas comunidades.',
+      ? t('profileCommunities.posts.ownerText')
+      : t('profileCommunities.posts.publicText'),
     empty: isOwnerView
-      ? 'Voce ainda nao criou posts em comunidades.'
-      : 'Este perfil ainda nao criou posts em comunidades.',
+      ? t('profileCommunities.posts.ownerEmpty')
+      : t('profileCommunities.posts.publicEmpty'),
   }
 }
 
@@ -88,6 +82,7 @@ export function ProfileCommunitiesSection({
   isOwnerView,
   kind,
 }: ProfileCommunitiesSectionProps) {
+  const { t, formatDate, formatNumber } = useI18n()
   const [state, setState] = useState<SectionState>({
     communities: [],
     posts: [],
@@ -135,7 +130,7 @@ export function ProfileCommunitiesSection({
     }
   }, [currentUserId, kind, profileId])
 
-  const copy = getSectionCopy(kind, isOwnerView)
+  const copy = getSectionCopy(kind, isOwnerView, t)
   const hasItems =
     kind === 'communities' ? state.communities.length > 0 : state.posts.length > 0
 
@@ -154,7 +149,7 @@ export function ProfileCommunitiesSection({
         </div>
 
         {state.loading ? (
-          <div className="profile-communities-empty">Carregando...</div>
+          <div className="profile-communities-empty">{t('common.loading')}</div>
         ) : state.error ? (
           <div className="profile-communities-empty">{state.error}</div>
         ) : !hasItems ? (
@@ -162,7 +157,7 @@ export function ProfileCommunitiesSection({
             <p>{copy.empty}</p>
             {kind === 'communities' && isOwnerView ? (
               <Link to="/comunidades" className="profile-secondary-button">
-                Explorar comunidades
+                {t('profileCommunities.explore')}
               </Link>
             ) : null}
           </div>
@@ -186,9 +181,12 @@ export function ProfileCommunitiesSection({
                   </div>
                   <div className="profile-community-card-copy">
                     <h3>{community.nome}</h3>
-                    <p>{community.descricao || 'Sem descricao informada.'}</p>
+                    <p>{community.descricao || t('communities.noDescription')}</p>
                     <span>
-                      {community.membros_count} membros / {community.posts_count} posts
+                      {t('communities.about.membersPosts', {
+                        members: formatNumber(community.membros_count),
+                        posts: formatNumber(community.posts_count),
+                      })}
                     </span>
                   </div>
                 </Link>
@@ -199,7 +197,7 @@ export function ProfileCommunitiesSection({
           <div className="profile-communities-grid">
             {state.posts.map(post => {
               const imageUrl = getPostImage(post)
-              const communityName = post.comunidade?.nome || 'Comunidade'
+              const communityName = post.comunidade?.nome || t('communities.kicker')
 
               return (
                 <Link
@@ -216,10 +214,13 @@ export function ProfileCommunitiesSection({
                   </div>
                   <div className="profile-community-card-copy">
                     <span>{communityName}</span>
-                    <h3>{post.texto || 'Post com imagem'}</h3>
-                    <p>{formatDate(post.created_at)}</p>
+                    <h3>{post.texto || t('profileCommunities.imagePost')}</h3>
+                    <p>{formatDate(post.created_at, { fallback: t('common.noDate') })}</p>
                     <span>
-                      {post.curtidas_count} curtidas / {post.comentarios_count} comentarios
+                      {t('profileCommunities.postStats', {
+                        likes: formatNumber(post.curtidas_count),
+                        comments: formatNumber(post.comentarios_count),
+                      })}
                     </span>
                   </div>
                 </Link>

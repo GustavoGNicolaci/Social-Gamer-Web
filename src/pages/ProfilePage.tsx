@@ -13,6 +13,7 @@ import {
   type ProfileUpdateError,
   type UserProfile,
 } from '../contexts/AuthContext'
+import { useI18n } from '../i18n/I18nContext'
 import {
   deleteGameStatus,
   getGameStatusesPageByUserId,
@@ -522,6 +523,7 @@ const readOnlySaveTopFive = async (_entries: TopFiveStoredEntry[]) => {
 
 export function ProfilePage() {
   const { username } = useParams()
+  const { t } = useI18n()
   const requestedUsername = username?.trim() || ''
   const isUsernameRoute = requestedUsername.length > 0
 
@@ -2213,7 +2215,7 @@ export function ProfilePage() {
                   aria-controls="profile-panel-communities"
                   onClick={() => setActiveTab('communities')}
                 >
-                  <span>Comunidades</span>
+                  <span>{t('communities.nav')}</span>
                 </button>
 
                 <button
@@ -2225,7 +2227,7 @@ export function ProfilePage() {
                   aria-controls="profile-panel-community-posts"
                   onClick={() => setActiveTab('communityPosts')}
                 >
-                  <span>Posts em comunidades</span>
+                  <span>{t('profileCommunities.posts.kicker')}</span>
                 </button>
 
                 {isOwnerView ? (
@@ -2238,7 +2240,7 @@ export function ProfilePage() {
                     aria-controls="profile-panel-saved-community-posts"
                     onClick={() => setActiveTab('savedCommunityPosts')}
                   >
-                    <span>Posts salvos</span>
+                    <span>{t('profileCommunities.saved.title')}</span>
                   </button>
                 ) : null}
               </div>

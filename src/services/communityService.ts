@@ -4,6 +4,51 @@ import type { CatalogGamePreview } from './gameCatalogService'
 export type CommunityRole = 'lider' | 'admin' | 'membro'
 export type CommunityPostingPermission = 'todos_membros' | 'somente_admins' | 'somente_lider'
 export type CommunityReactionType = 'curtida' | 'dislike'
+export type CommunityVisibility = 'publica' | 'privada'
+export type CommunityJoinRequestStatus = 'pendente' | 'aprovada' | 'recusada' | 'cancelada'
+export type CommunityReportTargetType = 'post' | 'comentario'
+export type CommunityReportReason =
+  | 'spam'
+  | 'assedio_ou_ofensa'
+  | 'conteudo_improprio'
+  | 'informacao_enganosa'
+  | 'discurso_de_odio'
+  | 'outro'
+export type CommunityReportStatus = 'pending' | 'under_review' | 'resolved' | 'dismissed'
+
+export const COMMUNITY_CATEGORY_VALUES = [
+  'rpg',
+  'acao',
+  'aventura',
+  'fps',
+  'tps',
+  'estrategia',
+  'simulacao',
+  'corrida',
+  'esportes',
+  'terror',
+  'sobrevivencia',
+  'mundo_aberto',
+  'indie',
+  'multiplayer',
+  'competitivo',
+  'casual',
+  'retro',
+  'noticias',
+  'guias_e_dicas',
+  'discussao_geral',
+] as const
+
+export type CommunityCategoryValue = typeof COMMUNITY_CATEGORY_VALUES[number]
+
+export const COMMUNITY_REPORT_REASONS: CommunityReportReason[] = [
+  'spam',
+  'assedio_ou_ofensa',
+  'conteudo_improprio',
+  'informacao_enganosa',
+  'discurso_de_odio',
+  'outro',
+]
 
 export interface CommunityError {
   code?: string
@@ -29,6 +74,7 @@ export interface CommunitySummary {
   categoria: string | null
   regras: string | null
   permissao_postagem: CommunityPostingPermission
+  visibilidade: CommunityVisibility
   lider_id: string
   membros_count: number
   posts_count: number
@@ -37,7 +83,9 @@ export interface CommunitySummary {
   jogo: Pick<CatalogGamePreview, 'id' | 'titulo' | 'capa_url'> | null
   lider: CommunityAuthor | null
   currentUserRole: CommunityRole | null
+  currentUserJoinRequestStatus: CommunityJoinRequestStatus | null
   canPost: boolean
+  canViewContent: boolean
 }
 
 export interface CommunityMember {
@@ -77,7 +125,39 @@ export interface CommunityPost {
   savedByCurrentUser: boolean
   canInteract: boolean
   canDelete: boolean
-  comunidade?: Pick<CommunitySummary, 'id' | 'nome' | 'banner_path'> | null
+  comunidade?: Pick<CommunitySummary, 'id' | 'nome' | 'banner_path' | 'visibilidade'> | null
+}
+
+export interface CommunityJoinRequest {
+  id: string
+  comunidade_id: string
+  usuario_id: string
+  status: CommunityJoinRequestStatus
+  decidido_por: string | null
+  decidido_em: string | null
+  created_at: string
+  updated_at: string
+  usuario: CommunityAuthor | null
+  moderador: CommunityAuthor | null
+}
+
+export interface CommunityReport {
+  id: string
+  comunidade_id: string
+  denunciante_id: string
+  tipo_conteudo: CommunityReportTargetType
+  post_id: string | null
+  comentario_id: string | null
+  motivo: CommunityReportReason
+  descricao: string | null
+  status: CommunityReportStatus
+  created_at: string
+  updated_at: string
+  denunciante: CommunityAuthor | null
+  targetText: string | null
+  targetImagePath: string | null
+  targetAuthor: CommunityAuthor | null
+  targetCreatedAt: string | null
 }
 
 export interface CommunityListFilters {
@@ -86,6 +166,20 @@ export interface CommunityListFilters {
   categoria?: string
   gameId?: number | null
   limit?: number
+}
+
+export interface CommunityMembersOptions {
+  search?: string
+  limit?: number
+}
+
+export interface CommunityPostsOptions {
+  page?: number
+  pageSize?: number
+}
+
+export interface CommunityReportsOptions {
+  status?: CommunityReportStatus | 'all'
 }
 
 export interface CreateCommunityInput {
@@ -97,20 +191,30 @@ export interface CreateCommunityInput {
   categoria?: string | null
   regras?: string | null
   permissaoPostagem?: CommunityPostingPermission
+  visibilidade?: CommunityVisibility
 }
 
 export interface UpdateCommunityInput extends CreateCommunityInput {
   comunidadeId: string
 }
 
-interface ServiceResult<T> {
+export interface UpdateCommunityModeratedInput {
+  comunidadeId: string
+  descricao?: string | null
+  bannerPath?: string | null
+  regras?: string | null
+}
+
+export interface ServiceResult<T> {
   data: T
   error: CommunityError | null
 }
 
-interface PaginatedServiceResult<T> extends ServiceResult<T> {
+export interface PaginatedServiceResult<T> extends ServiceResult<T> {
   totalCount: number | null
 }
+
+export type CommunityJoinAction = 'joined' | 'requested' | 'already_member' | 'already_pending'
 
 interface AuthorRow {
   id: string
@@ -131,6 +235,7 @@ interface CommunityRow {
   categoria: string | null
   regras: string | null
   permissao_postagem: CommunityPostingPermission
+  visibilidade: CommunityVisibility | null
   lider_id: string
   membros_count: number | string | null
   posts_count: number | string | null
@@ -161,7 +266,7 @@ interface PostRow {
   created_at: string
   updated_at: string
   autor?: Relation<AuthorRow>
-  comunidade?: Relation<Pick<CommunitySummary, 'id' | 'nome' | 'banner_path'>>
+  comunidade?: Relation<Pick<CommunitySummary, 'id' | 'nome' | 'banner_path' | 'visibilidade'>>
 }
 
 interface CommentRow {
@@ -186,6 +291,53 @@ interface SavedPostRow {
   usuario_id: string
 }
 
+interface JoinRequestRow {
+  id: string
+  comunidade_id: string
+  usuario_id: string
+  status: CommunityJoinRequestStatus
+  decidido_por: string | null
+  decidido_em: string | null
+  created_at: string
+  updated_at: string
+  usuario?: Relation<AuthorRow>
+  moderador?: Relation<AuthorRow>
+}
+
+interface ReportTargetPostRow {
+  id: string
+  texto: string | null
+  imagem_path: string | null
+  autor_id: string
+  created_at: string
+  autor?: Relation<AuthorRow>
+}
+
+interface ReportTargetCommentRow {
+  id: string
+  texto: string
+  autor_id: string
+  created_at: string
+  autor?: Relation<AuthorRow>
+}
+
+interface ReportRow {
+  id: string
+  comunidade_id: string
+  denunciante_id: string
+  tipo_conteudo: CommunityReportTargetType
+  post_id: string | null
+  comentario_id: string | null
+  motivo: CommunityReportReason
+  descricao: string | null
+  status: CommunityReportStatus
+  created_at: string
+  updated_at: string
+  denunciante?: Relation<AuthorRow>
+  post?: Relation<ReportTargetPostRow>
+  comentario?: Relation<ReportTargetCommentRow>
+}
+
 const COMMUNITY_SELECT = `
   id,
   nome,
@@ -196,6 +348,7 @@ const COMMUNITY_SELECT = `
   categoria,
   regras,
   permissao_postagem,
+  visibilidade,
   lider_id,
   membros_count,
   posts_count,
@@ -240,7 +393,50 @@ const PROFILE_POST_SELECT = `
   created_at,
   updated_at,
   autor:usuarios!comunidade_posts_autor_id_fkey(id, username, nome_completo, avatar_path),
-  comunidade:comunidades(id, nome, banner_path)
+  comunidade:comunidades(id, nome, banner_path, visibilidade)
+`
+
+const JOIN_REQUEST_SELECT = `
+  id,
+  comunidade_id,
+  usuario_id,
+  status,
+  decidido_por,
+  decidido_em,
+  created_at,
+  updated_at,
+  usuario:usuarios!comunidade_solicitacoes_entrada_usuario_id_fkey(id, username, nome_completo, avatar_path),
+  moderador:usuarios!comunidade_solicitacoes_entrada_decidido_por_fkey(id, username, nome_completo, avatar_path)
+`
+
+const REPORT_SELECT = `
+  id,
+  comunidade_id,
+  denunciante_id,
+  tipo_conteudo,
+  post_id,
+  comentario_id,
+  motivo,
+  descricao,
+  status,
+  created_at,
+  updated_at,
+  denunciante:usuarios!comunidade_denuncias_denunciante_id_fkey(id, username, nome_completo, avatar_path),
+  post:comunidade_posts!comunidade_denuncias_post_id_fkey(
+    id,
+    texto,
+    imagem_path,
+    autor_id,
+    created_at,
+    autor:usuarios!comunidade_posts_autor_id_fkey(id, username, nome_completo, avatar_path)
+  ),
+  comentario:comunidade_post_comentarios!comunidade_denuncias_comentario_id_fkey(
+    id,
+    texto,
+    autor_id,
+    created_at,
+    autor:usuarios!comunidade_post_comentarios_autor_id_fkey(id, username, nome_completo, avatar_path)
+  )
 `
 
 function normalizeCommunityError(error: unknown, fallbackMessage: string): CommunityError {
@@ -280,7 +476,14 @@ function canRolePost(role: CommunityRole | null, permission: CommunityPostingPer
   return role === 'lider'
 }
 
-function normalizeCommunity(row: CommunityRow, currentUserRole: CommunityRole | null): CommunitySummary {
+function normalizeCommunity(
+  row: CommunityRow,
+  currentUserRole: CommunityRole | null,
+  currentUserJoinRequestStatus: CommunityJoinRequestStatus | null
+): CommunitySummary {
+  const visibility = row.visibilidade || 'publica'
+  const canViewContent = visibility === 'publica' || Boolean(currentUserRole)
+
   return {
     id: row.id,
     nome: row.nome,
@@ -291,6 +494,7 @@ function normalizeCommunity(row: CommunityRow, currentUserRole: CommunityRole | 
     categoria: row.categoria,
     regras: row.regras,
     permissao_postagem: row.permissao_postagem,
+    visibilidade: visibility,
     lider_id: row.lider_id,
     membros_count: normalizeNumber(row.membros_count),
     posts_count: normalizeNumber(row.posts_count),
@@ -299,7 +503,9 @@ function normalizeCommunity(row: CommunityRow, currentUserRole: CommunityRole | 
     jogo: resolveRelation(row.jogo),
     lider: normalizeAuthor(row.lider),
     currentUserRole,
-    canPost: canRolePost(currentUserRole, row.permissao_postagem),
+    currentUserJoinRequestStatus,
+    canPost: canViewContent && canRolePost(currentUserRole, row.permissao_postagem),
+    canViewContent,
   }
 }
 
@@ -358,6 +564,54 @@ function normalizePost(
   }
 }
 
+function normalizeJoinRequest(row: JoinRequestRow): CommunityJoinRequest {
+  return {
+    id: row.id,
+    comunidade_id: row.comunidade_id,
+    usuario_id: row.usuario_id,
+    status: row.status,
+    decidido_por: row.decidido_por,
+    decidido_em: row.decidido_em,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    usuario: normalizeAuthor(row.usuario),
+    moderador: normalizeAuthor(row.moderador),
+  }
+}
+
+function normalizeReport(row: ReportRow): CommunityReport {
+  const targetPost = resolveRelation(row.post)
+  const targetComment = resolveRelation(row.comentario)
+  const target = row.tipo_conteudo === 'post' ? targetPost : targetComment
+
+  return {
+    id: row.id,
+    comunidade_id: row.comunidade_id,
+    denunciante_id: row.denunciante_id,
+    tipo_conteudo: row.tipo_conteudo,
+    post_id: row.post_id,
+    comentario_id: row.comentario_id,
+    motivo: row.motivo,
+    descricao: row.descricao,
+    status: row.status,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    denunciante: normalizeAuthor(row.denunciante),
+    targetText: target?.texto || null,
+    targetImagePath: targetPost?.imagem_path || null,
+    targetAuthor: normalizeAuthor(target?.autor),
+    targetCreatedAt: target?.created_at || null,
+  }
+}
+
+function normalizeSearch(value: string | null | undefined) {
+  return (value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+}
+
 async function getCurrentUserRoles(
   communityIds: string[],
   currentUserId?: string | null
@@ -383,6 +637,36 @@ async function getCurrentUserRoles(
   })
 
   return roles
+}
+
+async function getCurrentUserJoinRequestStatuses(
+  communityIds: string[],
+  currentUserId?: string | null
+): Promise<Map<string, CommunityJoinRequestStatus>> {
+  const requests = new Map<string, CommunityJoinRequestStatus>()
+  const uniqueIds = Array.from(new Set(communityIds.filter(Boolean)))
+
+  if (!currentUserId || uniqueIds.length === 0) return requests
+
+  const { data, error } = await supabase
+    .from('comunidade_solicitacoes_entrada')
+    .select('comunidade_id, status, created_at')
+    .eq('usuario_id', currentUserId)
+    .in('comunidade_id', uniqueIds)
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    console.error('Erro ao carregar solicitacoes de entrada:', error)
+    return requests
+  }
+
+  ;((data || []) as Array<{ comunidade_id: string; status: CommunityJoinRequestStatus }>).forEach(row => {
+    if (!requests.has(row.comunidade_id)) {
+      requests.set(row.comunidade_id, row.status)
+    }
+  })
+
+  return requests
 }
 
 async function getPostsInteractionState(
@@ -446,6 +730,7 @@ async function loadCommentsByPostId(postIds: string[]) {
       autor:usuarios!comunidade_post_comentarios_autor_id_fkey(id, username, nome_completo, avatar_path)
     `)
     .in('post_id', postIds)
+    .is('deleted_at', null)
     .order('created_at', { ascending: true })
 
   if (error) return { commentsByPostId, error }
@@ -520,10 +805,15 @@ export async function getCommunities(
     }
 
     const rows = (data || []) as CommunityRow[]
-    const roles = await getCurrentUserRoles(rows.map(row => row.id), currentUserId)
+    const [roles, requests] = await Promise.all([
+      getCurrentUserRoles(rows.map(row => row.id), currentUserId),
+      getCurrentUserJoinRequestStatuses(rows.map(row => row.id), currentUserId),
+    ])
 
     return {
-      data: rows.map(row => normalizeCommunity(row, roles.get(row.id) || null)),
+      data: rows.map(row =>
+        normalizeCommunity(row, roles.get(row.id) || null, requests.get(row.id) || null)
+      ),
       error: null,
       totalCount: count,
     }
@@ -557,10 +847,13 @@ export async function getCommunityById(
     if (!data) return { data: null, error: null }
 
     const row = data as CommunityRow
-    const roles = await getCurrentUserRoles([row.id], currentUserId)
+    const [roles, requests] = await Promise.all([
+      getCurrentUserRoles([row.id], currentUserId),
+      getCurrentUserJoinRequestStatuses([row.id], currentUserId),
+    ])
 
     return {
-      data: normalizeCommunity(row, roles.get(row.id) || null),
+      data: normalizeCommunity(row, roles.get(row.id) || null, requests.get(row.id) || null),
       error: null,
     }
   } catch (error) {
@@ -572,8 +865,9 @@ export async function getCommunityById(
 }
 
 export async function getCommunityMembers(
-  communityId: string
-): Promise<ServiceResult<CommunityMember[]>> {
+  communityId: string,
+  options: CommunityMembersOptions = {}
+): Promise<PaginatedServiceResult<CommunityMember[]>> {
   try {
     const { data, error } = await supabase
       .from('comunidade_membros')
@@ -586,17 +880,31 @@ export async function getCommunityMembers(
       return {
         data: [],
         error: normalizeCommunityError(error, 'Nao foi possivel carregar os membros.'),
+        totalCount: null,
       }
     }
 
+    const search = normalizeSearch(options.search)
+    const members = ((data || []) as MemberRow[]).map(normalizeMember)
+    const filteredMembers = search
+      ? members.filter(member => {
+          const username = normalizeSearch(member.usuario?.username)
+          const displayName = normalizeSearch(member.usuario?.nome_completo)
+          const role = normalizeSearch(member.cargo)
+          return username.includes(search) || displayName.includes(search) || role.includes(search)
+        })
+      : members
+
     return {
-      data: ((data || []) as MemberRow[]).map(normalizeMember),
+      data: filteredMembers.slice(0, options.limit || 200),
       error: null,
+      totalCount: filteredMembers.length,
     }
   } catch (error) {
     return {
       data: [],
       error: normalizeCommunityError(error, 'Erro inesperado ao carregar os membros.'),
+      totalCount: null,
     }
   }
 }
@@ -604,19 +912,28 @@ export async function getCommunityMembers(
 export async function getCommunityPosts(
   communityId: string,
   currentUserId?: string | null,
-  currentUserRole?: CommunityRole | null
-): Promise<ServiceResult<CommunityPost[]>> {
+  currentUserRole?: CommunityRole | null,
+  options: CommunityPostsOptions = {}
+): Promise<PaginatedServiceResult<CommunityPost[]>> {
   try {
-    const { data, error } = await supabase
+    const pageSize = Math.min(Math.max(options.pageSize || 12, 1), 30)
+    const page = Math.max(options.page || 1, 1)
+    const from = (page - 1) * pageSize
+    const to = from + pageSize - 1
+
+    const { data, error, count } = await supabase
       .from('comunidade_posts')
-      .select(POST_SELECT)
+      .select(POST_SELECT, { count: 'exact' })
       .eq('comunidade_id', communityId)
+      .is('deleted_at', null)
       .order('created_at', { ascending: false })
+      .range(from, to)
 
     if (error) {
       return {
         data: [],
         error: normalizeCommunityError(error, 'Nao foi possivel carregar os posts.'),
+        totalCount: null,
       }
     }
 
@@ -634,11 +951,13 @@ export async function getCommunityPosts(
       error: normalizedPosts.error
         ? normalizeCommunityError(normalizedPosts.error, 'Nao foi possivel carregar as interacoes dos posts.')
         : null,
+      totalCount: count,
     }
   } catch (error) {
     return {
       data: [],
       error: normalizeCommunityError(error, 'Erro inesperado ao carregar os posts.'),
+      totalCount: null,
     }
   }
 }
@@ -655,6 +974,7 @@ export async function createCommunity(
     p_categoria: input.categoria || null,
     p_regras: input.regras || null,
     p_permissao_postagem: input.permissaoPostagem || 'todos_membros',
+    p_visibilidade: input.visibilidade || 'publica',
   })
 
   if (error) {
@@ -666,7 +986,7 @@ export async function createCommunity(
 
   const row = data as CommunityRow
   return {
-    data: normalizeCommunity(row, 'lider'),
+    data: normalizeCommunity(row, 'lider', null),
     error: null,
   }
 }
@@ -683,6 +1003,7 @@ export async function updateCommunity(
     p_jogo_id: input.jogoId || null,
     p_categoria: input.categoria || null,
     p_regras: input.regras || null,
+    p_visibilidade: input.visibilidade || null,
   })
 
   if (error) {
@@ -693,18 +1014,44 @@ export async function updateCommunity(
   }
 
   return {
-    data: normalizeCommunity(data as CommunityRow, 'lider'),
+    data: normalizeCommunity(data as CommunityRow, 'lider', null),
     error: null,
   }
 }
 
-export async function joinCommunity(communityId: string): Promise<ServiceResult<null>> {
-  const { error } = await supabase.rpc('entrar_comunidade', {
+export async function updateCommunityModeratedDetails(
+  input: UpdateCommunityModeratedInput
+): Promise<ServiceResult<CommunitySummary | null>> {
+  const { data, error } = await supabase.rpc('editar_comunidade_moderavel', {
+    p_comunidade_id: input.comunidadeId,
+    p_descricao: input.descricao || null,
+    p_banner_path: input.bannerPath || null,
+    p_regras: input.regras || null,
+  })
+
+  if (error) {
+    return {
+      data: null,
+      error: normalizeCommunityError(error, 'Nao foi possivel editar a comunidade.'),
+    }
+  }
+
+  const currentRole = await getCurrentUserRoles([input.comunidadeId])
+  return {
+    data: normalizeCommunity(data as CommunityRow, currentRole.get(input.comunidadeId) || null, null),
+    error: null,
+  }
+}
+
+export async function joinCommunity(
+  communityId: string
+): Promise<ServiceResult<CommunityJoinAction>> {
+  const { data, error } = await supabase.rpc('entrar_comunidade', {
     p_comunidade_id: communityId,
   })
 
   return {
-    data: null,
+    data: (data as CommunityJoinAction) || 'joined',
     error: error ? normalizeCommunityError(error, 'Nao foi possivel entrar na comunidade.') : null,
   }
 }
@@ -717,6 +1064,79 @@ export async function leaveCommunity(communityId: string): Promise<ServiceResult
   return {
     data: null,
     error: error ? normalizeCommunityError(error, 'Nao foi possivel sair da comunidade.') : null,
+  }
+}
+
+export async function cancelCommunityJoinRequest(
+  requestId: string
+): Promise<ServiceResult<null>> {
+  const { error } = await supabase.rpc('cancelar_solicitacao_comunidade', {
+    p_solicitacao_id: requestId,
+  })
+
+  return {
+    data: null,
+    error: error ? normalizeCommunityError(error, 'Nao foi possivel cancelar a solicitacao.') : null,
+  }
+}
+
+export async function getCommunityJoinRequests(
+  communityId: string,
+  status: CommunityJoinRequestStatus | 'all' = 'pendente'
+): Promise<ServiceResult<CommunityJoinRequest[]>> {
+  try {
+    let query = supabase
+      .from('comunidade_solicitacoes_entrada')
+      .select(JOIN_REQUEST_SELECT)
+      .eq('comunidade_id', communityId)
+      .order('created_at', { ascending: false })
+
+    if (status !== 'all') query = query.eq('status', status)
+
+    const { data, error } = await query
+
+    if (error) {
+      return {
+        data: [],
+        error: normalizeCommunityError(error, 'Nao foi possivel carregar as solicitacoes.'),
+      }
+    }
+
+    return {
+      data: ((data || []) as JoinRequestRow[]).map(normalizeJoinRequest),
+      error: null,
+    }
+  } catch (error) {
+    return {
+      data: [],
+      error: normalizeCommunityError(error, 'Erro inesperado ao carregar as solicitacoes.'),
+    }
+  }
+}
+
+export async function approveCommunityJoinRequest(
+  requestId: string
+): Promise<ServiceResult<null>> {
+  const { error } = await supabase.rpc('aprovar_solicitacao_comunidade', {
+    p_solicitacao_id: requestId,
+  })
+
+  return {
+    data: null,
+    error: error ? normalizeCommunityError(error, 'Nao foi possivel aprovar a solicitacao.') : null,
+  }
+}
+
+export async function rejectCommunityJoinRequest(
+  requestId: string
+): Promise<ServiceResult<null>> {
+  const { error } = await supabase.rpc('recusar_solicitacao_comunidade', {
+    p_solicitacao_id: requestId,
+  })
+
+  return {
+    data: null,
+    error: error ? normalizeCommunityError(error, 'Nao foi possivel recusar a solicitacao.') : null,
   }
 }
 
@@ -896,6 +1316,90 @@ export async function toggleCommunityPostSave(
   }
 }
 
+export async function submitCommunityReport(input: {
+  communityId: string
+  targetType: CommunityReportTargetType
+  targetId: string
+  reason: CommunityReportReason
+  description?: string | null
+}): Promise<ServiceResult<CommunityReport | null>> {
+  const { data, error } = await supabase.rpc('criar_denuncia_comunidade', {
+    p_comunidade_id: input.communityId,
+    p_tipo_conteudo: input.targetType,
+    p_conteudo_id: input.targetId,
+    p_motivo: input.reason,
+    p_descricao: input.description || null,
+  })
+
+  if (error) {
+    return {
+      data: null,
+      error: normalizeCommunityError(error, 'Nao foi possivel registrar a denuncia.'),
+    }
+  }
+
+  return {
+    data: data ? normalizeReport(data as ReportRow) : null,
+    error: null,
+  }
+}
+
+export async function getCommunityReports(
+  communityId: string,
+  options: CommunityReportsOptions = {}
+): Promise<ServiceResult<CommunityReport[]>> {
+  try {
+    let query = supabase
+      .from('comunidade_denuncias')
+      .select(REPORT_SELECT)
+      .eq('comunidade_id', communityId)
+      .order('created_at', { ascending: false })
+
+    if (options.status && options.status !== 'all') query = query.eq('status', options.status)
+
+    const { data, error } = await query
+
+    if (error) {
+      return {
+        data: [],
+        error: normalizeCommunityError(error, 'Nao foi possivel carregar as denuncias.'),
+      }
+    }
+
+    return {
+      data: ((data || []) as ReportRow[]).map(normalizeReport),
+      error: null,
+    }
+  } catch (error) {
+    return {
+      data: [],
+      error: normalizeCommunityError(error, 'Erro inesperado ao carregar denuncias.'),
+    }
+  }
+}
+
+export async function updateCommunityReportStatus(
+  reportId: string,
+  status: CommunityReportStatus
+): Promise<ServiceResult<CommunityReport | null>> {
+  const { data, error } = await supabase.rpc('atualizar_status_denuncia_comunidade', {
+    p_denuncia_id: reportId,
+    p_status: status,
+  })
+
+  if (error) {
+    return {
+      data: null,
+      error: normalizeCommunityError(error, 'Nao foi possivel atualizar a denuncia.'),
+    }
+  }
+
+  return {
+    data: data ? normalizeReport(data as ReportRow) : null,
+    error: null,
+  }
+}
+
 export async function getCommunitiesByUserId(
   userId: string,
   currentUserId?: string | null
@@ -917,10 +1421,15 @@ export async function getCommunitiesByUserId(
     const communityRows = ((data || []) as Array<{ comunidade: Relation<CommunityRow> }>)
       .map(row => resolveRelation(row.comunidade))
       .filter((row): row is CommunityRow => Boolean(row))
-    const roles = await getCurrentUserRoles(communityRows.map(row => row.id), currentUserId)
+    const [roles, requests] = await Promise.all([
+      getCurrentUserRoles(communityRows.map(row => row.id), currentUserId),
+      getCurrentUserJoinRequestStatuses(communityRows.map(row => row.id), currentUserId),
+    ])
 
     return {
-      data: communityRows.map(row => normalizeCommunity(row, roles.get(row.id) || null)),
+      data: communityRows.map(row =>
+        normalizeCommunity(row, roles.get(row.id) || null, requests.get(row.id) || null)
+      ),
       error: null,
     }
   } catch (error) {
@@ -940,6 +1449,7 @@ export async function getCommunityPostsByUserId(
       .from('comunidade_posts')
       .select(PROFILE_POST_SELECT)
       .eq('autor_id', userId)
+      .is('deleted_at', null)
       .order('created_at', { ascending: false })
       .limit(24)
 
