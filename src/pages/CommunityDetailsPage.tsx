@@ -55,7 +55,7 @@ import { getOptionalPublicProfilePath } from '../utils/profileRoutes'
 import './CommunitiesPage.css'
 
 type FeedbackTone = 'success' | 'error' | 'info'
-type CommunityTab = 'posts' | 'members' | 'about' | 'moderation' | 'settings'
+type CommunityTab = 'posts' | 'members' | 'about' | 'moderation' | 'settings' | 'memberSettings'
 type RequestFilter = 'pendente' | 'all'
 type ReportFilter = CommunityReportStatus | 'all'
 
@@ -96,6 +96,11 @@ interface LightboxState {
 }
 
 const POST_PAGE_SIZE = 8
+const POSTING_PERMISSION_OPTIONS: CommunityPostingPermission[] = [
+  'todos_membros',
+  'somente_admins',
+  'somente_lider',
+]
 
 function createSettingsDraft(community: CommunitySummary | null): SettingsDraft {
   return {
@@ -177,12 +182,14 @@ function CommunityDetailsPage() {
   const totalPostPages = postsTotalCount ? Math.max(1, Math.ceil(postsTotalCount / POST_PAGE_SIZE)) : 1
 
   const visibleTabs = useMemo<CommunityTab[]>(() => {
-    if (!canViewContent) return []
+    if (!canViewContent) return isModerator ? [] : ['memberSettings']
+
+    const baseTabs: CommunityTab[] = ['posts', 'members', 'about']
+    if (isModerator) return [...baseTabs, 'moderation', 'settings']
+
     return [
-      'posts',
-      'members',
-      'about',
-      ...(isModerator ? (['moderation', 'settings'] as CommunityTab[]) : []),
+      ...baseTabs,
+      'memberSettings',
     ]
   }, [canViewContent, isModerator])
 
@@ -777,11 +784,16 @@ function CommunityDetailsPage() {
     .filter(Boolean)
     .join(' / ')
 
-  const renderParticipationPanel = () => {
+  const renderMemberSettingsTab = () => {
     const roleLabel = community.currentUserRole
       ? getRoleLabel(community.currentUserRole)
       : t('communities.role.visitor')
     const isPending = community.currentUserJoinRequestStatus === 'pendente'
+    const memberStatus = community.currentUserRole
+      ? t('communities.participation.statusApproved')
+      : isPending
+        ? t('communities.private.requestSent')
+        : t('communities.participation.statusNotMember')
     const participationHelp = community.currentUserRole === 'lider'
       ? t('communities.participation.leaderHelp')
       : community.currentUserRole === 'admin'
@@ -793,10 +805,12 @@ function CommunityDetailsPage() {
             : t('communities.participation.visitorHelp')
 
     return (
-      <section className="community-participation-card">
-        <div>
-          <span className="communities-kicker">{t('communities.participation.kicker')}</span>
-          <h2>{t('communities.participation.title')}</h2>
+      <section className="community-section community-member-settings-card">
+        <div className="community-member-settings-head">
+          <div>
+            <span className="communities-kicker">{t('communities.participation.kicker')}</span>
+            <h2>{t('communities.participation.title')}</h2>
+          </div>
           <p>{participationHelp}</p>
         </div>
 
@@ -805,12 +819,10 @@ function CommunityDetailsPage() {
             <strong>{t('communities.participation.role')}</strong>
             {roleLabel}
           </span>
-          {isPending ? (
-            <span>
-              <strong>{t('communities.participation.requestStatus')}</strong>
-              {t('communities.private.requestSent')}
-            </span>
-          ) : null}
+          <span>
+            <strong>{t('communities.participation.status')}</strong>
+            {memberStatus}
+          </span>
           <span>
             <strong>{t('communities.participation.postingRule')}</strong>
             {t(`communities.permission.${community.permissao_postagem}`)}
@@ -823,35 +835,15 @@ function CommunityDetailsPage() {
               {t('communities.loginToJoin')}
             </Link>
           ) : community.currentUserRole ? (
-            <>
-              {isModerator ? (
-                <>
-                  <button
-                    type="button"
-                    className="community-secondary-button"
-                    onClick={() => setActiveTab('moderation')}
-                  >
-                    {t('communities.participation.openModeration')}
-                  </button>
-                  <button
-                    type="button"
-                    className="community-secondary-button"
-                    onClick={() => setActiveTab('settings')}
-                  >
-                    {t('communities.participation.openSettings')}
-                  </button>
-                </>
-              ) : null}
-              {community.currentUserRole !== 'lider' ? (
-                <button
-                  type="button"
-                  className="community-danger-button"
-                  onClick={() => setConfirmState({ kind: 'leave-community' })}
-                >
-                  {t('communities.leave')}
-                </button>
-              ) : null}
-            </>
+            community.currentUserRole !== 'lider' ? (
+              <button
+                type="button"
+                className="community-danger-button"
+                onClick={() => setConfirmState({ kind: 'leave-community' })}
+              >
+                {t('communities.leave')}
+              </button>
+            ) : null
           ) : isPending ? (
             <button type="button" className="community-secondary-button" disabled>
               {t('communities.private.requestSent')}
@@ -1311,22 +1303,35 @@ function CommunityDetailsPage() {
         </form>
       </section>
 
-      <section className="community-settings-card">
-        <h2>{t('communities.settings.postingTitle')}</h2>
-        <p>{t(`communities.permissionDescription.${community.permissao_postagem}`)}</p>
-        <label className="communities-field">
-          <span>{t('communities.settings.postingRule')}</span>
-          <select
-            value={postingPermissionDraft}
-            onChange={event =>
-              setPostingPermissionDraft(event.target.value as CommunityPostingPermission)
-            }
-          >
-            <option value="todos_membros">{t('communities.permission.todos_membros')}</option>
-            <option value="somente_admins">{t('communities.permission.somente_admins')}</option>
-            <option value="somente_lider">{t('communities.permission.somente_lider')}</option>
-          </select>
-        </label>
+      <section className="community-settings-card community-posting-settings-card">
+        <div className="community-settings-card-head">
+          <div>
+            <h2>{t('communities.settings.postingTitle')}</h2>
+            <p>{t('communities.settings.postingCompactHelp')}</p>
+          </div>
+        </div>
+
+        <div className="community-posting-option-group" role="radiogroup" aria-label={t('communities.settings.postingRule')}>
+          {POSTING_PERMISSION_OPTIONS.map(option => (
+            <label
+              key={option}
+              className={`community-posting-option${postingPermissionDraft === option ? ' is-selected' : ''}`}
+            >
+              <input
+                type="radio"
+                name="community-posting-permission"
+                value={option}
+                checked={postingPermissionDraft === option}
+                onChange={() => setPostingPermissionDraft(option)}
+              />
+              <span>
+                <strong>{t(`communities.permission.${option}`)}</strong>
+                <small>{t(`communities.permissionDescription.${option}`)}</small>
+              </span>
+            </label>
+          ))}
+        </div>
+
         <button
           type="button"
           className="community-settings-button"
@@ -1413,9 +1418,7 @@ function CommunityDetailsPage() {
             <p className={`communities-feedback is-${feedback.tone}`}>{feedback.message}</p>
           ) : null}
 
-          {renderParticipationPanel()}
-
-          {!canViewContent ? (
+          {visibleTabs.length === 0 ? (
             <section className="community-section">
               <h2>{t('communities.private.title')}</h2>
               <p>{t('communities.private.text')}</p>
@@ -1441,6 +1444,7 @@ function CommunityDetailsPage() {
                 {activeTab === 'about' ? renderAboutTab() : null}
                 {activeTab === 'moderation' && isModerator ? renderModerationTab() : null}
                 {activeTab === 'settings' && isModerator ? renderSettingsTab() : null}
+                {activeTab === 'memberSettings' && !isModerator ? renderMemberSettingsTab() : null}
               </section>
             </>
           )}
