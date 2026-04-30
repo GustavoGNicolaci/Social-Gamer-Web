@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { CommunityConfirmModal } from '../components/communities/CommunityConfirmModal'
+import { CommunityFilePicker } from '../components/communities/CommunityFilePicker'
 import { CommunityPostCard } from '../components/communities/CommunityPostCard'
 import { CommunityReportModal } from '../components/communities/CommunityReportModal'
 import { UserAvatar } from '../components/UserAvatar'
@@ -148,6 +149,7 @@ function CommunityDetailsPage() {
   const [activeTab, setActiveTab] = useState<CommunityTab>('posts')
   const [postText, setPostText] = useState('')
   const [postImageFile, setPostImageFile] = useState<File | null>(null)
+  const [postImagePreviewUrl, setPostImagePreviewUrl] = useState<string | null>(null)
   const [postSubmitting, setPostSubmitting] = useState(false)
   const [settingsDraft, setSettingsDraft] = useState<SettingsDraft>(() => createSettingsDraft(null))
   const [settingsSaving, setSettingsSaving] = useState(false)
@@ -208,6 +210,17 @@ function CommunityDetailsPage() {
     setBannerPreviewUrl(previewUrl)
     return () => URL.revokeObjectURL(previewUrl)
   }, [bannerFile])
+
+  useEffect(() => {
+    if (!postImageFile) {
+      setPostImagePreviewUrl(null)
+      return
+    }
+
+    const previewUrl = URL.createObjectURL(postImageFile)
+    setPostImagePreviewUrl(previewUrl)
+    return () => URL.revokeObjectURL(previewUrl)
+  }, [postImageFile])
 
   useEffect(() => {
     if (!lightbox) return
@@ -450,10 +463,6 @@ function CommunityDetailsPage() {
     await reloadAll()
   }
 
-  const handlePostImageChange = (event: ChangeEvent<HTMLInputElement>) => {
-    setPostImageFile(event.target.files?.[0] || null)
-  }
-
   const handleCreatePost = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!user || !community || postSubmitting) return
@@ -541,10 +550,6 @@ function CommunityDetailsPage() {
     }
 
     await loadPosts()
-  }
-
-  const handleBannerChange = (event: ChangeEvent<HTMLInputElement>) => {
-    setBannerFile(event.target.files?.[0] || null)
   }
 
   const handleSaveSettings = async (event: FormEvent<HTMLFormElement>) => {
@@ -763,6 +768,106 @@ function CommunityDetailsPage() {
     )
   }
 
+  const communityCategoryLabel = community.categoria
+    ? COMMUNITY_CATEGORY_VALUES.includes(community.categoria as CommunityCategoryValue)
+      ? t(`communities.category.${community.categoria}`)
+      : community.categoria
+    : null
+  const communityHeroMeta = [community.tipo, communityCategoryLabel, community.jogo?.titulo]
+    .filter(Boolean)
+    .join(' / ')
+
+  const renderParticipationPanel = () => {
+    const roleLabel = community.currentUserRole
+      ? getRoleLabel(community.currentUserRole)
+      : t('communities.role.visitor')
+    const isPending = community.currentUserJoinRequestStatus === 'pendente'
+    const participationHelp = community.currentUserRole === 'lider'
+      ? t('communities.participation.leaderHelp')
+      : community.currentUserRole === 'admin'
+        ? t('communities.participation.adminHelp')
+        : community.currentUserRole === 'membro'
+          ? t('communities.participation.memberHelp')
+          : isPending
+            ? t('communities.participation.pendingHelp')
+            : t('communities.participation.visitorHelp')
+
+    return (
+      <section className="community-participation-card">
+        <div>
+          <span className="communities-kicker">{t('communities.participation.kicker')}</span>
+          <h2>{t('communities.participation.title')}</h2>
+          <p>{participationHelp}</p>
+        </div>
+
+        <div className="community-participation-status">
+          <span>
+            <strong>{t('communities.participation.role')}</strong>
+            {roleLabel}
+          </span>
+          {isPending ? (
+            <span>
+              <strong>{t('communities.participation.requestStatus')}</strong>
+              {t('communities.private.requestSent')}
+            </span>
+          ) : null}
+          <span>
+            <strong>{t('communities.participation.postingRule')}</strong>
+            {t(`communities.permission.${community.permissao_postagem}`)}
+          </span>
+        </div>
+
+        <div className="community-participation-actions">
+          {!user ? (
+            <Link to="/login" className="communities-primary-link">
+              {t('communities.loginToJoin')}
+            </Link>
+          ) : community.currentUserRole ? (
+            <>
+              {isModerator ? (
+                <>
+                  <button
+                    type="button"
+                    className="community-secondary-button"
+                    onClick={() => setActiveTab('moderation')}
+                  >
+                    {t('communities.participation.openModeration')}
+                  </button>
+                  <button
+                    type="button"
+                    className="community-secondary-button"
+                    onClick={() => setActiveTab('settings')}
+                  >
+                    {t('communities.participation.openSettings')}
+                  </button>
+                </>
+              ) : null}
+              {community.currentUserRole !== 'lider' ? (
+                <button
+                  type="button"
+                  className="community-danger-button"
+                  onClick={() => setConfirmState({ kind: 'leave-community' })}
+                >
+                  {t('communities.leave')}
+                </button>
+              ) : null}
+            </>
+          ) : isPending ? (
+            <button type="button" className="community-secondary-button" disabled>
+              {t('communities.private.requestSent')}
+            </button>
+          ) : (
+            <button type="button" className="communities-primary-button" onClick={handleJoin}>
+              {community.visibilidade === 'privada'
+                ? t('communities.private.requestJoin')
+                : t('communities.join')}
+            </button>
+          )}
+        </div>
+      </section>
+    )
+  }
+
   const renderMemberCard = (member: CommunityMember) => {
     const memberName = getMemberName(member)
     const memberPath = getOptionalPublicProfilePath(member.usuario?.username)
@@ -853,15 +958,19 @@ function CommunityDetailsPage() {
               maxLength={4000}
               disabled={postSubmitting}
             />
-            <label className="communities-field">
-              <span>{t('communities.post.optionalImage')}</span>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handlePostImageChange}
-                disabled={postSubmitting}
-              />
-            </label>
+            <CommunityFilePicker
+              label={t('communities.post.optionalImage')}
+              buttonLabel={t('communities.upload.addImage')}
+              removeLabel={t('communities.upload.removeImage')}
+              uploadingLabel={t('communities.upload.uploading')}
+              previewAlt={t('communities.post.imageAlt')}
+              helperText={t('communities.upload.postImageHelper')}
+              file={postImageFile}
+              previewUrl={postImagePreviewUrl}
+              disabled={postSubmitting}
+              isUploading={postSubmitting && Boolean(postImageFile)}
+              onChange={setPostImageFile}
+            />
             <button type="submit" disabled={postSubmitting}>
               {postSubmitting ? t('communities.post.publishing') : t('communities.post.publish')}
             </button>
@@ -1182,16 +1291,20 @@ function CommunityDetailsPage() {
                 <option value="privada">{t('communities.visibility.privada')}</option>
               </select>
             </label>
-            <label className="communities-field">
-              <span>{t('communities.field.banner')}</span>
-              <input type="file" accept="image/*" onChange={handleBannerChange} />
-            </label>
           </div>
-          {bannerPreviewUrl ? (
-            <div className="community-banner-preview">
-              <img src={bannerPreviewUrl} alt={t('communities.settings.bannerPreview')} />
-            </div>
-          ) : null}
+          <CommunityFilePicker
+            label={t('communities.field.banner')}
+            buttonLabel={t('communities.upload.chooseBanner')}
+            removeLabel={t('communities.upload.removeImage')}
+            uploadingLabel={t('communities.upload.uploading')}
+            previewAlt={t('communities.settings.bannerPreview')}
+            helperText={t('communities.upload.bannerHelper')}
+            file={bannerFile}
+            previewUrl={bannerPreviewUrl}
+            disabled={settingsSaving}
+            isUploading={settingsSaving && Boolean(bannerFile)}
+            onChange={setBannerFile}
+          />
           <button type="submit" className="community-settings-button" disabled={settingsSaving}>
             {settingsSaving ? t('common.saving') : t('communities.settings.saveInfo')}
           </button>
@@ -1250,9 +1363,25 @@ function CommunityDetailsPage() {
       <div className="page-content">
         <div className="community-details-page">
           <section className="community-details-hero">
+            <div className="community-details-banner-shell">
+              {bannerUrl ? (
+                <>
+                  <img className="community-media-backdrop" src={bannerUrl} alt="" aria-hidden="true" />
+                  <img className="community-media-foreground" src={bannerUrl} alt="" />
+                </>
+              ) : (
+                <div className="community-details-banner-fallback">
+                  {community.nome.charAt(0).toUpperCase()}
+                </div>
+              )}
+            </div>
+
             <div className="community-details-copy">
               <span className="communities-kicker">{t('communities.kicker')}</span>
               <h1>{community.nome}</h1>
+              {communityHeroMeta ? (
+                <p className="community-details-meta">{communityHeroMeta}</p>
+              ) : null}
               <p>{community.descricao || t('communities.noDescription')}</p>
 
               <div className="community-details-actions">
@@ -1267,49 +1396,24 @@ function CommunityDetailsPage() {
                 </span>
               </div>
 
-              <div className="community-details-actions">
-                {!user ? (
-                  <Link to="/login" className="communities-primary-link">
-                    {t('communities.loginToJoin')}
-                  </Link>
-                ) : community.currentUserRole ? (
-                  community.currentUserRole !== 'lider' ? (
-                    <button
-                      type="button"
-                      className="community-secondary-button"
-                      onClick={() => setConfirmState({ kind: 'leave-community' })}
-                    >
-                      {t('communities.leave')}
-                    </button>
-                  ) : null
-                ) : community.currentUserJoinRequestStatus === 'pendente' ? (
-                  <button type="button" className="community-secondary-button" disabled>
-                    {t('communities.private.requestSent')}
-                  </button>
-                ) : (
-                  <button type="button" className="communities-primary-button" onClick={handleJoin}>
-                    {community.visibilidade === 'privada'
-                      ? t('communities.private.requestJoin')
-                      : t('communities.join')}
-                  </button>
-                )}
+              <div className="community-details-stats">
+                <span>
+                  <strong>{formatNumber(community.membros_count)}</strong>
+                  {t('communities.members')}
+                </span>
+                <span>
+                  <strong>{formatNumber(community.posts_count)}</strong>
+                  {t('communities.posts')}
+                </span>
               </div>
-            </div>
-
-            <div className="community-details-banner-shell">
-              {bannerUrl ? (
-                <img className="community-details-banner" src={bannerUrl} alt="" />
-              ) : (
-                <div className="community-details-banner-fallback">
-                  {community.nome.charAt(0).toUpperCase()}
-                </div>
-              )}
             </div>
           </section>
 
           {feedback ? (
             <p className={`communities-feedback is-${feedback.tone}`}>{feedback.message}</p>
           ) : null}
+
+          {renderParticipationPanel()}
 
           {!canViewContent ? (
             <section className="community-section">

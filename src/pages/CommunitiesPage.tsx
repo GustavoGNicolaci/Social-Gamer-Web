@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { CommunityFilePicker } from '../components/communities/CommunityFilePicker'
 import { GameCoverImage } from '../components/GameCoverImage'
 import { useAuth } from '../contexts/AuthContext'
 import { useI18n } from '../i18n/I18nContext'
@@ -52,6 +53,8 @@ const POSTING_PERMISSION_OPTIONS: CommunityPostingPermission[] = [
   'somente_lider',
 ]
 
+const COMMUNITIES_PAGE_SIZE = 6
+
 function getCommunityImage(community: CommunitySummary) {
   return resolvePublicFileUrl(community.banner_path) || community.jogo?.capa_url || null
 }
@@ -77,6 +80,7 @@ function CommunitiesPage() {
   const [search, setSearch] = useState('')
   const [tipoFilter, setTipoFilter] = useState('')
   const [categoriaFilter, setCategoriaFilter] = useState<CommunityCategoryValue | ''>('')
+  const [currentPage, setCurrentPage] = useState(1)
   const [draft, setDraft] = useState<CommunityDraft>(initialDraft)
   const [bannerFile, setBannerFile] = useState<File | null>(null)
   const [bannerPreviewUrl, setBannerPreviewUrl] = useState<string | null>(null)
@@ -93,6 +97,12 @@ function CommunitiesPage() {
     [communities]
   )
 
+  const totalPages = Math.max(1, Math.ceil(communities.length / COMMUNITIES_PAGE_SIZE))
+  const currentCommunities = useMemo(() => {
+    const startIndex = (currentPage - 1) * COMMUNITIES_PAGE_SIZE
+    return communities.slice(startIndex, startIndex + COMMUNITIES_PAGE_SIZE)
+  }, [communities, currentPage])
+
   const loadCommunities = useCallback(async () => {
     setLoading(true)
     const result = await getCommunities(
@@ -100,6 +110,7 @@ function CommunitiesPage() {
         search,
         tipo: tipoFilter || undefined,
         categoria: categoriaFilter || undefined,
+        limit: 100,
       },
       user?.id
     )
@@ -108,6 +119,14 @@ function CommunitiesPage() {
     setFeedback(result.error ? { tone: 'error', message: result.error.message } : null)
     setLoading(false)
   }, [categoriaFilter, search, tipoFilter, user?.id])
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [categoriaFilter, search, tipoFilter])
+
+  useEffect(() => {
+    setCurrentPage(current => Math.min(current, totalPages))
+  }, [totalPages])
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -157,10 +176,6 @@ function CommunitiesPage() {
       ...currentDraft,
       [field]: value,
     }))
-  }
-
-  const handleBannerChange = (event: ChangeEvent<HTMLInputElement>) => {
-    setBannerFile(event.target.files?.[0] || null)
   }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -282,8 +297,9 @@ function CommunitiesPage() {
                   {t('communities.empty')}
                 </div>
               ) : (
-                <div className="communities-grid">
-                  {communities.map(community => {
+                <>
+                  <div className="communities-grid">
+                    {currentCommunities.map(community => {
                     const imageUrl = getCommunityImage(community)
                     const categoryLabel = getCommunityCategoryLabel(community.categoria, t)
                     const meta = [community.tipo, categoryLabel, community.jogo?.titulo]
@@ -298,7 +314,10 @@ function CommunitiesPage() {
                       >
                         <div className="community-card-media">
                           {imageUrl ? (
-                            <img src={imageUrl} alt="" />
+                            <>
+                              <img className="community-media-backdrop" src={imageUrl} alt="" aria-hidden="true" />
+                              <img className="community-media-foreground" src={imageUrl} alt="" />
+                            </>
                           ) : (
                             <div className="community-card-fallback">
                               {community.nome.charAt(0).toUpperCase()}
@@ -323,8 +342,36 @@ function CommunitiesPage() {
                         </div>
                       </Link>
                     )
-                  })}
-                </div>
+                    })}
+                  </div>
+
+                  {totalPages > 1 ? (
+                    <nav className="community-pagination" aria-label={t('communities.pagination.label')}>
+                      <button
+                        type="button"
+                        className="community-secondary-button"
+                        disabled={currentPage <= 1}
+                        onClick={() => setCurrentPage(page => Math.max(1, page - 1))}
+                      >
+                        {t('communities.pagination.previous')}
+                      </button>
+                      <span>
+                        {t('communities.pagination.pageLabel', {
+                          page: currentPage,
+                          total: totalPages,
+                        })}
+                      </span>
+                      <button
+                        type="button"
+                        className="community-secondary-button"
+                        disabled={currentPage >= totalPages}
+                        onClick={() => setCurrentPage(page => Math.min(totalPages, page + 1))}
+                      >
+                        {t('communities.pagination.next')}
+                      </button>
+                    </nav>
+                  ) : null}
+                </>
               )}
             </div>
 
@@ -477,16 +524,19 @@ function CommunitiesPage() {
                     />
                   </label>
 
-                  <label className="communities-field">
-                    <span>{t('communities.field.banner')}</span>
-                    <input type="file" accept="image/*" onChange={handleBannerChange} />
-                  </label>
-
-                  {bannerPreviewUrl ? (
-                    <div className="community-banner-preview">
-                      <img src={bannerPreviewUrl} alt={t('communities.create.bannerPreview')} />
-                    </div>
-                  ) : null}
+                  <CommunityFilePicker
+                    label={t('communities.field.banner')}
+                    buttonLabel={t('communities.upload.chooseBanner')}
+                    removeLabel={t('communities.upload.removeImage')}
+                    uploadingLabel={t('communities.upload.uploading')}
+                    previewAlt={t('communities.create.bannerPreview')}
+                    helperText={t('communities.upload.bannerHelper')}
+                    file={bannerFile}
+                    previewUrl={bannerPreviewUrl}
+                    disabled={submitting}
+                    isUploading={submitting && Boolean(bannerFile)}
+                    onChange={setBannerFile}
+                  />
 
                   <button type="submit" className="communities-primary-button" disabled={submitting}>
                     {submitting ? t('communities.create.creating') : t('communities.create.submit')}
