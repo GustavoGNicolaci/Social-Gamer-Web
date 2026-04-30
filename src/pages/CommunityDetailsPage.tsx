@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { CommunityAboutCard } from '../components/communities/CommunityAboutCard'
 import { CommunityConfirmModal } from '../components/communities/CommunityConfirmModal'
 import { CommunityFilePicker } from '../components/communities/CommunityFilePicker'
 import { CommunityPostCard } from '../components/communities/CommunityPostCard'
@@ -1061,36 +1062,13 @@ function CommunityDetailsPage() {
   )
 
   const renderAboutTab = () => (
-    <section className="community-section">
-      <h2>{t('communities.tabs.about')}</h2>
-      <div className="community-about-grid">
-        <div>
-          <h3>{t('communities.about.description')}</h3>
-          <p>{community.descricao || t('communities.noDescription')}</p>
-        </div>
-        <div>
-          <h3>{t('communities.about.rules')}</h3>
-          <p>{community.regras || t('communities.about.noRules')}</p>
-        </div>
-        <div>
-          <h3>{t('communities.about.details')}</h3>
-          <p>{t('communities.about.membersPosts', {
-            members: formatNumber(community.membros_count),
-            posts: formatNumber(community.posts_count),
-          })}</p>
-          {community.jogo ? <p>{t('communities.about.relatedGame', { game: community.jogo.titulo })}</p> : null}
-          {community.tipo ? <p>{t('communities.about.theme', { theme: community.tipo })}</p> : null}
-          {community.categoria ? (
-            <p>{t('communities.about.category', {
-              category: COMMUNITY_CATEGORY_VALUES.includes(community.categoria as CommunityCategoryValue)
-                ? t(`communities.category.${community.categoria}`)
-                : community.categoria,
-            })}</p>
-          ) : null}
-          <p>{t('communities.about.visibility', { visibility: t(`communities.visibility.${community.visibilidade}`) })}</p>
-        </div>
-      </div>
-    </section>
+    <CommunityAboutCard
+      community={community}
+      categoryLabel={communityCategoryLabel}
+      t={t}
+      formatDate={formatDate}
+      formatNumber={formatNumber}
+    />
   )
 
   const renderModerationTab = () => (

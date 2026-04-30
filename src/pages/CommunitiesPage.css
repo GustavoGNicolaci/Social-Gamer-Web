@@ -12,6 +12,7 @@
 .community-details-hero,
 .community-tabs,
 .community-section,
+.community-about-card,
 .community-post-card,
 .community-settings-card,
 .community-member-card,
@@ -878,6 +879,178 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.community-about-card {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem;
+}
+
+.community-about-hero {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.25rem 0 0.5rem;
+}
+
+.community-about-hero h2,
+.community-about-hero p,
+.community-about-section-title h3,
+.community-about-summary p,
+.community-about-rules p {
+  margin: 0;
+}
+
+.community-about-hero h2 {
+  color: var(--foreground);
+  font-size: clamp(1.5rem, 3vw, 2.1rem);
+  line-height: 1.12;
+}
+
+.community-about-hero p,
+.community-about-summary p,
+.community-about-rules p {
+  color: var(--muted-foreground);
+  line-height: 1.7;
+}
+
+.community-about-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 320px);
+  gap: 1rem;
+  align-items: stretch;
+}
+
+.community-about-summary,
+.community-about-leader-card,
+.community-about-rules {
+  display: grid;
+  gap: 0.8rem;
+  align-content: start;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 1rem;
+}
+
+.community-about-description {
+  white-space: pre-wrap;
+}
+
+.community-about-section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.community-about-section-title svg,
+.community-about-meta-icon svg {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  color: var(--primary);
+}
+
+.community-about-section-title h3 {
+  color: var(--foreground);
+  font-size: 1rem;
+}
+
+.community-about-leader-card a,
+.community-about-leader-card strong {
+  color: var(--foreground);
+  font-size: 1.08rem;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.community-about-leader-card a:hover {
+  color: var(--primary);
+}
+
+.community-about-leader-card span {
+  width: fit-content;
+  border: 1px solid var(--badge-border);
+  border-radius: 999px;
+  padding: 0.28rem 0.58rem;
+  background: var(--badge);
+  color: var(--badge-foreground);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.community-about-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.community-about-meta-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.7rem;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 0.8rem;
+}
+
+.community-about-meta-item div {
+  display: grid;
+  gap: 0.16rem;
+  min-width: 0;
+}
+
+.community-about-meta-item span {
+  color: var(--muted-foreground);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.community-about-meta-item strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--foreground);
+  font-size: 0.98rem;
+}
+
+.community-about-meta-icon {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--surface-active);
+}
+
+.community-rules-list {
+  display: grid;
+  gap: 0.62rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.community-rules-list li {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--foreground);
+  line-height: 1.65;
+  padding: 0.74rem 0.85rem 0.74rem 2.3rem;
+}
+
+.community-rules-list li::before {
+  content: "";
+  position: absolute;
+  left: 0.92rem;
+  top: 1.34rem;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: var(--primary);
+}
+
 .community-feed {
   display: grid;
   gap: 1rem;
@@ -1244,8 +1417,13 @@
   .community-details-grid,
   .community-moderation-grid,
   .community-settings-layout,
-  .community-about-grid {
+  .community-about-grid,
+  .community-about-layout {
     grid-template-columns: 1fr;
+  }
+
+  .community-about-meta-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .community-participation-actions {
@@ -1290,6 +1468,17 @@
   .community-section-head,
   .community-report-card-head {
     display: grid;
+  }
+
+  .community-about-card,
+  .community-about-summary,
+  .community-about-leader-card,
+  .community-about-rules {
+    padding: 0.85rem;
+  }
+
+  .community-about-meta-grid {
+    grid-template-columns: 1fr;
   }
 
   .community-post-image-button {
