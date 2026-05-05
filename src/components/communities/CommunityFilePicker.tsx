@@ -1,4 +1,5 @@
 import { useId, useRef, type ChangeEvent } from 'react'
+import { Image } from 'lucide-react'
 
 interface CommunityFilePickerProps {
   label: string
@@ -20,31 +21,6 @@ interface CommunityFilePickerProps {
 function formatFileSize(size: number) {
   if (size < 1024 * 1024) return `${Math.max(1, Math.round(size / 1024))} KB`
   return `${(size / (1024 * 1024)).toFixed(1)} MB`
-}
-
-function imageIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path
-        d="M4.8 5.5C4.8 4.56 5.56 3.8 6.5 3.8H17.5C18.44 3.8 19.2 4.56 19.2 5.5V18.5C19.2 19.44 18.44 20.2 17.5 20.2H6.5C5.56 20.2 4.8 19.44 4.8 18.5V5.5Z"
-        stroke="currentColor"
-        strokeWidth="1.7"
-      />
-      <path
-        d="M7.6 16.4L10.2 13.35C10.62 12.86 11.37 12.84 11.82 13.3L12.7 14.2L14.65 11.8C15.08 11.27 15.9 11.29 16.3 11.85L19.1 15.75"
-        stroke="currentColor"
-        strokeWidth="1.7"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M9 8.35H9.02"
-        stroke="currentColor"
-        strokeWidth="2.4"
-        strokeLinecap="round"
-      />
-    </svg>
-  )
 }
 
 export function CommunityFilePicker({
@@ -88,7 +64,7 @@ export function CommunityFilePicker({
           onChange={handleChange}
         />
         <label className="community-file-picker-button" htmlFor={inputId}>
-          {imageIcon()}
+          <Image size={20} strokeWidth={1.8} aria-hidden="true" />
           <span>{isUploading ? uploadingLabel : buttonLabel}</span>
         </label>
 

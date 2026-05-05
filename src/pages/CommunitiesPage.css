@@ -5,7 +5,6 @@
 }
 
 .communities-hero,
-.communities-create-panel,
 .communities-toolbar,
 .communities-state-card,
 .community-card,
@@ -27,7 +26,15 @@
 }
 
 .communities-hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 1.25rem;
+  align-items: flex-start;
   padding: 1.5rem;
+}
+
+.communities-hero-copy {
+  min-width: 0;
 }
 
 .communities-hero h1 {
@@ -43,6 +50,34 @@
   margin: 0.8rem 0 0;
   color: var(--muted-foreground);
   line-height: 1.7;
+}
+
+.communities-create-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  gap: 0.5rem;
+  min-height: 48px;
+  border: none;
+  border-radius: 8px;
+  padding: 0.72rem 1rem;
+  background: var(--primary-gradient);
+  color: var(--primary-foreground);
+  font: inherit;
+  font-weight: 800;
+  box-shadow: 0 16px 30px color-mix(in srgb, var(--primary) 22%, transparent);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+}
+
+.communities-create-trigger:hover {
+  transform: translateY(-2px);
+  opacity: 0.94;
+}
+
+.communities-create-trigger:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring), 0 16px 30px color-mix(in srgb, var(--primary) 22%, transparent);
 }
 
 .communities-kicker,
@@ -64,7 +99,7 @@
 
 .communities-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
+  grid-template-columns: minmax(0, 1fr);
   gap: 1rem;
   align-items: start;
 }
@@ -77,7 +112,7 @@
 
 .communities-toolbar {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) minmax(160px, 220px) minmax(160px, 220px);
+  grid-template-columns: minmax(240px, 1fr) minmax(170px, 240px) minmax(170px, 240px);
   gap: 0.8rem;
   padding: 1rem;
 }
@@ -132,17 +167,48 @@
   box-shadow: var(--focus-ring);
 }
 
+.communities-search-control {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.55rem;
+  min-height: 46px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--input);
+  padding: 0 0.85rem;
+  color: var(--muted-foreground);
+}
+
+.communities-search-control:focus-within {
+  border-color: var(--ring);
+  box-shadow: var(--focus-ring);
+}
+
+.communities-search-control input {
+  min-height: 44px;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  box-shadow: none;
+}
+
+.communities-search-control input:focus {
+  border-color: transparent;
+  box-shadow: none;
+}
+
 .communities-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1rem;
   align-items: stretch;
 }
 
 .community-card {
   display: grid;
-  grid-template-rows: 180px minmax(0, 1fr) auto;
-  min-height: 420px;
+  grid-template-rows: 170px minmax(0, 1fr) auto;
+  min-height: 390px;
   min-width: 0;
   overflow: hidden;
   color: inherit;
@@ -159,7 +225,7 @@
 .community-card-media {
   position: relative;
   isolation: isolate;
-  height: 154px;
+  height: 170px;
   overflow: hidden;
   background:
     linear-gradient(135deg, color-mix(in srgb, var(--secondary) 84%, transparent), var(--surface)),
@@ -168,7 +234,7 @@
 
 .community-card-media,
 .community-file-picker-preview {
-  height: 180px;
+  height: 170px;
 }
 
 .community-media-backdrop {
@@ -222,6 +288,24 @@
   flex-wrap: wrap;
 }
 
+.community-card-meta-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.community-card-meta-row span:last-child {
+  flex: 0 0 auto;
+  border: 1px solid var(--badge-border);
+  border-radius: 999px;
+  padding: 0.2rem 0.52rem;
+  background: var(--badge);
+  color: var(--badge-foreground);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
 .community-card-copy span,
 .community-post-count,
 .communities-helper {
@@ -256,21 +340,28 @@
 }
 
 .community-card-stats {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr);
-  gap: 0.35rem;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
   align-items: center;
   align-self: end;
-  padding: 0 1rem 1rem;
+  padding: 0.85rem 1rem 1rem;
+  border-top: 1px solid var(--border);
   color: var(--muted-foreground);
   font-size: 0.85rem;
+}
+
+.community-card-stats span {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.36rem;
 }
 
 .community-card-stats strong {
   color: var(--foreground);
 }
 
-.communities-create-panel,
 .community-section,
 .community-settings-card {
   display: grid;
@@ -278,12 +369,6 @@
   padding: 1rem;
 }
 
-.communities-panel-head {
-  display: grid;
-  gap: 0.5rem;
-}
-
-.communities-panel-head h2,
 .community-section h2,
 .community-settings-card h2 {
   margin: 0;
@@ -293,6 +378,12 @@
 .communities-login-card {
   display: grid;
   gap: 1rem;
+}
+
+.communities-login-card h3 {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 1.08rem;
 }
 
 .communities-form,
@@ -470,6 +561,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 0.48rem;
   min-height: 46px;
   border: none;
   border-radius: 8px;
@@ -494,9 +586,119 @@
   color: var(--destructive);
 }
 
+.communities-feedback.is-info {
+  color: var(--info);
+}
+
 .communities-state-card {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
   padding: 1.25rem;
   color: var(--muted-foreground);
+}
+
+.communities-create-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1450;
+  display: grid;
+  place-items: center;
+  padding: clamp(0.75rem, 3vw, 1.25rem);
+  background: var(--overlay);
+  backdrop-filter: blur(12px);
+}
+
+.communities-create-modal {
+  position: relative;
+  width: min(100%, 760px);
+  max-height: min(90vh, 840px);
+  display: grid;
+  gap: 1rem;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background:
+    radial-gradient(circle at top left, rgba(102, 126, 234, 0.16), transparent 32%),
+    var(--popover);
+  color: var(--popover-foreground);
+  box-shadow: 0 28px 70px var(--shadow-color);
+  padding: clamp(1rem, 3vw, 1.35rem);
+}
+
+.communities-create-modal-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.communities-create-modal-title-row {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 0.85rem;
+  align-items: start;
+  min-width: 0;
+}
+
+.communities-create-modal-icon {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--badge-border);
+  border-radius: 8px;
+  background: var(--surface-active);
+  color: var(--primary);
+}
+
+.communities-create-modal-header h2,
+.communities-create-modal-header p {
+  margin: 0.5rem 0 0;
+}
+
+.communities-create-modal-header h2 {
+  color: var(--foreground);
+  font-size: clamp(1.35rem, 3vw, 1.8rem);
+  line-height: 1.15;
+}
+
+.communities-create-modal-header p {
+  color: var(--muted-foreground);
+  line-height: 1.65;
+}
+
+.communities-create-modal-close {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--secondary);
+  color: var(--secondary-foreground);
+  padding: 0;
+  transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+.communities-create-modal-close:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: var(--ring);
+  background: var(--surface-hover);
+}
+
+.communities-create-modal-close:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.communities-create-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding-top: 0.25rem;
 }
 
 .community-details-hero {
@@ -584,6 +786,7 @@
 }
 
 .community-secondary-button,
+.community-pagination-button,
 .community-danger-button,
 .community-action-button,
 .community-expand-button,
@@ -611,6 +814,7 @@
 }
 
 .community-secondary-button:hover:not(:disabled),
+.community-pagination-button:hover:not(:disabled),
 .community-action-button:hover:not(:disabled),
 .community-expand-button:hover:not(:disabled),
 .community-danger-link:hover:not(:disabled),
@@ -620,6 +824,7 @@
 }
 
 .community-secondary-button:focus-visible,
+.community-pagination-button:focus-visible,
 .community-danger-button:focus-visible,
 .community-action-button:focus-visible,
 .community-expand-button:focus-visible,
@@ -682,6 +887,7 @@
 }
 
 .community-action-button:disabled,
+.community-pagination-button:disabled,
 .communities-primary-button:disabled,
 .community-post-form button:disabled,
 .community-comment-form button:disabled,
@@ -1257,6 +1463,26 @@
   color: var(--muted-foreground);
 }
 
+.community-pagination-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.75rem;
+}
+
+.community-pagination-label {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.42rem 0.72rem;
+  background: var(--surface);
+  color: var(--foreground);
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
 .community-banner-preview {
   height: 160px;
   overflow: hidden;
@@ -1422,6 +1648,10 @@
     grid-template-columns: 1fr;
   }
 
+  .communities-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .community-about-meta-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1436,6 +1666,14 @@
 }
 
 @media (max-width: 768px) {
+  .communities-hero {
+    display: grid;
+  }
+
+  .communities-create-trigger {
+    width: 100%;
+  }
+
   .communities-toolbar,
   .communities-form-grid,
   .community-comment-form {
@@ -1488,8 +1726,30 @@
   .community-file-picker-control,
   .community-file-picker-button,
   .community-file-picker-remove,
+  .communities-create-modal-actions > *,
   .community-participation-actions > *,
   .community-details-actions > * {
     width: 100%;
+  }
+}
+
+@media (max-width: 560px) {
+  .communities-create-modal {
+    max-height: 94vh;
+  }
+
+  .communities-create-modal-header {
+    display: grid;
+    padding-right: 3rem;
+  }
+
+  .communities-create-modal-title-row {
+    grid-template-columns: 1fr;
+  }
+
+  .communities-create-modal-close {
+    position: absolute;
+    top: 0.85rem;
+    right: 0.85rem;
   }
 }
