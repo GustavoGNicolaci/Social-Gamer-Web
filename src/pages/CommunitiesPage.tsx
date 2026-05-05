@@ -41,6 +41,7 @@ function getCommunityCategoryLabel(
 function CommunitiesPage() {
   const { user } = useAuth()
   const { t, formatNumber } = useI18n()
+  const userId = user?.id || null
 
   const [communities, setCommunities] = useState<CommunitySummary[]>([])
   const [loading, setLoading] = useState(true)
@@ -62,10 +63,11 @@ function CommunitiesPage() {
   )
 
   const totalPages = Math.max(1, Math.ceil(communities.length / COMMUNITIES_PAGE_SIZE))
+  const safeCurrentPage = Math.min(currentPage, totalPages)
   const currentCommunities = useMemo(() => {
-    const startIndex = (currentPage - 1) * COMMUNITIES_PAGE_SIZE
+    const startIndex = (safeCurrentPage - 1) * COMMUNITIES_PAGE_SIZE
     return communities.slice(startIndex, startIndex + COMMUNITIES_PAGE_SIZE)
-  }, [communities, currentPage])
+  }, [communities, safeCurrentPage])
 
   const loadCommunities = useCallback(async (options: { preserveFeedback?: boolean } = {}) => {
     setLoading(true)
@@ -76,7 +78,7 @@ function CommunitiesPage() {
         categoria: categoriaFilter || undefined,
         limit: 100,
       },
-      user?.id
+      userId
     )
 
     setCommunities(result.data)
@@ -87,10 +89,10 @@ function CommunitiesPage() {
     }
     setLoading(false)
     return result
-  }, [categoriaFilter, search, tipoFilter, user?.id])
+  }, [categoriaFilter, search, tipoFilter, userId])
 
   const loadCreationQuota = useCallback(async () => {
-    if (!user?.id) {
+    if (!userId) {
       setCreationQuota(null)
       setCreationQuotaError(null)
       setCreationQuotaLoading(false)
@@ -98,20 +100,12 @@ function CommunitiesPage() {
     }
 
     setCreationQuotaLoading(true)
-    const result = await getCommunityCreationQuota(user.id)
+    const result = await getCommunityCreationQuota(userId)
     setCreationQuota(result.data)
     setCreationQuotaError(result.error ? t('communities.create.quotaLoadError') : null)
     setCreationQuotaLoading(false)
     return result
-  }, [t, user?.id])
-
-  useEffect(() => {
-    setCurrentPage(1)
-  }, [categoriaFilter, search, tipoFilter])
-
-  useEffect(() => {
-    setCurrentPage(current => Math.min(current, totalPages))
-  }, [totalPages])
+  }, [t, userId])
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -122,7 +116,11 @@ function CommunitiesPage() {
   }, [loadCommunities])
 
   useEffect(() => {
-    void loadCreationQuota()
+    const timeoutId = window.setTimeout(() => {
+      void loadCreationQuota()
+    }, 0)
+
+    return () => window.clearTimeout(timeoutId)
   }, [loadCreationQuota])
 
   const handleCommunityCreated = useCallback(async () => {
@@ -188,7 +186,10 @@ function CommunitiesPage() {
                     <input
                       type="search"
                       value={search}
-                      onChange={event => setSearch(event.target.value)}
+                      onChange={event => {
+                        setSearch(event.target.value)
+                        setCurrentPage(1)
+                      }}
                       placeholder={t('communities.searchPlaceholder')}
                     />
                   </div>
@@ -196,7 +197,13 @@ function CommunitiesPage() {
 
                 <label className="communities-field">
                   <span>{t('communities.field.theme')}</span>
-                  <select value={tipoFilter} onChange={event => setTipoFilter(event.target.value)}>
+                  <select
+                    value={tipoFilter}
+                    onChange={event => {
+                      setTipoFilter(event.target.value)
+                      setCurrentPage(1)
+                    }}
+                  >
                     <option value="">{t('communities.filter.allThemes')}</option>
                     {tipoOptions.map(option => (
                       <option key={option} value={option}>
@@ -210,7 +217,10 @@ function CommunitiesPage() {
                   <span>{t('communities.field.category')}</span>
                   <select
                     value={categoriaFilter}
-                    onChange={event => setCategoriaFilter(event.target.value as CommunityCategoryValue | '')}
+                    onChange={event => {
+                      setCategoriaFilter(event.target.value as CommunityCategoryValue | '')
+                      setCurrentPage(1)
+                    }}
                   >
                     <option value="">{t('communities.filter.allCategories')}</option>
                     {COMMUNITY_CATEGORY_VALUES.map(option => (
@@ -292,23 +302,23 @@ function CommunitiesPage() {
                       <button
                         type="button"
                         className="community-pagination-button"
-                        disabled={currentPage <= 1}
-                        onClick={() => setCurrentPage(page => Math.max(1, page - 1))}
+                        disabled={safeCurrentPage <= 1}
+                        onClick={() => setCurrentPage(Math.max(1, safeCurrentPage - 1))}
                       >
                         <ChevronLeft size={18} aria-hidden="true" />
                         <span>{t('communities.pagination.previous')}</span>
                       </button>
                       <span className="community-pagination-label">
                         {t('communities.pagination.pageLabel', {
-                          page: currentPage,
+                          page: safeCurrentPage,
                           total: totalPages,
                         })}
                       </span>
                       <button
                         type="button"
                         className="community-pagination-button"
-                        disabled={currentPage >= totalPages}
-                        onClick={() => setCurrentPage(page => Math.min(totalPages, page + 1))}
+                        disabled={safeCurrentPage >= totalPages}
+                        onClick={() => setCurrentPage(Math.min(totalPages, safeCurrentPage + 1))}
                       >
                         <span>{t('communities.pagination.next')}</span>
                         <ChevronRight size={18} aria-hidden="true" />

@@ -94,7 +94,23 @@ export function ActiveCommunitiesSection({
               >
                 <div className="home-active-community-media">
                   {imageUrl ? (
-                    <img src={imageUrl} alt="" loading="lazy" />
+                    <>
+                      <img
+                        className="home-active-community-media-backdrop"
+                        src={imageUrl}
+                        alt=""
+                        aria-hidden="true"
+                        loading="lazy"
+                        decoding="async"
+                      />
+                      <img
+                        className="home-active-community-media-foreground"
+                        src={imageUrl}
+                        alt=""
+                        loading="lazy"
+                        decoding="async"
+                      />
+                    </>
                   ) : (
                     <div className="home-active-community-fallback">
                       {getInitial(community.name)}

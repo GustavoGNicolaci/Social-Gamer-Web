@@ -319,10 +319,12 @@
 }
 
 .home-active-community-card {
+  --home-active-community-banner-height: clamp(168px, 16vw, 220px);
+
   position: relative;
   display: grid;
-  grid-template-rows: 150px minmax(0, 1fr) auto;
-  min-height: 360px;
+  grid-template-rows: var(--home-active-community-banner-height) minmax(0, 1fr) auto;
+  min-height: 390px;
   overflow: hidden;
   border: 1px solid rgba(158, 177, 255, 0.12);
   border-radius: 24px;
@@ -346,31 +348,72 @@
 
 .home-active-community-media {
   position: relative;
+  isolation: isolate;
+  display: grid;
+  place-items: center;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.08);
+  aspect-ratio: 16 / 9;
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.12), transparent 34%),
+    linear-gradient(135deg, rgba(20, 184, 166, 0.22), rgba(79, 70, 229, 0.2)),
+    rgba(255, 255, 255, 0.08);
+}
+
+.home-active-community-media::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background:
+    linear-gradient(180deg, rgba(4, 8, 20, 0.14), rgba(4, 8, 20, 0.34)),
+    radial-gradient(circle at center, transparent 36%, rgba(4, 8, 20, 0.22));
+  pointer-events: none;
 }
 
 .home-active-community-media::after {
   content: '';
   position: absolute;
   inset: auto 0 0;
+  z-index: 3;
   height: 50%;
   background: linear-gradient(180deg, transparent, rgba(10, 15, 30, 0.76));
   pointer-events: none;
 }
 
-.home-active-community-media img,
 .home-active-community-fallback {
   width: 100%;
   height: 100%;
 }
 
-.home-active-community-media img {
+.home-active-community-media-backdrop,
+.home-active-community-media-foreground {
   display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.home-active-community-media-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
   object-fit: cover;
+  filter: blur(18px) saturate(1.18);
+  opacity: 0.62;
+  transform: scale(1.14);
+}
+
+.home-active-community-media-foreground {
+  position: relative;
+  z-index: 2;
+  padding: 0.45rem;
+  object-fit: contain;
+  object-position: center;
+  filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.28));
 }
 
 .home-active-community-fallback {
+  position: relative;
+  z-index: 2;
   display: grid;
   place-items: center;
   color: #fff;
@@ -446,7 +489,9 @@
 }
 
 .home-active-community-card.is-skeleton {
+  grid-template-rows: auto auto auto auto;
   gap: 0.75rem;
+  min-height: 390px;
   padding: 1rem;
   pointer-events: none;
 }
@@ -460,7 +505,7 @@
 }
 
 .home-active-community-skeleton-media {
-  height: 150px;
+  height: var(--home-active-community-banner-height);
 }
 
 .home-active-community-skeleton-line {

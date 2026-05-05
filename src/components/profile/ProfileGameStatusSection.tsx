@@ -1,5 +1,6 @@
 import {
   memo,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -262,8 +263,11 @@ export const ProfileGameStatusSection = memo(function ProfileGameStatusSection({
       year: 'numeric',
       fallback: t('profile.dateFallback'),
     })
-  const getStatusLabel = (status: GameStatusValue) =>
-    statusOptions.find(option => option.value === status)?.label || t('common.status')
+  const getStatusLabel = useCallback(
+    (status: GameStatusValue) =>
+      statusOptions.find(option => option.value === status)?.label || t('common.status'),
+    [statusOptions, t]
+  )
 
   const activeStatusFilterSet = useMemo(() => new Set(activeStatusFilters), [activeStatusFilters])
   const trackedItemsByGameId = useMemo(() => {
@@ -288,7 +292,7 @@ export const ProfileGameStatusSection = memo(function ProfileGameStatusSection({
           isFavorite: Boolean(existingItem?.favorito),
         }
       }),
-    [searchResults, statusOptions, trackedItemsByGameId]
+    [getStatusLabel, searchResults, trackedItemsByGameId]
   )
   const filteredItems = useMemo(() => {
     if (activeStatusFilters.length === 0) return items
