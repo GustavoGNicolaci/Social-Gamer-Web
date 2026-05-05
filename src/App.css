@@ -5,6 +5,10 @@
   box-sizing: border-box;
 }
 
+html {
+  overflow-x: hidden;
+}
+
 /* Theme variables */
 :root {
   --content-max-width: 1600px;
@@ -123,6 +127,46 @@ body.light {
   flex-direction: column;
   min-height: 100vh;
   background: var(--bg-gradient);
+}
+
+body {
+  overflow-x: hidden;
+}
+
+button svg {
+  display: block;
+  flex-shrink: 0;
+}
+
+.ui-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 0;
+  line-height: 1;
+  text-align: center;
+}
+
+.ui-icon-button--sm {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+}
+
+.ui-icon-button--md {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  min-height: 40px;
+}
+
+.ui-icon-button--lg {
+  width: 48px;
+  height: 48px;
+  min-width: 48px;
+  min-height: 48px;
 }
 
 /* Logo */

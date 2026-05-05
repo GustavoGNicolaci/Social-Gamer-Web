@@ -248,8 +248,10 @@
 .gp-modal-close {
   width: 2rem;
   height: 2rem;
+  min-width: 2rem;
   min-height: 2rem;
   padding: 0;
+  flex-shrink: 0;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.08);
@@ -257,6 +259,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  line-height: 1;
 }
 
 .gp-search-helper,
@@ -809,19 +812,24 @@
   z-index: 1100;
   display: grid;
   place-items: center;
-  padding: 1rem;
+  padding: clamp(0.75rem, 3vw, 1rem);
+  overflow-x: hidden;
   background: rgba(6, 8, 18, 0.72);
   backdrop-filter: blur(10px);
 }
 
 .gp-modal-card {
-  width: min(560px, 100%);
+  width: min(560px, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
+  max-height: calc(100dvh - 24px);
   display: grid;
   gap: 1rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .gp-filters-modal {
-  width: min(960px, 100%);
+  width: min(960px, calc(100vw - 24px));
 }
 
 .gp-modal-head {
@@ -858,7 +866,8 @@
 }
 
 .gp-filter-pill-cloud.is-modal {
-  max-height: 340px;
+  max-height: min(340px, 42vh);
+  max-height: min(340px, 42dvh);
   overflow-y: auto;
   padding-right: 0.15rem;
 }
@@ -983,6 +992,11 @@ body.light .gp-date {
   .gp-empty,
   .gp-modal-card {
     padding: 1.08rem;
+  }
+
+  .gp-modal-card {
+    max-height: calc(100vh - 24px);
+    max-height: calc(100dvh - 24px);
   }
 
   .gp-panel-copy h1 {

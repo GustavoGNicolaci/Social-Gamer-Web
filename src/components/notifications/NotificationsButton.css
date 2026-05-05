@@ -14,6 +14,8 @@
   position: relative;
   width: 48px;
   height: 48px;
+  min-width: 48px;
+  min-height: 48px;
   display: inline-grid;
   place-items: center;
   padding: 0;
@@ -40,6 +42,7 @@
 
 .notifications-trigger svg {
   display: block;
+  flex-shrink: 0;
   width: 20px;
   height: 20px;
 }
@@ -125,6 +128,7 @@
   min-height: 38px;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.42rem;
   padding: 0.5rem 0.7rem;
   border: 1px solid rgba(191, 219, 254, 0.18);
@@ -148,6 +152,8 @@
 .notifications-mark-all svg,
 .notification-read-icon svg,
 .notifications-spin {
+  display: block;
+  flex-shrink: 0;
   width: 16px;
   height: 16px;
 }
@@ -319,6 +325,8 @@
 .notification-read-icon {
   width: 24px;
   height: 24px;
+  min-width: 24px;
+  min-height: 24px;
   display: inline-grid;
   place-items: center;
   color: rgba(216, 225, 255, 0.54);
@@ -393,6 +401,8 @@ body.light .notifications-badge {
     left: 0.55rem;
     width: auto;
     max-height: calc(100vh - 6rem);
+    max-height: calc(100dvh - 6rem);
+    overflow: hidden;
   }
 
   .notifications-dropdown-header {
@@ -405,5 +415,6 @@ body.light .notifications-badge {
 
   .notifications-list {
     max-height: calc(100vh - 13rem);
+    max-height: calc(100dvh - 13rem);
   }
 }

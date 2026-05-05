@@ -347,7 +347,8 @@
   z-index: 1000;
   display: grid;
   place-items: center;
-  padding: 1.25rem;
+  padding: clamp(0.75rem, 3vw, 1.25rem);
+  overflow-x: hidden;
   background: rgba(5, 7, 16, 0.74);
   backdrop-filter: blur(8px);
 }
@@ -355,7 +356,11 @@
 .account-settings-modal {
   display: grid;
   gap: 1rem;
-  width: min(100%, 520px);
+  width: min(520px, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 1.5rem;
 }
 
@@ -373,6 +378,10 @@
 }
 
 @media (max-width: 640px) {
+  .account-settings-modal-backdrop {
+    padding: 0.75rem;
+  }
+
   .account-settings-header {
     display: grid;
   }

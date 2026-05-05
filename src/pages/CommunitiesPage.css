@@ -668,17 +668,20 @@
   display: grid;
   place-items: center;
   padding: clamp(0.75rem, 3vw, 1.25rem);
+  overflow-x: hidden;
   background: var(--overlay);
   backdrop-filter: blur(12px);
 }
 
 .communities-create-modal {
   position: relative;
-  width: min(100%, 760px);
+  width: min(760px, calc(100vw - 24px));
   max-height: min(90vh, 840px);
+  max-height: min(90dvh, 840px);
   display: grid;
   gap: 1rem;
   overflow-y: auto;
+  overscroll-behavior: contain;
   border: 1px solid var(--border);
   border-radius: 8px;
   background:
@@ -734,6 +737,8 @@
 .communities-create-modal-close {
   width: 42px;
   height: 42px;
+  min-width: 42px;
+  min-height: 42px;
   flex: 0 0 auto;
   display: grid;
   place-items: center;
@@ -742,6 +747,7 @@
   background: var(--secondary);
   color: var(--secondary-foreground);
   padding: 0;
+  line-height: 1;
   transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
 }
 
@@ -915,6 +921,8 @@
 
 .community-action-button svg,
 .community-icon-action svg {
+  display: block;
+  flex-shrink: 0;
   width: 18px;
   height: 18px;
 }
@@ -940,8 +948,11 @@
 .community-icon-action {
   width: 38px;
   height: 38px;
+  min-width: 38px;
+  min-height: 38px;
   display: inline-grid;
   place-items: center;
+  padding: 0;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--secondary);
@@ -1631,9 +1642,13 @@
 }
 
 .community-report-modal {
-  width: min(100%, 560px);
+  width: min(560px, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
+  max-height: calc(100dvh - 24px);
   display: grid;
   gap: 1rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 1.2rem;
 }
 
@@ -1670,15 +1685,17 @@
   z-index: 1500;
   display: grid;
   place-items: center;
-  padding: 1rem;
+  padding: clamp(0.75rem, 3vw, 1rem);
+  overflow: hidden;
   background: var(--overlay);
   backdrop-filter: blur(12px);
 }
 
 .community-lightbox-content {
   position: relative;
-  width: min(100%, 1080px);
+  width: min(1080px, calc(100vw - 24px));
   height: min(86vh, 760px);
+  height: min(86dvh, 760px);
   display: grid;
   place-items: center;
 }
@@ -1697,14 +1714,18 @@
   z-index: 1;
   width: 38px;
   height: 38px;
+  min-width: 38px;
+  min-height: 38px;
   display: grid;
   place-items: center;
+  padding: 0;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--popover);
   color: var(--popover-foreground);
   font: inherit;
   font-weight: 800;
+  line-height: 1;
 }
 
 @media (max-width: 1120px) {
@@ -1814,7 +1835,10 @@
 
 @media (max-width: 560px) {
   .communities-create-modal {
-    max-height: 94vh;
+    width: calc(100vw - 24px);
+    max-height: calc(100vh - 24px);
+    max-height: calc(100dvh - 24px);
+    padding: 1rem;
   }
 
   .communities-create-modal-header {
@@ -1830,5 +1854,17 @@
     position: absolute;
     top: 0.85rem;
     right: 0.85rem;
+  }
+
+  .community-report-modal {
+    padding: 1rem;
+  }
+
+  .community-report-modal-header {
+    display: grid;
+  }
+
+  .community-report-modal .community-lightbox-close {
+    justify-self: end;
   }
 }

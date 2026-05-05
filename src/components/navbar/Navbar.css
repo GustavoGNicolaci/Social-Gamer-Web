@@ -190,7 +190,8 @@
   min-width: 48px;
   width: auto;
   height: 48px;
-  padding: 0 0.85rem;
+  padding: 0;
+  line-height: 1;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.08);
@@ -213,6 +214,8 @@
 
 .navbar-search-toggle svg,
 .navbar-search-field-icon svg {
+  display: block;
+  flex-shrink: 0;
   width: 1.05rem;
   height: 1.05rem;
 }
@@ -638,6 +641,8 @@
   bottom: -1px;
   width: 18px;
   height: 18px;
+  min-width: 18px;
+  min-height: 18px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -649,6 +654,8 @@
 }
 
 .navbar-avatar-badge-icon {
+  display: block;
+  flex-shrink: 0;
   width: 10px;
   height: 10px;
 }
@@ -684,11 +691,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
   color: rgba(255, 255, 255, 0.8);
   transition: transform 0.25s ease, color 0.25s ease;
 }
 
 .navbar-profile-chevron svg {
+  display: block;
   width: 100%;
   height: 100%;
 }
@@ -759,6 +768,8 @@
 .navbar-dropdown-icon {
   width: 2.35rem;
   height: 2.35rem;
+  min-width: 2.35rem;
+  min-height: 2.35rem;
   display: grid;
   place-items: center;
   flex-shrink: 0;
@@ -768,6 +779,7 @@
 }
 
 .navbar-dropdown-icon svg {
+  display: block;
   width: 1.15rem;
   height: 1.15rem;
 }
@@ -806,8 +818,11 @@
 .navbar-mobile-menu-trigger {
   width: 48px;
   height: 48px;
+  min-width: 48px;
+  min-height: 48px;
   display: none;
   place-items: center;
+  padding: 0;
   border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.08);
@@ -831,6 +846,8 @@
 .navbar-mobile-menu-trigger svg,
 .navbar-mobile-close svg,
 .navbar-mobile-link svg {
+  display: block;
+  flex-shrink: 0;
   width: 20px;
   height: 20px;
 }
@@ -910,6 +927,8 @@
 .navbar-mobile-close {
   width: 42px;
   height: 42px;
+  min-width: 42px;
+  min-height: 42px;
   display: inline-grid;
   place-items: center;
   flex: 0 0 auto;
@@ -1394,6 +1413,8 @@ body.light .navbar-mobile-link.is-danger {
   .notifications-trigger {
     width: 42px;
     height: 42px;
+    min-width: 42px;
+    min-height: 42px;
     border-radius: 14px;
   }
 
