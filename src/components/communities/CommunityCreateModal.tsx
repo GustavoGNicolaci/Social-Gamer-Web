@@ -6,6 +6,8 @@ import { useI18n } from '../../i18n/I18nContext'
 import {
   COMMUNITY_CATEGORY_VALUES,
   createCommunity,
+  isCommunityCreationLimitError,
+  type CommunityCreationQuota,
   type CommunityCategoryValue,
   type CommunityPostingPermission,
   type CommunityVisibility,
@@ -36,6 +38,9 @@ interface FeedbackState {
 }
 
 interface CommunityCreateModalProps {
+  creationQuota: CommunityCreationQuota | null
+  quotaError: string | null
+  quotaLoading: boolean
   onClose: () => void
   onCreated: () => void | Promise<void>
 }
@@ -56,7 +61,13 @@ const POSTING_PERMISSION_OPTIONS: CommunityPostingPermission[] = [
   'somente_lider',
 ]
 
-export function CommunityCreateModal({ onClose, onCreated }: CommunityCreateModalProps) {
+export function CommunityCreateModal({
+  creationQuota,
+  quotaError,
+  quotaLoading,
+  onClose,
+  onCreated,
+}: CommunityCreateModalProps) {
   const { user } = useAuth()
   const { t } = useI18n()
   const titleId = useId()
@@ -152,6 +163,11 @@ export function CommunityCreateModal({ onClose, onCreated }: CommunityCreateModa
     event.preventDefault()
     if (!user || submitting) return
 
+    if (creationQuota && !creationQuota.canCreate) {
+      setFeedback({ tone: 'error', message: t('communities.create.limitReached') })
+      return
+    }
+
     const normalizedName = draft.nome.trim()
     if (normalizedName.length < 3) {
       setFeedback({ tone: 'error', message: t('communities.create.nameMin') })
@@ -188,7 +204,9 @@ export function CommunityCreateModal({ onClose, onCreated }: CommunityCreateModa
       if (result.error || !result.data) {
         setFeedback({
           tone: 'error',
-          message: result.error?.message || t('communities.create.error'),
+          message: isCommunityCreationLimitError(result.error)
+            ? t('communities.create.limitReached')
+            : result.error?.message || t('communities.create.error'),
         })
         return
       }
@@ -250,8 +268,32 @@ export function CommunityCreateModal({ onClose, onCreated }: CommunityCreateModa
               {t('common.login')}
             </Link>
           </div>
+        ) : creationQuota && !creationQuota.canCreate ? (
+          <div className="communities-limit-card">
+            <h3>{t('communities.create.limitTitle')}</h3>
+            <p>{t('communities.create.limitReached')}</p>
+            <p>{t('communities.create.limitText')}</p>
+          </div>
         ) : (
           <form className="communities-form" onSubmit={handleSubmit}>
+            {quotaLoading ? (
+              <p className="communities-quota-note is-loading">
+                {t('communities.create.quotaChecking')}
+              </p>
+            ) : quotaError ? (
+              <p className="communities-quota-note is-error">
+                {quotaError}
+              </p>
+            ) : creationQuota ? (
+              <p className="communities-quota-note">
+                {t('communities.create.quotaStatus', {
+                  count: creationQuota.createdCount,
+                  limit: creationQuota.limit,
+                  remaining: creationQuota.remaining,
+                })}
+              </p>
+            ) : null}
+
             <label className="communities-field">
               <span>{t('communities.field.name')}</span>
               <input
@@ -419,7 +461,11 @@ export function CommunityCreateModal({ onClose, onCreated }: CommunityCreateModa
                 {t('common.cancel')}
               </button>
 
-              <button type="submit" className="communities-primary-button" disabled={submitting}>
+              <button
+                type="submit"
+                className="communities-primary-button"
+                disabled={submitting || quotaLoading}
+              >
                 <Plus size={18} aria-hidden="true" />
                 <span>
                   {submitting ? t('communities.create.creating') : t('communities.create.submit')}

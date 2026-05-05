@@ -61,6 +61,24 @@ export interface HomeSiteStats {
   reviews: number
 }
 
+export interface HomeActiveCommunity {
+  id: string
+  name: string
+  description: string | null
+  bannerPath: string | null
+  membersCount: number
+  postsCount: number
+  newMembersCount: number
+  recentPostsCount: number
+  activityScore: number
+  createdAt: string
+  game: {
+    id: number
+    title: string
+    coverUrl: string | null
+  } | null
+}
+
 interface HomeResult<T> {
   data: T
   error: HomeError | null
@@ -120,6 +138,22 @@ interface ReleaseGameRow {
   capa_url: string | null
   generos: unknown
   data_lancamento: string | null
+}
+
+interface ActiveCommunityRow {
+  community_id: string
+  nome: string | null
+  descricao: string | null
+  banner_path: string | null
+  jogo_id: number | string | null
+  jogo_title: string | null
+  jogo_cover_url: string | null
+  membros_count: number | string | null
+  posts_count: number | string | null
+  new_members_count: number | string | null
+  recent_posts_count: number | string | null
+  activity_score: number | string | null
+  created_at: string
 }
 
 function normalizeHomeError(error: unknown, fallbackMessage: string): HomeError {
@@ -296,6 +330,30 @@ function normalizeReleaseGame(row: ReleaseGameRow): HomeGameSummary {
   }
 }
 
+function normalizeActiveCommunity(row: ActiveCommunityRow): HomeActiveCommunity {
+  const gameId = normalizeInteger(row.jogo_id)
+
+  return {
+    id: row.community_id,
+    name: normalizeString(row.nome, 'Comunidade'),
+    description: row.descricao || null,
+    bannerPath: row.banner_path || null,
+    membersCount: normalizeInteger(row.membros_count),
+    postsCount: normalizeInteger(row.posts_count),
+    newMembersCount: normalizeInteger(row.new_members_count),
+    recentPostsCount: normalizeInteger(row.recent_posts_count),
+    activityScore: normalizeInteger(row.activity_score),
+    createdAt: row.created_at,
+    game: gameId > 0
+      ? {
+          id: gameId,
+          title: normalizeString(row.jogo_title, 'Jogo desconhecido'),
+          coverUrl: row.jogo_cover_url || null,
+        }
+      : null,
+  }
+}
+
 async function getFallbackFeaturedGames(limit: number): Promise<HomeResult<HomeFeaturedGame[]>> {
   try {
     const { data, error } = await supabase
@@ -325,6 +383,38 @@ async function getFallbackFeaturedGames(limit: number): Promise<HomeResult<HomeF
     return {
       data: [],
       error: normalizeHomeError(error, 'Erro inesperado ao carregar jogos em destaque.'),
+    }
+  }
+}
+
+export async function getHomeActiveCommunities({
+  daysWindow = 7,
+  limit = 6,
+}: {
+  daysWindow?: number
+  limit?: number
+} = {}): Promise<HomeResult<HomeActiveCommunity[]>> {
+  try {
+    const { data, error } = await supabase.rpc('get_home_active_communities', {
+      p_days_window: daysWindow,
+      p_limit: limit,
+    })
+
+    if (error) {
+      return {
+        data: [],
+        error: normalizeHomeError(error, 'Nao foi possivel carregar comunidades ativas.'),
+      }
+    }
+
+    return {
+      data: ((data || []) as ActiveCommunityRow[]).map(normalizeActiveCommunity),
+      error: null,
+    }
+  } catch (error) {
+    return {
+      data: [],
+      error: normalizeHomeError(error, 'Erro inesperado ao carregar comunidades ativas.'),
     }
   }
 }

@@ -2,7 +2,6 @@ import { memo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { GameCoverImage } from '../GameCoverImage'
 import type { ProfileReviewItem } from '../../services/reviewService'
-import { formatLocalizedDate, formatLocalizedNumber } from '../../i18n'
 import { useI18n } from '../../i18n/I18nContext'
 import './ProfileReviewsSection.css'
 
@@ -19,25 +18,9 @@ interface ProfileReviewsSectionProps {
   onLoadMore: () => Promise<void>
 }
 
-function formatCompactDate(value: string | null | undefined, fallback = 'Data nao informada') {
-  return formatLocalizedDate(value, {
-    fallback,
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  })
-}
-
 function getInitial(value: string) {
   const firstCharacter = value.trim().charAt(0)
   return firstCharacter ? firstCharacter.toUpperCase() : 'J'
-}
-
-function formatScoreLabel(score: number) {
-  return `${formatLocalizedNumber(score, {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 1,
-  })}/10`
 }
 
 export const ProfileReviewsSection = memo(function ProfileReviewsSection({
@@ -52,12 +35,24 @@ export const ProfileReviewsSection = memo(function ProfileReviewsSection({
   onDeleteReview,
   onLoadMore,
 }: ProfileReviewsSectionProps) {
-  const { t, formatNumber } = useI18n()
+  const { t, formatDate, formatNumber } = useI18n()
   const [removingReviewIds, setRemovingReviewIds] = useState<string[]>([])
   const [actionError, setActionError] = useState<string | null>(null)
   const hasReviews = items.length > 0
   const remainingReviewsCount =
     totalCount === null ? 0 : Math.max(totalCount - items.length, 0)
+  const formatReviewDate = (value: string | null | undefined) =>
+    formatDate(value, {
+      fallback: t('profile.dateFallback'),
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    })
+  const formatScoreLabel = (score: number) =>
+    `${formatNumber(score, {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 1,
+    })}/10`
 
   const handleDeleteReview = async (reviewId: string) => {
     if (!onDeleteReview) return
@@ -174,7 +169,7 @@ export const ProfileReviewsSection = memo(function ProfileReviewsSection({
                         </span>
                         <span className="profile-reviews-date">
                           {t('profileReviews.reviewedAt', {
-                            date: formatCompactDate(review.data_publicacao, t('profile.dateFallback')),
+                            date: formatReviewDate(review.data_publicacao),
                           })}
                         </span>
                       </div>

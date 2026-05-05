@@ -9,6 +9,7 @@ import {
 } from 'react'
 import { Link } from 'react-router-dom'
 import { GameCoverImage } from '../GameCoverImage'
+import { useI18n } from '../../i18n/I18nContext'
 import {
   type GameStatusSortValue,
   type GameStatusItem,
@@ -63,31 +64,8 @@ interface StatusSearchResultItem {
 }
 
 const SEARCH_DEBOUNCE_DELAY = 220
-const STATUS_SORT_OPTIONS: Array<{ value: StatusSortValue; label: string }> = [
-  { value: 'recent', label: 'Mais recentes' },
-  { value: 'oldest', label: 'Mais antigos' },
-  { value: 'favorites', label: 'Favoritos primeiro' },
-  { value: 'title', label: 'Titulo A-Z' },
-]
-
-const STATUS_OPTIONS: Array<{ value: GameStatusValue; label: string }> = [
-  { value: 'jogando', label: 'Jogando' },
-  { value: 'zerado', label: 'Zerei' },
-  { value: 'dropado', label: 'Dropei' },
-]
-
-function formatCompactDate(value: string | null | undefined, fallback = 'Data nao informada') {
-  if (!value) return fallback
-
-  const parsedDate = new Date(value)
-  if (Number.isNaN(parsedDate.getTime())) return fallback
-
-  return parsedDate.toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  })
-}
+const STATUS_SORT_VALUES: StatusSortValue[] = ['recent', 'oldest', 'favorites', 'title']
+const STATUS_VALUES: GameStatusValue[] = ['jogando', 'zerado', 'dropado']
 
 function getInitial(value: string) {
   const firstCharacter = value.trim().charAt(0)
@@ -101,10 +79,6 @@ function getTimestamp(value: string | null | undefined) {
   return Number.isNaN(parsedDate.getTime()) ? 0 : parsedDate.getTime()
 }
 
-function getStatusLabel(status: GameStatusValue) {
-  return STATUS_OPTIONS.find(option => option.value === status)?.label || 'Status'
-}
-
 function getStatusGridColumns(viewportWidth: number) {
   if (viewportWidth <= 480) return 1
   if (viewportWidth <= 768) return 2
@@ -113,9 +87,12 @@ function getStatusGridColumns(viewportWidth: number) {
   return 6
 }
 
-function getStatusSearchErrorMessage(error: GameCatalogError | null) {
+function getStatusSearchErrorMessage(
+  error: GameCatalogError | null,
+  t: (key: string, params?: Record<string, string | number>) => string
+) {
   if (!error) {
-    return 'Nao foi possivel buscar jogos agora.'
+    return t('error.genericSearchGames')
   }
 
   const fullMessage = [error.message, error.details, error.hint].filter(Boolean).join(' ').toLowerCase()
@@ -126,13 +103,13 @@ function getStatusSearchErrorMessage(error: GameCatalogError | null) {
     fullMessage.includes('row-level security') ||
     fullMessage.includes('policy')
   ) {
-    return 'Nao foi possivel buscar jogos por permissao. Verifique as policies das tabelas jogos e status_jogo no Supabase.'
+    return t('error.permissionSearchGamesStatus')
   }
 
-  return 'Nao foi possivel buscar jogos agora.'
+  return t('error.genericSearchGames')
 }
 
-function sortStatusItems(items: GameStatusItem[], sortValue: StatusSortValue) {
+function sortStatusItems(items: GameStatusItem[], sortValue: StatusSortValue, locale: string) {
   return [...items].sort((leftItem, rightItem) => {
     const leftTitle = leftItem.jogo?.titulo || ''
     const rightTitle = rightItem.jogo?.titulo || ''
@@ -145,7 +122,7 @@ function sortStatusItems(items: GameStatusItem[], sortValue: StatusSortValue) {
       }
 
       if (recentDelta !== 0) return recentDelta
-      return leftTitle.localeCompare(rightTitle, 'pt-BR')
+      return leftTitle.localeCompare(rightTitle, locale)
     }
 
     if (sortValue === 'oldest') {
@@ -153,11 +130,11 @@ function sortStatusItems(items: GameStatusItem[], sortValue: StatusSortValue) {
       if (leftItem.favorito !== rightItem.favorito) {
         return leftItem.favorito ? -1 : 1
       }
-      return leftTitle.localeCompare(rightTitle, 'pt-BR')
+      return leftTitle.localeCompare(rightTitle, locale)
     }
 
     if (sortValue === 'title') {
-      const titleDelta = leftTitle.localeCompare(rightTitle, 'pt-BR')
+      const titleDelta = leftTitle.localeCompare(rightTitle, locale)
       if (titleDelta !== 0) return titleDelta
       if (leftItem.favorito !== rightItem.favorito) {
         return leftItem.favorito ? -1 : 1
@@ -169,7 +146,7 @@ function sortStatusItems(items: GameStatusItem[], sortValue: StatusSortValue) {
     if (leftItem.favorito !== rightItem.favorito) {
       return leftItem.favorito ? -1 : 1
     }
-    return leftTitle.localeCompare(rightTitle, 'pt-BR')
+    return leftTitle.localeCompare(rightTitle, locale)
   })
 }
 
@@ -177,21 +154,27 @@ function PaginationControls({
   currentPage,
   totalPages,
   onChangePage,
+  label,
+  previousLabel,
+  nextLabel,
 }: {
   currentPage: number
   totalPages: number
   onChangePage: (page: number) => void
+  label: string
+  previousLabel: string
+  nextLabel: string
 }) {
   if (totalPages <= 1) return null
 
   return (
-    <nav className="profile-status-pagination" aria-label="Paginacao dos jogos do perfil">
+    <nav className="profile-status-pagination" aria-label={label}>
       <button
         type="button"
         onClick={() => onChangePage(Math.max(currentPage - 1, 0))}
         disabled={currentPage === 0}
       >
-        Anterior
+        {previousLabel}
       </button>
 
       {Array.from({ length: totalPages }, (_, index) => index).map(page => (
@@ -211,7 +194,7 @@ function PaginationControls({
         onClick={() => onChangePage(Math.min(currentPage + 1, totalPages - 1))}
         disabled={currentPage === totalPages - 1}
       >
-        Proxima
+        {nextLabel}
       </button>
     </nav>
   )
@@ -233,6 +216,7 @@ export const ProfileGameStatusSection = memo(function ProfileGameStatusSection({
   onLoadMore,
   onControlsChange,
 }: ProfileGameStatusSectionProps) {
+  const { t, formatDate, locale } = useI18n()
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<CatalogGamePreview[]>([])
   const [searchLoading, setSearchLoading] = useState(false)
@@ -255,6 +239,31 @@ export const ProfileGameStatusSection = memo(function ProfileGameStatusSection({
   const sortMenuRef = useRef<HTMLDivElement | null>(null)
   const searchTimeoutRef = useRef<number | null>(null)
   const searchRequestIdRef = useRef(0)
+  const statusSortOptions = useMemo(
+    () =>
+      STATUS_SORT_VALUES.map(value => ({
+        value,
+        label: t(`profileStatus.sort.${value}`),
+      })),
+    [t]
+  )
+  const statusOptions = useMemo(
+    () =>
+      STATUS_VALUES.map(value => ({
+        value,
+        label: t(`game.status.${value}`),
+      })),
+    [t]
+  )
+  const formatStatusDate = (value: string | null | undefined) =>
+    formatDate(value, {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      fallback: t('profile.dateFallback'),
+    })
+  const getStatusLabel = (status: GameStatusValue) =>
+    statusOptions.find(option => option.value === status)?.label || t('common.status')
 
   const activeStatusFilterSet = useMemo(() => new Set(activeStatusFilters), [activeStatusFilters])
   const trackedItemsByGameId = useMemo(() => {
@@ -279,7 +288,7 @@ export const ProfileGameStatusSection = memo(function ProfileGameStatusSection({
           isFavorite: Boolean(existingItem?.favorito),
         }
       }),
-    [searchResults, trackedItemsByGameId]
+    [searchResults, statusOptions, trackedItemsByGameId]
   )
   const filteredItems = useMemo(() => {
     if (activeStatusFilters.length === 0) return items
@@ -287,10 +296,13 @@ export const ProfileGameStatusSection = memo(function ProfileGameStatusSection({
     return items.filter(item => activeStatusFilterSet.has(item.status))
   }, [activeStatusFilterSet, activeStatusFilters.length, items])
   const activeStatusFilterOptions = useMemo(
-    () => STATUS_OPTIONS.filter(option => activeStatusFilterSet.has(option.value)),
-    [activeStatusFilterSet]
+    () => statusOptions.filter(option => activeStatusFilterSet.has(option.value)),
+    [activeStatusFilterSet, statusOptions]
   )
-  const sortedItems = useMemo(() => sortStatusItems(filteredItems, sortValue), [filteredItems, sortValue])
+  const sortedItems = useMemo(
+    () => sortStatusItems(filteredItems, sortValue, locale),
+    [filteredItems, locale, sortValue]
+  )
   const hasSavedStatusItems = items.length > 0
   const hasVisibleStatusItems = sortedItems.length > 0
   const hasActiveStatusFilters = activeStatusFilters.length > 0
@@ -320,15 +332,16 @@ export const ProfileGameStatusSection = memo(function ProfileGameStatusSection({
   const statusGridStyle = {
     '--status-columns': String(gridColumns),
   } as CSSProperties
-  const sortLabel = STATUS_SORT_OPTIONS.find(option => option.value === sortValue)?.label || 'Mais recentes'
+  const sortLabel =
+    statusSortOptions.find(option => option.value === sortValue)?.label || t('profileStatus.sort.recent')
   const statusFilterSummary = useMemo(() => {
-    if (activeStatusFilterOptions.length === 0) return 'Todos os status'
+    if (activeStatusFilterOptions.length === 0) return t('profileStatus.allStatuses')
     if (activeStatusFilterOptions.length <= 2) {
       return activeStatusFilterOptions.map(option => option.label).join(', ')
     }
 
-    return `${activeStatusFilterOptions.length} status ativos`
-  }, [activeStatusFilterOptions])
+    return t('profileStatus.activeStatuses', { count: activeStatusFilterOptions.length })
+  }, [activeStatusFilterOptions, t])
 
   const handleToggleStatusFilter = (status: GameStatusValue) => {
     const nextFilters = activeStatusFilters.includes(status)
@@ -425,7 +438,7 @@ export const ProfileGameStatusSection = memo(function ProfileGameStatusSection({
 
       if (error) {
         setSearchResults([])
-        setSearchError(getStatusSearchErrorMessage(error))
+        setSearchError(getStatusSearchErrorMessage(error, t))
       } else {
         setSearchResults(data)
         setSearchError(null)
@@ -472,7 +485,7 @@ export const ProfileGameStatusSection = memo(function ProfileGameStatusSection({
     })
 
     if (!result.ok) {
-      setActionError(result.message || 'Nao foi possivel salvar o status deste jogo.')
+      setActionError(result.message || t('profileStatus.saveError'))
       setIsCreatingStatus(false)
       return
     }
@@ -510,7 +523,7 @@ export const ProfileGameStatusSection = memo(function ProfileGameStatusSection({
     setSavingItemIds(currentIds => currentIds.filter(currentId => currentId !== item.id))
 
     if (!result.ok) {
-      setActionError(result.message || 'Nao foi possivel atualizar o status deste jogo.')
+      setActionError(result.message || t('profileStatus.updateError'))
       return
     }
   }
@@ -526,7 +539,7 @@ export const ProfileGameStatusSection = memo(function ProfileGameStatusSection({
     setRemovingItemIds(currentIds => currentIds.filter(currentId => currentId !== item.id))
 
     if (!result.ok) {
-      setActionError(result.message || 'Nao foi possivel remover este jogo do perfil.')
+      setActionError(result.message || t('profileStatus.removeError'))
     }
   }
 
@@ -545,21 +558,21 @@ export const ProfileGameStatusSection = memo(function ProfileGameStatusSection({
       <div className="profile-status-content">
         <div className="profile-section-head">
           <div className="profile-section-copy">
-            <span className="profile-section-label">Status dos jogos</span>
+            <span className="profile-section-label">{t('profile.tab.status')}</span>
             <h2>
               {isOwnerView
-                ? 'Uma lista so para tudo o que ja entrou no seu perfil'
-                : 'Os jogos que este perfil ja adicionou e organizou'}
+                ? t('profileStatus.ownerTitle')
+                : t('profileStatus.publicTitle')}
             </h2>
             <p>
               {isOwnerView
-                ? 'Busque rapido, organize por filtro e navegue pela sua colecao no mesmo ritmo da lista de jogos que voce quer jogar.'
-                : 'Explore os jogos deste perfil por status, favoritos e ordem de visualizacao.'}
+                ? t('profileStatus.ownerText')
+                : t('profileStatus.publicText')}
             </p>
           </div>
 
           <div className="profile-meta-item profile-status-summary">
-            <span>Total salvo</span>
+            <span>{t('profileStatus.totalSaved')}</span>
             <strong>{isLoading ? '...' : countLabel}</strong>
           </div>
         </div>
@@ -568,14 +581,14 @@ export const ProfileGameStatusSection = memo(function ProfileGameStatusSection({
           {isOwnerView ? (
             <div className="profile-status-toolbar-control profile-status-search-shell">
               <label className="profile-status-search-field" htmlFor="profile-status-search-input">
-                <span>Buscar jogo no catalogo</span>
+                <span>{t('profileStatus.searchLabel')}</span>
                 <input
                   id="profile-status-search-input"
                   type="text"
                   value={searchQuery}
                   onChange={event => handleSearchChange(event.target.value)}
                   className="profile-input"
-                  placeholder="Digite para ver resultados imediatos..."
+                  placeholder={t('profileStatus.searchPlaceholder')}
                   autoComplete="off"
                   disabled={isCreatingStatus}
                   aria-expanded={shouldShowAutosuggest || shouldShowEmptyAutosuggest}
@@ -585,19 +598,19 @@ export const ProfileGameStatusSection = memo(function ProfileGameStatusSection({
 
               {trimmedSearchQuery.length === 1 && !searchLoading ? (
                 <p className="profile-status-search-helper">
-                  Continue digitando para mostrar sugestoes do catalogo.
+                  {t('profileStatus.keepTyping')}
                 </p>
               ) : null}
 
               {shouldShowAutosuggest || shouldShowEmptyAutosuggest ? (
                 <div className="profile-status-autosuggest" id={searchResultsId}>
                   {searchLoading ? (
-                    <p className="profile-status-autosuggest-state">Buscando jogos...</p>
+                    <p className="profile-status-autosuggest-state">{t('profileStatus.searching')}</p>
                   ) : searchError ? (
                     <p className="profile-status-autosuggest-state is-error">{searchError}</p>
                   ) : shouldShowEmptyAutosuggest ? (
                     <p className="profile-status-autosuggest-state">
-                      Nenhum jogo encontrado para esse termo.
+                      {t('profileStatus.emptySearch')}
                     </p>
                   ) : (
                     searchResultItems.map(result => {
@@ -608,7 +621,7 @@ export const ProfileGameStatusSection = memo(function ProfileGameStatusSection({
                             {game.capa_url ? (
                               <GameCoverImage
                                 src={game.capa_url}
-                                alt={`Capa do jogo ${game.titulo}`}
+                                alt={t('catalog.coverAlt', { title: game.titulo })}
                                 width={64}
                                 height={64}
                                 sizes="64px"
@@ -629,7 +642,7 @@ export const ProfileGameStatusSection = memo(function ProfileGameStatusSection({
                               <span
                                 className={`profile-status-autosuggest-hint${isTracked ? ' is-tracked' : ''}`}
                               >
-                                {isTracked ? 'Ja adicionado ao perfil' : 'Adicionar ao perfil'}
+                                {isTracked ? t('profileStatus.alreadyTracked') : t('profileStatus.addToProfile')}
                               </span>
 
                               {isTracked && existingItem ? (
@@ -642,7 +655,7 @@ export const ProfileGameStatusSection = memo(function ProfileGameStatusSection({
 
                               {isFavorite ? (
                                 <span className="profile-status-search-badge is-favorite">
-                                  Favorito
+                                  {t('profileStatus.favoriteBadge')}
                                 </span>
                               ) : null}
                             </div>
@@ -655,7 +668,7 @@ export const ProfileGameStatusSection = memo(function ProfileGameStatusSection({
                           <div
                             key={game.id}
                             className="profile-status-autosuggest-item is-tracked"
-                            aria-label={`${game.titulo} ja adicionado ao perfil em ${statusLabel || 'Status'}${isFavorite ? ', favorito' : ''}.`}
+                            aria-label={`${game.titulo} ${t('profileStatus.alreadyTracked')} ${statusLabel || t('common.status')}${isFavorite ? `, ${t('profileStatus.favoriteBadge')}` : ''}.`}
                           >
                             {autosuggestContent}
                           </div>
@@ -683,7 +696,7 @@ export const ProfileGameStatusSection = memo(function ProfileGameStatusSection({
 
           <div className="profile-status-toolbar-control">
             <div className="profile-status-sort-field">
-              <span className="profile-status-toolbar-label">Ordenacao e status</span>
+              <span className="profile-status-toolbar-label">{t('profileStatus.sortAndStatus')}</span>
 
               <div className="profile-status-sort" ref={sortMenuRef}>
                 <button
@@ -692,7 +705,10 @@ export const ProfileGameStatusSection = memo(function ProfileGameStatusSection({
                   onClick={() => setShowSortMenu(currentValue => !currentValue)}
                   aria-haspopup="menu"
                   aria-expanded={showSortMenu}
-                  aria-label={`Ordenar e filtrar jogos do perfil. Ordem atual: ${sortLabel}. Status ativos: ${statusFilterSummary}.`}
+                  aria-label={t('profileStatus.sortAria', {
+                    sort: sortLabel,
+                    status: statusFilterSummary,
+                  })}
                 >
                   <span className="profile-status-sort-trigger-copy">
                     <strong>{sortLabel}</strong>
@@ -701,11 +717,11 @@ export const ProfileGameStatusSection = memo(function ProfileGameStatusSection({
                 </button>
 
                 {showSortMenu ? (
-                  <div className="profile-status-sort-menu" role="menu" aria-label="Ordenar e filtrar jogos do perfil">
+                  <div className="profile-status-sort-menu" role="menu" aria-label={t('profileStatus.sortAndStatus')}>
                     <div className="profile-status-sort-section">
-                      <span className="profile-status-sort-section-label">Ordenacao</span>
+                      <span className="profile-status-sort-section-label">{t('profileStatus.sortSection')}</span>
 
-                      {STATUS_SORT_OPTIONS.map(option => (
+                      {statusSortOptions.map(option => (
                         <button
                           key={option.value}
                           type="button"
@@ -729,13 +745,13 @@ export const ProfileGameStatusSection = memo(function ProfileGameStatusSection({
                             className="profile-status-sort-clear"
                             onClick={handleClearStatusFilters}
                           >
-                            Limpar
+                            {t('common.clear')}
                           </button>
                         ) : null}
                       </div>
 
                       <div className="profile-status-sort-filter-list">
-                        {STATUS_OPTIONS.map(option => {
+                        {statusOptions.map(option => {
                           const isActive = activeStatusFilterSet.has(option.value)
 
                           return (
@@ -767,7 +783,7 @@ export const ProfileGameStatusSection = memo(function ProfileGameStatusSection({
                 {visibleSelectedGame.capa_url ? (
                   <GameCoverImage
                     src={visibleSelectedGame.capa_url}
-                    alt={`Capa do jogo ${visibleSelectedGame.titulo}`}
+                    alt={t('catalog.coverAlt', { title: visibleSelectedGame.titulo })}
                     width={92}
                     height={92}
                     sizes="92px"
@@ -780,22 +796,22 @@ export const ProfileGameStatusSection = memo(function ProfileGameStatusSection({
               </div>
 
               <div className="profile-status-composer-copy">
-                <span className="profile-section-label">Novo jogo no perfil</span>
+                <span className="profile-section-label">{t('profileStatus.newGame')}</span>
                 <h3>{visibleSelectedGame.titulo}</h3>
-                <p>Escolha o status inicial e confirme se ele deve entrar como favorito.</p>
+                <p>{t('profileStatus.composerText')}</p>
               </div>
             </div>
 
             <div className="profile-status-composer-actions">
               <label className="profile-status-control-field">
-                <span>Status inicial</span>
+                <span>{t('profileStatus.initialStatus')}</span>
                 <select
                   value={composerStatus}
                   className="profile-status-select"
                   onChange={event => setComposerStatus(event.target.value as GameStatusValue)}
                   disabled={isCreatingStatus}
                 >
-                  {STATUS_OPTIONS.map(option => (
+                  {statusOptions.map(option => (
                     <option key={`composer-status-${option.value}`} value={option.value}>
                       {option.label}
                     </option>
@@ -811,7 +827,7 @@ export const ProfileGameStatusSection = memo(function ProfileGameStatusSection({
                   onClick={() => setComposerFavorito(currentValue => !currentValue)}
                   disabled={isCreatingStatus}
                 >
-                  {composerFavorito ? 'Favorito ativo' : 'Marcar favorito'}
+                  {composerFavorito ? t('profileStatus.favoriteActive') : t('profileStatus.markFavorite')}
                 </button>
 
                 <button
@@ -820,11 +836,11 @@ export const ProfileGameStatusSection = memo(function ProfileGameStatusSection({
                   onClick={handleCancelSelectedGame}
                   disabled={isCreatingStatus}
                 >
-                  Cancelar
+                  {t('common.cancel')}
                 </button>
 
                 <button type="submit" className="profile-save-button" disabled={isCreatingStatus}>
-                  {isCreatingStatus ? 'Salvando...' : 'Salvar no perfil'}
+                  {isCreatingStatus ? t('common.saving') : t('profileStatus.saveToProfile')}
                 </button>
               </div>
             </div>
@@ -835,11 +851,11 @@ export const ProfileGameStatusSection = memo(function ProfileGameStatusSection({
 
         {isLoading ? (
           <div className="profile-status-empty">
-            <h3>{isOwnerView ? 'Carregando seus jogos' : 'Carregando jogos deste perfil'}</h3>
+            <h3>{isOwnerView ? t('profileStatus.loadingOwner') : t('profileStatus.loadingPublic')}</h3>
             <p>
               {isOwnerView
-                ? 'Estamos montando a grade com tudo o que voce adicionou ao seu perfil.'
-                : 'Estamos montando a grade com tudo o que este perfil adicionou.'}
+                ? t('profileStatus.loadingOwnerText')
+                : t('profileStatus.loadingPublicText')}
             </p>
             <div className="profile-status-skeleton-grid" style={statusGridStyle} aria-hidden="true">
               {Array.from({ length: Math.min(gridColumns * 2, 12) }, (_, index) => (
@@ -849,35 +865,35 @@ export const ProfileGameStatusSection = memo(function ProfileGameStatusSection({
           </div>
         ) : errorMessage ? (
           <div className="profile-status-empty">
-            <h3>Ocorreu um problema ao carregar os jogos deste perfil</h3>
+            <h3>{t('profileStatus.errorTitle')}</h3>
             <p>{errorMessage}</p>
             <button
               type="button"
               className="profile-secondary-button"
               onClick={() => void onRefresh()}
             >
-              Tentar novamente
+              {t('common.tryAgain')}
             </button>
           </div>
         ) : !hasSavedStatusItems ? (
           <div className="profile-status-empty">
-            <h3>{isOwnerView ? 'Seu perfil ainda nao tem jogos salvos' : 'Este perfil ainda nao tem jogos salvos'}</h3>
+            <h3>{isOwnerView ? t('profileStatus.emptyOwner') : t('profileStatus.emptyPublic')}</h3>
             <p>
               {isOwnerView
-                ? 'Use a busca acima para adicionar o primeiro jogo e começar a organizar seu perfil.'
-                : 'Quando este usuario adicionar jogos ao perfil, eles vao aparecer aqui.'}
+                ? t('profileStatus.emptyOwnerText')
+                : t('profileStatus.emptyPublicText')}
             </p>
           </div>
         ) : !hasVisibleStatusItems ? (
           <div className="profile-status-empty">
-            <h3>Nenhum jogo corresponde aos filtros atuais</h3>
-            <p>Selecione outros status ou limpe os filtros para voltar a visualizar toda a lista.</p>
+            <h3>{t('profileStatus.emptyFilterTitle')}</h3>
+            <p>{t('profileStatus.emptyFilterText')}</p>
             <button
               type="button"
               className="profile-secondary-button"
               onClick={handleClearStatusFilters}
             >
-              Limpar filtros
+              {t('profileStatus.clearFilters')}
             </button>
           </div>
         ) : (
@@ -885,20 +901,29 @@ export const ProfileGameStatusSection = memo(function ProfileGameStatusSection({
             <div className="profile-status-list-head">
               <p>
                 {sortedItems.length === 1
-                  ? `1 jogo encontrado${hasActiveStatusFilters ? ' com os filtros atuais.' : ' nesta visualizacao.'}`
-                  : `${sortedItems.length} jogos encontrados${hasActiveStatusFilters ? ' com os filtros atuais.' : ' nesta visualizacao.'}`}
+                  ? t('profileStatus.foundOneFiltered', {
+                      suffix: hasActiveStatusFilters
+                        ? t('profileStatus.withFilters')
+                        : t('profileStatus.inView'),
+                    })
+                  : t('profileStatus.foundManyFiltered', {
+                      count: sortedItems.length,
+                      suffix: hasActiveStatusFilters
+                        ? t('profileStatus.withFilters')
+                        : t('profileStatus.inView'),
+                    })}
                 {totalCount !== null && totalCount > sortedItems.length
-                  ? ` ${totalCount - sortedItems.length} ainda nao carregados.`
+                  ? t('profileStatus.notLoaded', { count: totalCount - sortedItems.length })
                   : ''}
               </p>
               <span>
-                Pagina {safeCurrentPage + 1} de {totalPages}
+                {t('profileStatus.page', { page: safeCurrentPage + 1, total: totalPages })}
               </span>
             </div>
 
             <div className="profile-status-grid" style={statusGridStyle}>
               {visibleItems.map(item => {
-                const visibleTitle = item.jogo?.titulo || 'Jogo indisponivel'
+                const visibleTitle = item.jogo?.titulo || t('common.gameUnavailable')
                 const isSavingItem = savingItemIds.includes(item.id)
                 const isRemovingItem = removingItemIds.includes(item.id)
                 const isBusyItem = isSavingItem || isRemovingItem
@@ -914,7 +939,7 @@ export const ProfileGameStatusSection = memo(function ProfileGameStatusSection({
                           {getStatusLabel(item.status)}
                         </span>
                         {item.favorito ? (
-                          <span className="profile-status-favorite-pill">Favorito</span>
+                          <span className="profile-status-favorite-pill">{t('profileStatus.favoriteBadge')}</span>
                         ) : null}
                       </div>
 
@@ -922,7 +947,7 @@ export const ProfileGameStatusSection = memo(function ProfileGameStatusSection({
                         {item.jogo?.capa_url ? (
                           <GameCoverImage
                             src={item.jogo.capa_url}
-                            alt={`Capa do jogo ${visibleTitle}`}
+                            alt={t('catalog.coverAlt', { title: visibleTitle })}
                             width={430}
                             height={200}
                             sizes="(max-width: 768px) 100vw, 17vw"
@@ -934,17 +959,17 @@ export const ProfileGameStatusSection = memo(function ProfileGameStatusSection({
 
                       <div className="profile-status-card-body">
                         <span className="profile-status-date">
-                          Atualizado em {formatCompactDate(item.created_at)}
+                          {t('profileStatus.updatedAt', { date: formatStatusDate(item.created_at) })}
                         </span>
                         <h3>{visibleTitle}</h3>
-                        <span className="profile-status-card-cta">Ver detalhes</span>
+                        <span className="profile-status-card-cta">{t('common.viewDetails')}</span>
                       </div>
                     </Link>
 
                     {isOwnerView ? (
                       <div className="profile-status-card-actions">
                         <label className="profile-status-control-field">
-                          <span>Status</span>
+                          <span>{t('common.status')}</span>
                           <select
                             value={item.status}
                             className="profile-status-select"
@@ -957,7 +982,7 @@ export const ProfileGameStatusSection = memo(function ProfileGameStatusSection({
                             }
                             disabled={isBusyItem}
                           >
-                            {STATUS_OPTIONS.map(option => (
+                            {statusOptions.map(option => (
                               <option key={`${item.id}-${option.value}`} value={option.value}>
                                 {option.label}
                               </option>
@@ -975,7 +1000,7 @@ export const ProfileGameStatusSection = memo(function ProfileGameStatusSection({
                             }
                             disabled={isBusyItem}
                           >
-                            {item.favorito ? 'Favorito ativo' : 'Marcar favorito'}
+                            {item.favorito ? t('profileStatus.favoriteActive') : t('profileStatus.markFavorite')}
                           </button>
 
                           <button
@@ -984,12 +1009,12 @@ export const ProfileGameStatusSection = memo(function ProfileGameStatusSection({
                             onClick={() => void handleDeleteItem(item)}
                             disabled={isBusyItem}
                           >
-                            Remover
+                            {t('common.remove')}
                           </button>
 
                           {isBusyItem ? (
                             <span className="profile-status-saving-label">
-                              {isRemovingItem ? 'Removendo...' : 'Salvando...'}
+                              {isRemovingItem ? t('common.removing') : t('common.saving')}
                             </span>
                           ) : null}
                         </div>
@@ -1004,6 +1029,9 @@ export const ProfileGameStatusSection = memo(function ProfileGameStatusSection({
               currentPage={safeCurrentPage}
               totalPages={totalPages}
               onChangePage={setCurrentPage}
+              label={t('profileStatus.paginationLabel')}
+              previousLabel={t('profileStatus.previous')}
+              nextLabel={t('profileStatus.next')}
             />
 
             {hasMore ? (
@@ -1013,7 +1041,7 @@ export const ProfileGameStatusSection = memo(function ProfileGameStatusSection({
                 onClick={() => void onLoadMore()}
                 disabled={isLoadingMore}
               >
-                {isLoadingMore ? 'Carregando...' : 'Ver mais jogos'}
+                {isLoadingMore ? t('common.loading') : t('profileStatus.moreGames')}
               </button>
             ) : null}
           </>

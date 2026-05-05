@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { UserAvatar } from '../UserAvatar'
+import { useI18n } from '../../i18n/I18nContext'
 import {
   followUser,
   getProfileFollowList,
@@ -35,16 +36,9 @@ interface FollowTabState {
 
 const CONNECTION_TABS: Array<{
   kind: FollowListKind
-  label: string
 }> = [
-  {
-    kind: 'followers',
-    label: 'Seguidores',
-  },
-  {
-    kind: 'following',
-    label: 'Seguindo',
-  },
+  { kind: 'followers' },
+  { kind: 'following' },
 ]
 
 function createEmptyTabState(): Record<FollowListKind, FollowTabState> {
@@ -64,11 +58,15 @@ function createEmptyTabState(): Record<FollowListKind, FollowTabState> {
   }
 }
 
-function getFollowListErrorMessage(error: UserServiceError | null, kind: FollowListKind) {
+function getFollowListErrorMessage(
+  error: UserServiceError | null,
+  kind: FollowListKind,
+  t: (key: string, params?: Record<string, string | number>) => string
+) {
   if (!error) {
     return kind === 'followers'
-      ? 'Nao foi possivel carregar os seguidores deste perfil agora.'
-      : 'Nao foi possivel carregar os perfis seguidos por este usuario agora.'
+      ? t('connections.errorFollowers')
+      : t('connections.errorFollowing')
   }
 
   const fullMessage = [error.message, error.details, error.hint].filter(Boolean).join(' ').toLowerCase()
@@ -79,19 +77,23 @@ function getFollowListErrorMessage(error: UserServiceError | null, kind: FollowL
     fullMessage.includes('row-level security') ||
     fullMessage.includes('policy')
   ) {
-    return 'Nao foi possivel carregar esta lista por permissao. Verifique as policies SELECT das tabelas usuarios e seguidores no Supabase.'
+    return t('connections.permissionError')
   }
 
   return error.message || (kind === 'followers'
-    ? 'Nao foi possivel carregar os seguidores deste perfil agora.'
-    : 'Nao foi possivel carregar os perfis seguidos por este usuario agora.')
+    ? t('connections.errorFollowers')
+    : t('connections.errorFollowing'))
 }
 
-function getFollowActionErrorMessage(error: UserServiceError | null, action: 'follow' | 'unfollow') {
+function getFollowActionErrorMessage(
+  error: UserServiceError | null,
+  action: 'follow' | 'unfollow',
+  t: (key: string, params?: Record<string, string | number>) => string
+) {
   if (!error) {
     return action === 'follow'
-      ? 'Nao foi possivel seguir este usuario agora.'
-      : 'Nao foi possivel deixar de seguir este usuario agora.'
+      ? t('connections.followError')
+      : t('connections.unfollowError')
   }
 
   const fullMessage = [error.message, error.details, error.hint].filter(Boolean).join(' ').toLowerCase()
@@ -103,35 +105,43 @@ function getFollowActionErrorMessage(error: UserServiceError | null, action: 'fo
     fullMessage.includes('policy')
   ) {
     return action === 'follow'
-      ? 'Nao foi possivel seguir este usuario por permissao. Verifique as policies INSERT da tabela seguidores.'
-      : 'Nao foi possivel deixar de seguir este usuario por permissao. Verifique as policies DELETE da tabela seguidores.'
+      ? t('connections.followPermissionError')
+      : t('connections.unfollowPermissionError')
   }
 
   if (fullMessage.includes('duplicate') || fullMessage.includes('unique')) {
-    return 'Voce ja segue este usuario.'
+    return t('connections.alreadyFollowing')
   }
 
-  return error.message || 'Nao foi possivel concluir esta acao agora.'
+  return error.message || t('connections.actionError')
 }
 
-function getEmptyStateTitle(kind: FollowListKind, isOwnerView: boolean) {
+function getEmptyStateTitle(
+  kind: FollowListKind,
+  isOwnerView: boolean,
+  t: (key: string, params?: Record<string, string | number>) => string
+) {
   if (kind === 'followers') {
-    return 'Nenhum seguidor ainda'
+    return t('connections.emptyFollowers')
   }
 
-  return isOwnerView ? 'Voce ainda nao segue ninguem' : 'Esse usuario ainda nao esta seguindo ninguem'
+  return isOwnerView ? t('connections.emptyFollowingOwner') : t('connections.emptyFollowingPublic')
 }
 
-function getEmptyStateDescription(kind: FollowListKind, isOwnerView: boolean) {
+function getEmptyStateDescription(
+  kind: FollowListKind,
+  isOwnerView: boolean,
+  t: (key: string, params?: Record<string, string | number>) => string
+) {
   if (kind === 'followers') {
     return isOwnerView
-      ? 'Quando alguem comecar a seguir voce, a lista aparecera aqui.'
-      : 'Quando alguem comecar a seguir este usuario, a lista aparecera aqui.'
+      ? t('connections.emptyFollowersOwnerText')
+      : t('connections.emptyFollowersPublicText')
   }
 
   return isOwnerView
-    ? 'Quando voce seguir outros perfis, eles aparecerao aqui.'
-    : 'Quando este usuario seguir outros perfis, eles aparecerao aqui.'
+    ? t('connections.emptyFollowingOwnerText')
+    : t('connections.emptyFollowingPublicText')
 }
 
 export function ProfileConnectionsModal({
@@ -147,6 +157,7 @@ export function ProfileConnectionsModal({
   onClose,
   onRefreshFollowState,
 }: ProfileConnectionsModalProps) {
+  const { t, formatNumber } = useI18n()
   const [activeTab, setActiveTab] = useState<FollowListKind>(initialTab)
   const [tabState, setTabState] = useState<Record<FollowListKind, FollowTabState>>(
     createEmptyTabState
@@ -237,13 +248,13 @@ export function ProfileConnectionsModal({
         ...currentState,
         [kind]: {
           items: result.data,
-          errorMessage: result.error ? getFollowListErrorMessage(result.error, kind) : null,
+          errorMessage: result.error ? getFollowListErrorMessage(result.error, kind, t) : null,
           isLoading: false,
           hasLoaded: true,
         },
       }))
     },
-    [followersCount, followingCount, profileId, updateTabState, viewerId]
+    [followersCount, followingCount, profileId, t, updateTabState, viewerId]
   )
 
   const updateUserFollowFlag = useCallback((userId: string, isFollowing: boolean) => {
@@ -345,7 +356,7 @@ export function ProfileConnectionsModal({
       setPendingUserIds(currentIds => currentIds.filter(currentId => currentId !== listedUser.id))
 
       if (result.error) {
-        setActionError(getFollowActionErrorMessage(result.error, wasFollowing ? 'unfollow' : 'follow'))
+        setActionError(getFollowActionErrorMessage(result.error, wasFollowing ? 'unfollow' : 'follow', t))
         return
       }
 
@@ -366,6 +377,7 @@ export function ProfileConnectionsModal({
       onRefreshFollowState,
       pendingUserIds,
       profileId,
+      t,
       updateUserFollowFlag,
       viewerId,
     ]
@@ -401,10 +413,10 @@ export function ProfileConnectionsModal({
         <div className="profile-connections-modal-content">
           <header className="profile-connections-modal-header">
             <div className="profile-connections-modal-copy">
-              <span className="profile-section-label">Conexoes</span>
-              <h2 id={titleId}>Seguidores e seguindo de @{profileUsername}</h2>
+              <span className="profile-section-label">{t('connections.label')}</span>
+              <h2 id={titleId}>{t('connections.title', { username: profileUsername })}</h2>
               <p id={descriptionId}>
-                Explore as conexoes de {profileDisplayName} com troca rapida entre seguidores e perfis seguidos.
+                {t('connections.description', { name: profileDisplayName })}
               </p>
             </div>
 
@@ -412,7 +424,7 @@ export function ProfileConnectionsModal({
               type="button"
               className="profile-connections-close-button"
               onClick={onClose}
-              aria-label="Fechar modal de seguidores e seguindo"
+              aria-label={t('connections.close')}
             >
               <span aria-hidden="true">&times;</span>
             </button>
@@ -421,7 +433,7 @@ export function ProfileConnectionsModal({
           <div
             className="profile-connections-tabs"
             role="tablist"
-            aria-label="Alternar entre seguidores e perfis seguidos"
+            aria-label={t('connections.tabsAria')}
           >
             {CONNECTION_TABS.map(tab => (
               <button
@@ -440,8 +452,8 @@ export function ProfileConnectionsModal({
                   setActiveTab(tab.kind)
                 }}
               >
-                <span>{tab.label}</span>
-                <strong>{tabCounts[tab.kind].toLocaleString('pt-BR')}</strong>
+                <span>{tab.kind === 'followers' ? t('common.followers') : t('common.following')}</span>
+                <strong>{formatNumber(tabCounts[tab.kind])}</strong>
               </button>
             ))}
           </div>
@@ -456,31 +468,31 @@ export function ProfileConnectionsModal({
               <div className="profile-connections-state-card">
                 <h3>
                   {activeTab === 'followers'
-                    ? 'Carregando seguidores'
-                    : 'Carregando perfis seguidos'}
+                    ? t('connections.loadingFollowers')
+                    : t('connections.loadingFollowing')}
                 </h3>
                 <p>
                   {activeTab === 'followers'
-                    ? 'Estamos buscando quem acompanha este perfil.'
-                    : 'Estamos buscando os perfis que este usuario acompanha.'}
+                    ? t('connections.loadingFollowersText')
+                    : t('connections.loadingFollowingText')}
                 </p>
               </div>
             ) : shouldShowBlockingError ? (
               <div className="profile-connections-state-card">
-                <h3>Ocorreu um problema ao carregar esta lista</h3>
+                <h3>{t('connections.errorTitle')}</h3>
                 <p>{currentTabState.errorMessage}</p>
                 <button
                   type="button"
                   className="profile-secondary-button profile-connections-retry-button"
                   onClick={() => void loadTab(activeTab, { force: true })}
                 >
-                  Tentar novamente
+                  {t('common.tryAgain')}
                 </button>
               </div>
             ) : shouldShowEmptyState ? (
               <div className="profile-connections-state-card">
-                <h3>{getEmptyStateTitle(activeTab, isOwnerView)}</h3>
-                <p>{getEmptyStateDescription(activeTab, isOwnerView)}</p>
+                <h3>{getEmptyStateTitle(activeTab, isOwnerView, t)}</h3>
+                <p>{getEmptyStateDescription(activeTab, isOwnerView, t)}</p>
               </div>
             ) : (
               <div className="profile-connections-list-shell">
@@ -498,11 +510,11 @@ export function ProfileConnectionsModal({
                     const isFollowPending = pendingUserIds.includes(listedUser.id)
                     const followButtonLabel = isFollowPending
                       ? listedUser.isFollowing
-                        ? 'Atualizando...'
-                        : 'Seguindo...'
+                        ? t('connections.updating')
+                        : t('connections.followingPending')
                       : listedUser.isFollowing
-                        ? 'Deixar de seguir'
-                        : 'Seguir'
+                        ? t('common.unfollow')
+                        : t('common.follow')
                     const visibleFullName = listedUser.nome_completo?.trim() || ''
                     const visibleName = visibleFullName || listedUser.username
 
@@ -518,7 +530,7 @@ export function ProfileConnectionsModal({
                             avatarPath={listedUser.avatar_path}
                             imageClassName="profile-connections-user-avatar"
                             fallbackClassName="profile-connections-user-avatar profile-connections-user-avatar-fallback"
-                            alt={`Foto de perfil de ${visibleName}`}
+                            alt={t('connections.profilePhotoAlt', { name: visibleName })}
                           />
 
                           <div className="profile-connections-user-copy">
@@ -529,7 +541,7 @@ export function ProfileConnectionsModal({
 
                         <div className="profile-connections-user-actions">
                           {isOwnUser ? (
-                            <span className="profile-connections-user-chip">Seu perfil</span>
+                            <span className="profile-connections-user-chip">{t('connections.selfProfile')}</span>
                           ) : viewerId ? (
                             <button
                               type="button"

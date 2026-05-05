@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { GameCoverImage } from '../GameCoverImage'
+import { useI18n } from '../../i18n/I18nContext'
 import {
   getCatalogGamesByIds,
   searchCatalogGamesByTitle,
@@ -45,9 +46,12 @@ function getInitial(value: string) {
   return firstCharacter ? firstCharacter.toUpperCase() : 'J'
 }
 
-function getSearchErrorMessage(error: GameCatalogError | null) {
+function getSearchErrorMessage(
+  error: GameCatalogError | null,
+  t: (key: string, params?: Record<string, string | number>) => string
+) {
   if (!error) {
-    return 'Nao foi possivel buscar jogos agora.'
+    return t('error.genericSearchGames')
   }
 
   const fullMessage = [error.message, error.details, error.hint].filter(Boolean).join(' ').toLowerCase()
@@ -58,28 +62,32 @@ function getSearchErrorMessage(error: GameCatalogError | null) {
     fullMessage.includes('row-level security') ||
     fullMessage.includes('policy')
   ) {
-    return 'Nao foi possivel buscar jogos por permissao. Verifique as policies da tabela jogos no Supabase.'
+    return t('error.permissionSearchGames')
   }
 
-  return 'Nao foi possivel buscar jogos agora.'
+  return t('error.genericSearchGames')
 }
 
-function getTopFiveHeadingCopy(filledSlotsCount: number, isOwnerView: boolean) {
+function getTopFiveHeadingCopy(
+  filledSlotsCount: number,
+  isOwnerView: boolean,
+  t: (key: string, params?: Record<string, string | number>) => string
+) {
   if (filledSlotsCount === 5) {
     return isOwnerView
-      ? 'Seu ranking pessoal esta completo.'
-      : 'O ranking pessoal deste perfil esta completo.'
+      ? t('profileTopFive.completeOwner')
+      : t('profileTopFive.completePublic')
   }
 
   if (filledSlotsCount === 0) {
     return isOwnerView
-      ? 'Escolha os cinco jogos que melhor representam voce.'
-      : 'Este perfil ainda nao definiu nenhum jogo no ranking pessoal.'
+      ? t('profileTopFive.emptyOwner')
+      : t('profileTopFive.emptyPublic')
   }
 
   return isOwnerView
-    ? `${filledSlotsCount}/5 posicoes definidas no seu ranking pessoal.`
-    : `${filledSlotsCount}/5 posicoes definidas no ranking pessoal deste perfil.`
+    ? t('profileTopFive.partialOwner', { count: filledSlotsCount })
+    : t('profileTopFive.partialPublic', { count: filledSlotsCount })
 }
 
 export function ProfileTopFiveSection({
@@ -87,6 +95,7 @@ export function ProfileTopFiveSection({
   entries,
   onSaveTopFive,
 }: ProfileTopFiveSectionProps) {
+  const { t } = useI18n()
   const normalizedEntriesFromProps = useMemo(() => normalizeTopFiveEntries(entries), [entries])
 
   const [storedEntries, setStoredEntries] = useState<TopFiveStoredEntry[]>(normalizedEntriesFromProps)
@@ -186,7 +195,7 @@ export function ProfileTopFiveSection({
       if (selectedGamesRequestIdRef.current !== requestId) return
 
       if (error) {
-        setSelectedGamesError(error.message || 'Nao foi possivel carregar os jogos do seu Top 5.')
+        setSelectedGamesError(error.message || t('profileTopFive.loadSelectedError'))
         setSelectedGamesLoading(false)
         return
       }
@@ -201,7 +210,7 @@ export function ProfileTopFiveSection({
       setSelectedGamesError(null)
       setSelectedGamesLoading(false)
     })()
-  }, [storedEntries])
+  }, [storedEntries, t])
 
   useEffect(() => {
     if (!activeSlotPosition) return
@@ -275,7 +284,7 @@ export function ProfileTopFiveSection({
 
     if (!result.ok) {
       setStoredEntries(previousEntries)
-      setActionError(result.message || 'Nao foi possivel atualizar o Top 5 agora.')
+      setActionError(result.message || t('profileTopFive.updateError'))
       return
     }
 
@@ -322,7 +331,7 @@ export function ProfileTopFiveSection({
 
       if (error) {
         setSearchResults([])
-        setSearchError(getSearchErrorMessage(error))
+        setSearchError(getSearchErrorMessage(error, t))
       } else {
         setSearchResults(data)
         setSearchError(null)
@@ -367,7 +376,7 @@ export function ProfileTopFiveSection({
   }
 
   const renderSlotBody = (slot: TopFiveSlot) => {
-    const slotLabel = `Numero ${slot.posicao}`
+    const slotLabel = t('profileTopFive.number', { position: slot.posicao })
     const isActiveSlot = activeSlotPosition === slot.posicao
     const hasAssignedGame = slot.gameId !== null
     const slotClassName = `profile-top-five-slot is-rank-${slot.posicao}${hasAssignedGame ? ' is-filled' : ' is-empty'}${isActiveSlot ? ' is-active-picker' : ''}`
@@ -387,21 +396,22 @@ export function ProfileTopFiveSection({
               disabled={isSavingTopFive}
             >
               <span className="profile-top-five-slot-kicker">{slotLabel}</span>
-              <strong>Escolher jogo</strong>
-              <span>Monte sua colocacao pessoal com um jogo do catalogo.</span>
+              <strong>{t('profileTopFive.chooseGame')}</strong>
+              <span>{t('profileTopFive.slotHelp')}</span>
             </button>
           ) : (
             <div className="profile-top-five-slot-main">
               <span className="profile-top-five-slot-kicker">{slotLabel}</span>
-              <strong>Nao definido</strong>
-              <span>Este espaco ainda nao recebeu um jogo.</span>
+              <strong>{t('profileTopFive.notDefined')}</strong>
+              <span>{t('profileTopFive.emptySlot')}</span>
             </div>
           )}
         </article>
       )
     }
 
-    const visibleTitle = slot.game?.titulo || (selectedGamesLoading ? 'Carregando jogo...' : 'Jogo indisponivel')
+    const visibleTitle = slot.game?.titulo ||
+      (selectedGamesLoading ? t('profileTopFive.loadingGame') : t('common.gameUnavailable'))
 
     return (
       <article key={`top-five-slot-${slot.posicao}`} className={slotClassName}>
@@ -420,7 +430,7 @@ export function ProfileTopFiveSection({
               {slot.game?.capa_url ? (
                 <GameCoverImage
                   src={slot.game.capa_url}
-                  alt={`Capa do jogo ${visibleTitle}`}
+                  alt={t('catalog.coverAlt', { title: visibleTitle })}
                   width={320}
                   height={400}
                   sizes="(max-width: 768px) 50vw, 20vw"
@@ -441,7 +451,7 @@ export function ProfileTopFiveSection({
               {slot.game?.capa_url ? (
                 <GameCoverImage
                   src={slot.game.capa_url}
-                  alt={`Capa do jogo ${visibleTitle}`}
+                  alt={t('catalog.coverAlt', { title: visibleTitle })}
                   width={320}
                   height={400}
                   sizes="(max-width: 768px) 50vw, 20vw"
@@ -466,7 +476,7 @@ export function ProfileTopFiveSection({
               onClick={() => handleOpenSlotPicker(slot.posicao)}
               disabled={isSavingTopFive}
             >
-              Trocar jogo
+              {t('profileTopFive.changeGame')}
             </button>
 
             <button
@@ -475,7 +485,7 @@ export function ProfileTopFiveSection({
               onClick={() => void handleRemoveSlot(slot.posicao)}
               disabled={isSavingTopFive}
             >
-              Remover
+              {t('common.remove')}
             </button>
           </div>
         ) : null}
@@ -487,13 +497,13 @@ export function ProfileTopFiveSection({
     <div className="profile-top-five-section">
       <div className="profile-top-five-header">
         <div className="profile-top-five-copy">
-          <span className="profile-section-label">Top 5 pessoal</span>
+          <span className="profile-section-label">{t('profileTopFive.label')}</span>
           <h2>
             {isOwnerView
-              ? 'Os jogos que definem o seu ranking pessoal'
-              : 'Os jogos que definem o ranking pessoal deste perfil'}
+              ? t('profileTopFive.ownerTitle')
+              : t('profileTopFive.publicTitle')}
           </h2>
-          <p>{getTopFiveHeadingCopy(filledSlotsCount, isOwnerView)}</p>
+          <p>{getTopFiveHeadingCopy(filledSlotsCount, isOwnerView, t)}</p>
         </div>
       </div>
 
@@ -505,8 +515,8 @@ export function ProfileTopFiveSection({
       {selectedGamesLoading ? (
         <p className="profile-top-five-status">
           {isOwnerView
-            ? 'Carregando os jogos ja escolhidos para o seu Top 5...'
-            : 'Carregando os jogos ja escolhidos para o Top 5 deste perfil...'}
+            ? t('profileTopFive.loadingSelectedOwner')
+            : t('profileTopFive.loadingSelectedPublic')}
         </p>
       ) : null}
 
@@ -514,11 +524,9 @@ export function ProfileTopFiveSection({
         <div className="profile-top-five-picker">
           <div className="profile-top-five-picker-head">
             <div className="profile-top-five-picker-copy">
-              <span className="profile-section-label">Selecao do ranking</span>
-              <h3>Escolher jogo para o Numero {activeSlotPosition}</h3>
-              <p>
-                Busque um jogo do catalogo e confirme qual titulo deve ocupar essa colocacao.
-              </p>
+              <span className="profile-section-label">{t('profileTopFive.pickerLabel')}</span>
+              <h3>{t('profileTopFive.pickerTitle', { position: activeSlotPosition })}</h3>
+              <p>{t('profileTopFive.pickerText')}</p>
             </div>
 
             <button
@@ -527,19 +535,19 @@ export function ProfileTopFiveSection({
               onClick={resetPicker}
               disabled={isSavingTopFive}
             >
-              Cancelar
+              {t('common.cancel')}
             </button>
           </div>
 
           {activeSlot?.gameId !== null ? (
             <div className="profile-top-five-picker-current">
-              <span>Atual</span>
-              <strong>{activeSlot?.game?.titulo || 'Jogo selecionado anteriormente'}</strong>
+              <span>{t('profileTopFive.current')}</span>
+              <strong>{activeSlot?.game?.titulo || t('profileTopFive.previousGame')}</strong>
             </div>
           ) : null}
 
           <label className="profile-top-five-search-field" htmlFor="profile-top-five-search-input">
-            <span>Buscar jogo no catalogo</span>
+            <span>{t('profileTopFive.searchLabel')}</span>
             <input
               ref={searchInputRef}
               id="profile-top-five-search-input"
@@ -547,7 +555,7 @@ export function ProfileTopFiveSection({
               value={searchQuery}
               onChange={event => handleSearchChange(event.target.value)}
               className="profile-input"
-              placeholder="Digite para encontrar um jogo..."
+              placeholder={t('profileTopFive.searchPlaceholder')}
               autoComplete="off"
               disabled={isSavingTopFive}
               aria-expanded={shouldShowSearchFeedback || shouldShowSearchEmptyState}
@@ -557,39 +565,42 @@ export function ProfileTopFiveSection({
 
           {trimmedSearchQuery.length === 1 && !searchLoading ? (
             <p className="profile-top-five-search-helper">
-              Continue digitando para mostrar sugestoes do catalogo.
+              {t('profileTopFive.keepTyping')}
             </p>
           ) : null}
 
           {shouldShowSearchFeedback || shouldShowSearchEmptyState ? (
             <div className="profile-top-five-search-results" id={pickerResultsId}>
               {searchLoading ? (
-                <p className="profile-top-five-search-state">Buscando jogos...</p>
+                <p className="profile-top-five-search-state">{t('profileTopFive.searching')}</p>
               ) : searchError ? (
                 <p className="profile-top-five-search-state is-error">{searchError}</p>
               ) : shouldShowSearchEmptyState ? (
-                <p className="profile-top-five-search-state">Nenhum jogo encontrado para esse termo.</p>
+                <p className="profile-top-five-search-state">{t('profileTopFive.emptySearch')}</p>
               ) : (
                 topFiveSearchResults.map(result => {
                   const { game, occupiedPosition, isDisabled, isCurrentSlot } = result
                   const helperText = isDisabled
-                    ? `Ja no Numero ${occupiedPosition}`
+                    ? t('profileTopFive.alreadyInNumber', { position: occupiedPosition || 0 })
                     : isCurrentSlot
-                      ? `Ja ocupa o Numero ${activeSlotPosition}`
-                      : `Selecionar para o Numero ${activeSlotPosition}`
+                      ? t('profileTopFive.alreadyCurrent', { position: activeSlotPosition })
+                      : t('profileTopFive.selectForNumber', { position: activeSlotPosition })
 
                   if (isDisabled) {
                     return (
                       <div
                         key={`top-five-search-result-${game.id}`}
                         className="profile-top-five-search-result is-disabled"
-                        aria-label={`${game.titulo} ja ocupa o Numero ${occupiedPosition}.`}
+                        aria-label={t('profileTopFive.alreadyOccupiesAria', {
+                          title: game.titulo,
+                          position: occupiedPosition || 0,
+                        })}
                       >
                         <div className="profile-top-five-search-result-cover">
                           {game.capa_url ? (
                             <GameCoverImage
                               src={game.capa_url}
-                              alt={`Capa do jogo ${game.titulo}`}
+                              alt={t('catalog.coverAlt', { title: game.titulo })}
                               width={60}
                               height={60}
                               sizes="60px"
@@ -621,7 +632,7 @@ export function ProfileTopFiveSection({
                         {game.capa_url ? (
                           <GameCoverImage
                             src={game.capa_url}
-                            alt={`Capa do jogo ${game.titulo}`}
+                            alt={t('catalog.coverAlt', { title: game.titulo })}
                             width={60}
                             height={60}
                             sizes="60px"

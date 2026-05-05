@@ -12,6 +12,7 @@ import {
 } from 'react'
 import { Link } from 'react-router-dom'
 import { GameCoverImage } from '../GameCoverImage'
+import { useI18n } from '../../i18n/I18nContext'
 import {
   type WishlistError,
   type WishlistGameItem,
@@ -47,19 +48,6 @@ const HORIZONTAL_LAYOUT_THRESHOLD = 6
 const DRAG_EDGE_THRESHOLD = 72
 const DRAG_PAGE_ADVANCE_DELAY = 220
 
-function formatCompactDate(value: string | null | undefined, fallback = 'Data nao informada') {
-  if (!value) return fallback
-
-  const parsedDate = new Date(value)
-  if (Number.isNaN(parsedDate.getTime())) return fallback
-
-  return parsedDate.toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  })
-}
-
 function getInitial(value: string) {
   const firstCharacter = value.trim().charAt(0)
   return firstCharacter ? firstCharacter.toUpperCase() : 'J'
@@ -83,9 +71,12 @@ function chunkWishlistItems(items: WishlistGameItem[], chunkSize: number) {
   return itemGroups
 }
 
-function getWishlistOrderErrorMessage(error: WishlistError | null) {
+function getWishlistOrderErrorMessage(
+  error: WishlistError | null,
+  t: (key: string, params?: Record<string, string | number>) => string
+) {
   if (!error) {
-    return 'Nao foi possivel salvar a nova ordem dos jogos que voce quer jogar agora.'
+    return t('profileWishlist.orderSaveError')
   }
 
   const fullMessage = [error.message, error.details, error.hint].filter(Boolean).join(' ').toLowerCase()
@@ -96,14 +87,14 @@ function getWishlistOrderErrorMessage(error: WishlistError | null) {
     fullMessage.includes('row-level security') ||
     fullMessage.includes('policy')
   ) {
-    return 'Nao foi possivel salvar a nova ordem por permissao. Verifique as policies da tabela lista_desejos no Supabase.'
+    return t('profileWishlist.orderPermissionError')
   }
 
   if (fullMessage.includes('column')) {
-    return 'Nao foi possivel salvar a ordem porque a estrutura da tabela lista_desejos nao corresponde ao frontend.'
+    return t('profileWishlist.orderStructureError')
   }
 
-  return 'Nao foi possivel salvar a nova ordem dos jogos que voce quer jogar agora.'
+  return t('profileWishlist.orderSaveError')
 }
 
 function moveWishlistItem(items: WishlistGameItem[], sourceIndex: number, targetIndex: number) {
@@ -150,6 +141,7 @@ export const ProfileWishlistSection = memo(function ProfileWishlistSection({
   onLoadMore,
   onLoadFullWishlistForReorder,
 }: ProfileWishlistSectionProps) {
+  const { t, formatDate } = useI18n()
   const [orderedItemIds, setOrderedItemIds] = useState<string[] | null>(null)
   const [draggedItemId, setDraggedItemId] = useState<string | null>(null)
   const [dropTargetId, setDropTargetId] = useState<string | null>(null)
@@ -214,6 +206,13 @@ export const ProfileWishlistSection = memo(function ProfileWishlistSection({
   const wishlistColumnsStyle = {
     '--wishlist-columns': String(itemsPerPage),
   } as CSSProperties
+  const formatWishlistDate = (value: string | null | undefined) =>
+    formatDate(value, {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      fallback: t('profile.dateFallback'),
+    })
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return
@@ -449,7 +448,7 @@ export const ProfileWishlistSection = memo(function ProfileWishlistSection({
     setIsSavingOrder(true)
     setOrderStatus({
       tone: 'saving',
-      message: 'Salvando nova ordem...',
+      message: t('profileWishlist.savingOrder'),
     })
 
     const { error } = await updateWishlistPriorities(userId, reorderedItems)
@@ -459,7 +458,7 @@ export const ProfileWishlistSection = memo(function ProfileWishlistSection({
       setOrderedItemIds(previousItems.map(item => item.id))
       setOrderStatus({
         tone: 'error',
-        message: getWishlistOrderErrorMessage(error),
+        message: getWishlistOrderErrorMessage(error, t),
       })
     } else {
       setOrderStatus(null)
@@ -484,7 +483,7 @@ export const ProfileWishlistSection = memo(function ProfileWishlistSection({
     if (!result.ok) {
       setOrderStatus({
         tone: 'error',
-        message: result.message || 'Nao foi possivel remover este jogo da lista agora.',
+        message: result.message || t('profileWishlist.removeError'),
       })
     }
   }
@@ -492,7 +491,7 @@ export const ProfileWishlistSection = memo(function ProfileWishlistSection({
   const handlePrepareReorder = async () => {
     setOrderStatus({
       tone: 'saving',
-      message: 'Carregando lista completa para reordenar...',
+      message: t('profileWishlist.loadingFull'),
     })
 
     const result = await onLoadFullWishlistForReorder()
@@ -504,7 +503,7 @@ export const ProfileWishlistSection = memo(function ProfileWishlistSection({
 
     setOrderStatus({
       tone: 'error',
-      message: result.message || 'Nao foi possivel preparar a reordenacao agora.',
+      message: result.message || t('profileWishlist.prepareError'),
     })
   }
 
@@ -516,17 +515,17 @@ export const ProfileWishlistSection = memo(function ProfileWishlistSection({
       <div className="profile-wishlist-content">
         <div className="profile-section-head">
           <div className="profile-section-copy">
-            <span className="profile-section-label">Jogos que quero jogar</span>
-            <h2>Jogos que quero jogar</h2>
+            <span className="profile-section-label">{t('profileWishlist.title')}</span>
+            <h2>{t('profileWishlist.title')}</h2>
             <p>
               {isOwnerView
-                ? 'Guarde aqui os titulos que voce quer explorar nas proximas jogatinas.'
-                : 'Veja quais titulos este perfil salvou para jogar em outro momento.'}
+                ? t('profileWishlist.ownerText')
+                : t('profileWishlist.publicText')}
             </p>
           </div>
 
           <div className="profile-meta-item profile-wishlist-summary">
-            <span>Total salvo</span>
+            <span>{t('profileWishlist.totalSaved')}</span>
             <strong>{isLoading ? '...' : countLabel}</strong>
           </div>
         </div>
@@ -535,13 +534,13 @@ export const ProfileWishlistSection = memo(function ProfileWishlistSection({
           <div className="profile-wishlist-empty">
             <h3>
               {isOwnerView
-                ? 'Carregando seus jogos para jogar'
-                : 'Carregando jogos para jogar deste perfil'}
+                ? t('profileWishlist.loadingOwner')
+                : t('profileWishlist.loadingPublic')}
             </h3>
             <p>
               {isOwnerView
-                ? 'Estamos buscando os jogos que voce salvou para jogar depois.'
-                : 'Estamos buscando os jogos que este perfil salvou para jogar depois.'}
+                ? t('profileWishlist.loadingOwnerText')
+                : t('profileWishlist.loadingPublicText')}
             </p>
             <div className="profile-wishlist-skeleton-grid" style={wishlistColumnsStyle} aria-hidden="true">
               {Array.from({ length: Math.min(itemsPerPage, 6) }, (_, index) => (
@@ -555,17 +554,17 @@ export const ProfileWishlistSection = memo(function ProfileWishlistSection({
           <div className="profile-wishlist-empty">
             <h3>
               {isOwnerView
-                ? 'Voce ainda nao salvou jogos para jogar'
-                : 'Este perfil ainda nao salvou jogos para jogar'}
+                ? t('profileWishlist.emptyOwner')
+                : t('profileWishlist.emptyPublic')}
             </h3>
             <p>
               {isOwnerView
-                ? 'Quando voce salvar um jogo, ele vai aparecer aqui com acesso rapido ao catalogo.'
-                : 'Quando este usuario salvar jogos para jogar, eles vao aparecer aqui.'}
+                ? t('profileWishlist.emptyOwnerText')
+                : t('profileWishlist.emptyPublicText')}
             </p>
             {isOwnerView ? (
               <Link to="/games" className="profile-secondary-button profile-wishlist-link">
-                Explorar jogos
+                {t('common.exploreGames')}
               </Link>
             ) : null}
           </div>
@@ -574,8 +573,11 @@ export const ProfileWishlistSection = memo(function ProfileWishlistSection({
             <div className="profile-wishlist-list-head">
               <p>
                 {totalCount !== null && totalCount > orderedItems.length
-                  ? `${orderedItems.length} de ${totalCount} jogos carregados.`
-                  : `${orderedItems.length} jogos carregados.`}
+                  ? t('profileWishlist.loadedPartial', {
+                      loaded: orderedItems.length,
+                      total: totalCount,
+                    })
+                  : t('profileWishlist.loadedCount', { count: orderedItems.length })}
               </p>
 
               {canPrepareReorder ? (
@@ -585,7 +587,7 @@ export const ProfileWishlistSection = memo(function ProfileWishlistSection({
                   onClick={() => void handlePrepareReorder()}
                   disabled={isPreparingReorder}
                 >
-                  {isPreparingReorder ? 'Preparando...' : 'Preparar reordenacao'}
+                  {isPreparingReorder ? t('profileWishlist.preparing') : t('profileWishlist.prepareReorder')}
                 </button>
               ) : null}
             </div>
@@ -599,7 +601,7 @@ export const ProfileWishlistSection = memo(function ProfileWishlistSection({
                   type="button"
                   className="profile-wishlist-arrow profile-wishlist-arrow--prev"
                   onClick={() => setCurrentPage(previousPage => Math.max(previousPage - 1, 0))}
-                  aria-label="Mostrar grupo anterior da lista de jogos para jogar"
+                  aria-label={t('profileWishlist.previousGroup')}
                 >
                   <span aria-hidden="true">&lsaquo;</span>
                 </button>
@@ -618,7 +620,7 @@ export const ProfileWishlistSection = memo(function ProfileWishlistSection({
                     <div key={`wishlist-page-${safeCurrentPage}`} className="profile-wishlist-page">
                         {visiblePageItems.map(item => {
                           const game = item.jogo
-                          const visibleTitle = game?.titulo || 'Jogo indisponivel'
+                          const visibleTitle = game?.titulo || t('common.gameUnavailable')
                           const isDraggedItem = draggedItemId === item.id
                           const isDropTarget = dropTargetId === item.id && draggedItemId !== item.id
                           const isRemovingItem = removingItemIds.includes(item.id)
@@ -639,7 +641,9 @@ export const ProfileWishlistSection = memo(function ProfileWishlistSection({
                               <Link to={`/games/${item.jogo_id}`} className="profile-wishlist-card-link">
                                 <div className="profile-wishlist-card-meta">
                                   <span className="profile-wishlist-date">
-                                    Adicionado em {formatCompactDate(item.adicionado_em)}
+                                    {t('profileWishlist.addedAt', {
+                                      date: formatWishlistDate(item.adicionado_em),
+                                    })}
                                   </span>
                                 </div>
 
@@ -647,7 +651,7 @@ export const ProfileWishlistSection = memo(function ProfileWishlistSection({
                                   {game?.capa_url ? (
                                     <GameCoverImage
                                       src={game.capa_url}
-                                      alt={`Capa do jogo ${visibleTitle}`}
+                                      alt={t('catalog.coverAlt', { title: visibleTitle })}
                                       width={520}
                                       height={200}
                                       sizes="(max-width: 768px) 100vw, 17vw"
@@ -661,7 +665,7 @@ export const ProfileWishlistSection = memo(function ProfileWishlistSection({
 
                                 <div className="profile-wishlist-body">
                                   <h3>{visibleTitle}</h3>
-                                  <span className="profile-wishlist-cta">Ver detalhes</span>
+                                  <span className="profile-wishlist-cta">{t('common.viewDetails')}</span>
                                 </div>
                               </Link>
 
@@ -673,7 +677,7 @@ export const ProfileWishlistSection = memo(function ProfileWishlistSection({
                                     onClick={() => void handleDeleteItem(item.id)}
                                     disabled={isSavingOrder || isRemovingItem}
                                   >
-                                    Remover
+                                    {t('common.remove')}
                                   </button>
                                 </div>
                               ) : null}
@@ -687,8 +691,8 @@ export const ProfileWishlistSection = memo(function ProfileWishlistSection({
                                   onClick={handleDragHandleClick}
                                   onDragStart={event => handleDragStart(item.id, event)}
                                   onDragEnd={handleDragEnd}
-                                  aria-label={`Reordenar ${visibleTitle}`}
-                                  title="Arraste para reorganizar"
+                                  aria-label={t('profileWishlist.reorderAria', { title: visibleTitle })}
+                                  title={t('profileWishlist.dragTitle')}
                                   disabled={isSavingOrder || isRemovingItem}
                                 >
                                   <svg viewBox="0 0 16 16" aria-hidden="true">
@@ -711,7 +715,7 @@ export const ProfileWishlistSection = memo(function ProfileWishlistSection({
                 <div className="profile-wishlist-grid">
                   {orderedItems.map(item => {
                     const game = item.jogo
-                    const visibleTitle = game?.titulo || 'Jogo indisponivel'
+                    const visibleTitle = game?.titulo || t('common.gameUnavailable')
                     const isDraggedItem = draggedItemId === item.id
                     const isDropTarget = dropTargetId === item.id && draggedItemId !== item.id
                     const isRemovingItem = removingItemIds.includes(item.id)
@@ -731,7 +735,9 @@ export const ProfileWishlistSection = memo(function ProfileWishlistSection({
                         <Link to={`/games/${item.jogo_id}`} className="profile-wishlist-card-link">
                           <div className="profile-wishlist-card-meta">
                             <span className="profile-wishlist-date">
-                              Adicionado em {formatCompactDate(item.adicionado_em)}
+                              {t('profileWishlist.addedAt', {
+                                date: formatWishlistDate(item.adicionado_em),
+                              })}
                             </span>
                           </div>
 
@@ -739,7 +745,7 @@ export const ProfileWishlistSection = memo(function ProfileWishlistSection({
                             {game?.capa_url ? (
                               <GameCoverImage
                                 src={game.capa_url}
-                                alt={`Capa do jogo ${visibleTitle}`}
+                                alt={t('catalog.coverAlt', { title: visibleTitle })}
                                 width={520}
                                 height={200}
                                 sizes="(max-width: 768px) 100vw, 20vw"
@@ -751,7 +757,7 @@ export const ProfileWishlistSection = memo(function ProfileWishlistSection({
 
                           <div className="profile-wishlist-body">
                             <h3>{visibleTitle}</h3>
-                          <span className="profile-wishlist-cta">Ver detalhes</span>
+                          <span className="profile-wishlist-cta">{t('common.viewDetails')}</span>
                         </div>
                       </Link>
 
@@ -763,7 +769,7 @@ export const ProfileWishlistSection = memo(function ProfileWishlistSection({
                             onClick={() => void handleDeleteItem(item.id)}
                             disabled={isSavingOrder || isRemovingItem}
                           >
-                            Remover
+                            {t('common.remove')}
                           </button>
                         </div>
                       ) : null}
@@ -777,8 +783,8 @@ export const ProfileWishlistSection = memo(function ProfileWishlistSection({
                           onClick={handleDragHandleClick}
                           onDragStart={event => handleDragStart(item.id, event)}
                           onDragEnd={handleDragEnd}
-                          aria-label={`Reordenar ${visibleTitle}`}
-                          title="Arraste para reorganizar"
+                          aria-label={t('profileWishlist.reorderAria', { title: visibleTitle })}
+                          title={t('profileWishlist.dragTitle')}
                           disabled={isSavingOrder || isRemovingItem}
                         >
                             <svg viewBox="0 0 16 16" aria-hidden="true">
@@ -804,7 +810,7 @@ export const ProfileWishlistSection = memo(function ProfileWishlistSection({
                   onClick={() =>
                     setCurrentPage(previousPage => Math.min(previousPage + 1, totalPages - 1))
                   }
-                  aria-label="Mostrar proximo grupo da lista de jogos para jogar"
+                  aria-label={t('profileWishlist.nextGroup')}
                 >
                   <span aria-hidden="true">&rsaquo;</span>
                 </button>
@@ -824,7 +830,7 @@ export const ProfileWishlistSection = memo(function ProfileWishlistSection({
                 onClick={() => void onLoadMore()}
                 disabled={isLoadingMore}
               >
-                {isLoadingMore ? 'Carregando...' : 'Ver mais jogos'}
+                {isLoadingMore ? t('common.loading') : t('profileStatus.moreGames')}
               </button>
             ) : null}
           </>

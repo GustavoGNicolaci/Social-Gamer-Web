@@ -193,22 +193,9 @@ function mergeCollectionsById<T extends { id: string }>(currentItems: T[], nextI
   return Array.from(mergedItems.values())
 }
 
-function formatProfileDate(value: string | null | undefined, fallback = 'Data nao informada') {
-  if (!value) return fallback
-
-  const parsedDate = new Date(value)
-  if (Number.isNaN(parsedDate.getTime())) return fallback
-
-  return parsedDate.toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric',
-  })
-}
-
 function getProfileUpdateErrorMessage(error: ProfileUpdateError | null) {
   if (!error) {
-    return 'Nao foi possivel salvar as alteracoes do perfil agora.'
+    return 'Could not save profile changes right now.'
   }
 
   const fullMessage = [error.message, error.details, error.hint].filter(Boolean).join(' ').toLowerCase()
@@ -219,7 +206,7 @@ function getProfileUpdateErrorMessage(error: ProfileUpdateError | null) {
     fullMessage.includes('key (username)') ||
     fullMessage.includes('unique')
   ) {
-    return 'Esse username ja esta em uso. Tente outro.'
+    return 'This username is already in use. Try another one.'
   }
 
   if (
@@ -228,11 +215,11 @@ function getProfileUpdateErrorMessage(error: ProfileUpdateError | null) {
     fullMessage.includes('row-level security') ||
     fullMessage.includes('policy')
   ) {
-    return 'Nao foi possivel atualizar o perfil por permissao. Verifique as policies de UPDATE e SELECT da tabela usuarios no Supabase.'
+    return 'Could not update the profile due to permissions. Check the UPDATE and SELECT policies for the usuarios table in Supabase.'
   }
 
   if (fullMessage.includes('column')) {
-    return 'Nao foi possivel salvar o perfil porque a estrutura da tabela usuarios nao corresponde ao frontend.'
+    return 'Could not save the profile because the usuarios table structure does not match the frontend.'
   }
 
   if (
@@ -240,15 +227,15 @@ function getProfileUpdateErrorMessage(error: ProfileUpdateError | null) {
     fullMessage.includes('no rows') ||
     fullMessage.includes('json object requested')
   ) {
-    return 'Nao foi possivel confirmar a atualizacao do perfil. Verifique as policies de UPDATE e SELECT da tabela usuarios no Supabase.'
+    return 'Could not confirm the profile update. Check the UPDATE and SELECT policies for the usuarios table in Supabase.'
   }
 
-  return 'Nao foi possivel salvar as alteracoes do perfil agora.'
+  return 'Could not save profile changes right now.'
 }
 
 function getPublicProfileErrorMessage(error: UserServiceError | null) {
   if (!error) {
-    return 'Nao foi possivel carregar este perfil agora.'
+    return 'Could not load this profile right now.'
   }
 
   const fullMessage = [error.message, error.details, error.hint].filter(Boolean).join(' ').toLowerCase()
@@ -259,19 +246,19 @@ function getPublicProfileErrorMessage(error: UserServiceError | null) {
     fullMessage.includes('row-level security') ||
     fullMessage.includes('policy')
   ) {
-    return 'Nao foi possivel carregar este perfil por permissao. Verifique as policies de SELECT da tabela usuarios no Supabase.'
+    return 'Could not load this profile due to permissions. Check the SELECT policies for the usuarios table in Supabase.'
   }
 
-  return 'Nao foi possivel carregar este perfil agora.'
+  return 'Could not load this profile right now.'
 }
 
 function getFollowErrorMessage(error: UserServiceError | null, action: 'load' | 'follow' | 'unfollow') {
   if (!error) {
   return action === 'load'
-    ? 'Nao foi possivel carregar as relacoes deste perfil agora.'
+    ? 'Could not load this profile connections right now.'
       : action === 'follow'
-        ? 'Nao foi possivel seguir este perfil agora.'
-        : 'Nao foi possivel deixar de seguir este perfil agora.'
+        ? 'Could not follow this profile right now.'
+        : 'Could not unfollow this profile right now.'
   }
 
   const fullMessage = [error.message, error.details, error.hint].filter(Boolean).join(' ').toLowerCase()
@@ -283,17 +270,17 @@ function getFollowErrorMessage(error: UserServiceError | null, action: 'load' | 
     fullMessage.includes('policy')
   ) {
     return action === 'load'
-      ? 'Nao foi possivel carregar seguidores por permissao. Verifique as policies da tabela seguidores no Supabase.'
+      ? 'Could not load followers due to permissions. Check the policies for the seguidores table in Supabase.'
       : action === 'follow'
-        ? 'Nao foi possivel seguir este perfil por permissao. Verifique as policies INSERT da tabela seguidores no Supabase.'
-        : 'Nao foi possivel deixar de seguir este perfil por permissao. Verifique as policies DELETE da tabela seguidores no Supabase.'
+        ? 'Could not follow this profile due to permissions. Check the INSERT policies for the seguidores table in Supabase.'
+        : 'Could not unfollow this profile due to permissions. Check the DELETE policies for the seguidores table in Supabase.'
   }
 
   if (fullMessage.includes('duplicate') || fullMessage.includes('unique')) {
-    return 'Voce ja segue este perfil.'
+    return 'You already follow this profile.'
   }
 
-  return error.message || 'Nao foi possivel continuar com esta acao agora.'
+  return error.message || 'Could not continue this action right now.'
 }
 
 function getProfileReportErrorMessage(
@@ -302,10 +289,10 @@ function getProfileReportErrorMessage(
 ) {
   if (!error) {
     return action === 'load'
-      ? 'Nao foi possivel carregar o estado da denuncia deste perfil agora.'
+      ? 'Could not load this profile report state right now.'
       : action === 'submit'
-        ? 'Nao foi possivel registrar esta denuncia de perfil agora.'
-        : 'Nao foi possivel remover esta denuncia de perfil agora.'
+        ? 'Could not submit this profile report right now.'
+        : 'Could not remove this profile report right now.'
   }
 
   const fullMessage = [error.message, error.details, error.hint].filter(Boolean).join(' ').toLowerCase()
@@ -317,18 +304,18 @@ function getProfileReportErrorMessage(
     fullMessage.includes('policy')
   ) {
     return action === 'load'
-      ? 'Nao foi possivel carregar a denuncia deste perfil por permissao. Verifique as policies da tabela denuncias_perfil no Supabase.'
+      ? 'Could not load this profile report due to permissions. Check the policies for the denuncias_perfil table in Supabase.'
       : action === 'submit'
-        ? 'Nao foi possivel registrar esta denuncia por permissao. Verifique as policies da tabela denuncias_perfil no Supabase.'
-        : 'Nao foi possivel remover esta denuncia por permissao. Verifique as policies DELETE da tabela denuncias_perfil no Supabase.'
+        ? 'Could not submit this report due to permissions. Check the policies for the denuncias_perfil table in Supabase.'
+        : 'Could not remove this report due to permissions. Check the DELETE policies for the denuncias_perfil table in Supabase.'
   }
 
   if (fullMessage.includes('duplicate') || fullMessage.includes('unique')) {
-    return 'Voce ja denunciou este perfil anteriormente.'
+    return 'You already reported this profile.'
   }
 
   if (fullMessage.includes('column')) {
-    return 'A estrutura da tabela denuncias_perfil nao corresponde ao frontend.'
+    return 'The denuncias_perfil table structure does not match the frontend.'
   }
 
   return error.message
@@ -365,12 +352,12 @@ function getWishlistErrorMessage(
 ) {
   if (!error) {
     if (action === 'delete') {
-      return 'Nao foi possivel remover este jogo da sua lista agora.'
+      return 'Could not remove this game from your list right now.'
     }
 
     return isOwnerView
-      ? 'Nao foi possivel carregar os jogos que voce quer jogar agora.'
-      : 'Nao foi possivel carregar os jogos que este perfil quer jogar agora.'
+      ? 'Could not load the games you want to play right now.'
+      : 'Could not load the games this profile wants to play right now.'
   }
 
   const fullMessage = [error.message, error.details, error.hint].filter(Boolean).join(' ').toLowerCase()
@@ -382,15 +369,15 @@ function getWishlistErrorMessage(
     fullMessage.includes('policy')
   ) {
     return action === 'delete'
-      ? 'Nao foi possivel remover este jogo por permissao. Verifique as policies DELETE da tabela lista_desejos no Supabase.'
-      : 'Nao foi possivel carregar esta lista por permissao. Verifique as policies da tabela lista_desejos no Supabase.'
+      ? 'Could not remove this game due to permissions. Check the DELETE policies for the lista_desejos table in Supabase.'
+      : 'Could not load this list due to permissions. Check the policies for the lista_desejos table in Supabase.'
   }
 
   return action === 'delete'
-    ? 'Nao foi possivel remover este jogo da sua lista agora.'
+    ? 'Could not remove this game from your list right now.'
     : isOwnerView
-      ? 'Nao foi possivel carregar os jogos que voce quer jogar agora.'
-      : 'Nao foi possivel carregar os jogos que este perfil quer jogar agora.'
+      ? 'Could not load the games you want to play right now.'
+      : 'Could not load the games this profile wants to play right now.'
 }
 
 function getGameStatusErrorMessage(
@@ -400,16 +387,16 @@ function getGameStatusErrorMessage(
 ) {
   if (!error) {
     if (action === 'save') {
-      return 'Nao foi possivel salvar o status deste jogo agora.'
+      return 'Could not save this game status right now.'
     }
 
     if (action === 'delete') {
-      return 'Nao foi possivel remover este jogo do perfil agora.'
+      return 'Could not remove this game from the profile right now.'
     }
 
     return isOwnerView
-      ? 'Nao foi possivel carregar os status do seu perfil agora.'
-      : 'Nao foi possivel carregar os status deste perfil agora.'
+      ? 'Could not load your profile statuses right now.'
+      : 'Could not load this profile statuses right now.'
   }
 
   const fullMessage = [error.message, error.details, error.hint].filter(Boolean).join(' ').toLowerCase()
@@ -421,27 +408,27 @@ function getGameStatusErrorMessage(
     fullMessage.includes('policy')
   ) {
     return action === 'load'
-      ? 'Nao foi possivel carregar os status por permissao. Verifique as policies da tabela status_jogo no Supabase.'
+      ? 'Could not load statuses due to permissions. Check the policies for the status_jogo table in Supabase.'
       : action === 'save'
-        ? 'Nao foi possivel salvar o status por permissao. Verifique as policies da tabela status_jogo no Supabase.'
-        : 'Nao foi possivel remover este jogo do perfil por permissao. Verifique as policies DELETE da tabela status_jogo no Supabase.'
+        ? 'Could not save the status due to permissions. Check the policies for the status_jogo table in Supabase.'
+        : 'Could not remove this game from the profile due to permissions. Check the DELETE policies for the status_jogo table in Supabase.'
   }
 
   if (fullMessage.includes('column')) {
-    return 'Nao foi possivel continuar porque a estrutura da tabela status_jogo nao corresponde ao frontend.'
+    return 'Could not continue because the status_jogo table structure does not match the frontend.'
   }
 
   if (action === 'save') {
-    return 'Nao foi possivel salvar o status deste jogo agora.'
+    return 'Could not save this game status right now.'
   }
 
   if (action === 'delete') {
-    return 'Nao foi possivel remover este jogo do perfil agora.'
+    return 'Could not remove this game from the profile right now.'
   }
 
   return isOwnerView
-    ? 'Nao foi possivel carregar os status do seu perfil agora.'
-    : 'Nao foi possivel carregar os status deste perfil agora.'
+    ? 'Could not load your profile statuses right now.'
+    : 'Could not load this profile statuses right now.'
 }
 
 function getReviewErrorMessage(
@@ -451,12 +438,12 @@ function getReviewErrorMessage(
 ) {
   if (!error) {
     if (action === 'delete') {
-      return 'Nao foi possivel apagar esta review agora.'
+      return 'Could not delete this review right now.'
     }
 
     return isOwnerView
-      ? 'Nao foi possivel carregar suas reviews agora.'
-      : 'Nao foi possivel carregar as reviews deste perfil agora.'
+      ? 'Could not load your reviews right now.'
+      : 'Could not load this profile reviews right now.'
   }
 
   const fullMessage = [error.message, error.details, error.hint].filter(Boolean).join(' ').toLowerCase()
@@ -468,21 +455,21 @@ function getReviewErrorMessage(
     fullMessage.includes('policy')
   ) {
     return action === 'delete'
-      ? 'Nao foi possivel apagar sua review por permissao. Verifique as policies DELETE da tabela avaliacoes no Supabase.'
-      : 'Nao foi possivel carregar as reviews por permissao. Verifique as policies das tabelas avaliacoes e jogos no Supabase.'
+      ? 'Could not delete your review due to permissions. Check the DELETE policies for the avaliacoes table in Supabase.'
+      : 'Could not load reviews due to permissions. Check the policies for the avaliacoes and jogos tables in Supabase.'
   }
 
   if (fullMessage.includes('column')) {
     return action === 'delete'
-      ? 'Nao foi possivel apagar a review porque a estrutura da tabela avaliacoes nao corresponde ao frontend.'
-      : 'Nao foi possivel carregar as reviews porque a estrutura das tabelas nao corresponde ao frontend.'
+      ? 'Could not delete the review because the avaliacoes table structure does not match the frontend.'
+      : 'Could not load reviews because the table structure does not match the frontend.'
   }
 
   return action === 'delete'
-    ? error.message || 'Nao foi possivel apagar esta review agora.'
+    ? error.message || 'Could not delete this review right now.'
     : isOwnerView
-      ? 'Nao foi possivel carregar suas reviews agora.'
-      : 'Nao foi possivel carregar as reviews deste perfil agora.'
+      ? 'Could not load your reviews right now.'
+      : 'Could not load this profile reviews right now.'
 }
 
 const readOnlySaveStatus = async (_params: {
@@ -493,7 +480,7 @@ const readOnlySaveStatus = async (_params: {
   void _params
   return {
     ok: false,
-    message: 'Apenas o dono do perfil pode alterar estes dados.',
+    message: 'Only the profile owner can change this data.',
   }
 }
 
@@ -501,7 +488,7 @@ const readOnlyDeleteStatus = async (_itemId: string) => {
   void _itemId
   return {
     ok: false,
-    message: 'Apenas o dono do perfil pode alterar estes dados.',
+    message: 'Only the profile owner can change this data.',
   }
 }
 
@@ -509,7 +496,7 @@ const readOnlyDeleteWishlist = async (_itemId: string) => {
   void _itemId
   return {
     ok: false,
-    message: 'Apenas o dono do perfil pode alterar estes dados.',
+    message: 'Only the profile owner can change this data.',
   }
 }
 
@@ -517,13 +504,13 @@ const readOnlySaveTopFive = async (_entries: TopFiveStoredEntry[]) => {
   void _entries
   return {
     ok: false,
-    message: 'Apenas o dono do perfil pode alterar estes dados.',
+    message: 'Only the profile owner can change this data.',
   }
 }
 
 export function ProfilePage() {
   const { username } = useParams()
-  const { t } = useI18n()
+  const { t, formatDate } = useI18n()
   const requestedUsername = username?.trim() || ''
   const isUsernameRoute = requestedUsername.length > 0
 
@@ -1156,9 +1143,9 @@ export function ProfilePage() {
       <div className="page-container">
         <div className="page-content">
           <div className="profile-state-card">
-            <span className="profile-state-badge">Perfil</span>
-            <h1>Carregando perfil</h1>
-            <p>Estamos reunindo as informacoes desta pagina.</p>
+            <span className="profile-state-badge">{t('common.profile')}</span>
+            <h1>{t('profile.loadingTitle')}</h1>
+            <p>{t('profile.loadingText')}</p>
           </div>
         </div>
       </div>
@@ -1170,9 +1157,9 @@ export function ProfilePage() {
       <div className="page-container">
         <div className="page-content">
           <div className="profile-state-card">
-            <span className="profile-state-badge">Perfil</span>
-            <h1>Faca login para acessar seu perfil</h1>
-            <p>Entre na sua conta para visualizar e editar seus dados.</p>
+            <span className="profile-state-badge">{t('common.profile')}</span>
+            <h1>{t('profile.loginTitle')}</h1>
+            <p>{t('profile.loginText')}</p>
           </div>
         </div>
       </div>
@@ -1184,8 +1171,8 @@ export function ProfilePage() {
       <div className="page-container">
         <div className="page-content">
           <div className="profile-state-card">
-            <span className="profile-state-badge">Perfil</span>
-            <h1>Perfil indisponivel</h1>
+            <span className="profile-state-badge">{t('common.profile')}</span>
+            <h1>{t('profile.unavailableTitle')}</h1>
             <p>{publicProfileError}</p>
           </div>
         </div>
@@ -1198,9 +1185,9 @@ export function ProfilePage() {
       <div className="page-container">
         <div className="page-content">
           <div className="profile-state-card">
-            <span className="profile-state-badge">Perfil</span>
-            <h1>Perfil indisponivel</h1>
-            <p>Nao foi possivel carregar seus dados agora. Tente novamente em instantes.</p>
+            <span className="profile-state-badge">{t('common.profile')}</span>
+            <h1>{t('profile.unavailableTitle')}</h1>
+            <p>{t('profile.ownLoadError')}</p>
           </div>
         </div>
       </div>
@@ -1212,9 +1199,9 @@ export function ProfilePage() {
       <div className="page-container">
         <div className="page-content">
           <div className="profile-state-card">
-            <span className="profile-state-badge">Perfil</span>
-            <h1>Perfil nao encontrado</h1>
-            <p>Esse usuario nao existe ou ainda nao disponibilizou um perfil publico.</p>
+            <span className="profile-state-badge">{t('common.profile')}</span>
+            <h1>{t('profile.notFoundTitle')}</h1>
+            <p>{t('profile.notFoundText')}</p>
           </div>
         </div>
       </div>
@@ -1226,9 +1213,9 @@ export function ProfilePage() {
       <div className="page-container">
         <div className="page-content">
           <div className="profile-state-card">
-            <span className="profile-state-badge">Perfil</span>
-            <h1>Perfil indisponivel</h1>
-            <p>Nao foi possivel carregar os dados editaveis deste perfil agora.</p>
+            <span className="profile-state-badge">{t('common.profile')}</span>
+            <h1>{t('profile.unavailableTitle')}</h1>
+            <p>{t('profile.editableLoadError')}</p>
           </div>
         </div>
       </div>
@@ -1240,16 +1227,21 @@ export function ProfilePage() {
       <div className="page-container">
         <div className="page-content">
           <div className="profile-state-card">
-            <span className="profile-state-badge">Perfil</span>
-            <h1>Perfil indisponivel</h1>
-            <p>Nao foi possivel montar esta pagina de perfil agora.</p>
+            <span className="profile-state-badge">{t('common.profile')}</span>
+            <h1>{t('profile.unavailableTitle')}</h1>
+            <p>{t('profile.pageLoadError')}</p>
           </div>
         </div>
       </div>
     )
   }
 
-  const joinedDate = formatProfileDate(activeProfile.data_cadastro)
+  const joinedDate = formatDate(activeProfile.data_cadastro, {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+    fallback: t('profile.dateFallback'),
+  })
   const visibleFullName = isEditing
     ? draftProfile.nome_completo.trim()
     : activeProfile.nome_completo?.trim() || ''
@@ -1275,31 +1267,31 @@ export function ProfilePage() {
     statusSectionLoading
       ? '...'
       : statusTotalCount === 1
-        ? '1 jogo com status'
-        : `${statusTotalCount} jogos com status`
+        ? t('profile.statusCountOne')
+        : t('profile.statusCountMany', { count: statusTotalCount })
   const wishlistCountLabel =
     wishlistSectionLoading
       ? '...'
       : wishlistTotalCount === 1
-        ? '1 jogo salvo para jogar'
-        : `${wishlistTotalCount} jogos salvos para jogar`
+        ? t('profile.wishlistCountOne')
+        : t('profile.wishlistCountMany', { count: wishlistTotalCount })
   const reviewsCountLabel =
     reviewsSectionLoading
       ? '...'
       : reviewsTotalCount === 1
-        ? '1 review publicada'
-        : `${reviewsTotalCount} reviews publicadas`
+        ? t('profile.reviewsCountOne')
+        : t('profile.reviewsCountMany', { count: reviewsTotalCount })
   const followButtonLabel = followSubmitting
     ? followState.isFollowing
-      ? 'Atualizando...'
-      : 'Seguindo...'
+      ? t('profile.followUpdating')
+      : t('profile.followPending')
     : followState.isFollowing
-      ? 'Deixar de seguir'
-      : 'Seguir'
+      ? t('common.unfollow')
+      : t('common.follow')
   const restrictedProfileTitle =
     resolvedProfile?.kind === 'public' && resolvedProfile.data.privacyMode === 'friends'
-      ? 'Somente para amigos'
-      : 'Perfil privado'
+      ? t('profile.restrictedFriendsTitle')
+      : t('profile.restrictedPrivateTitle')
   const restrictedProfileMessage =
     resolvedProfile?.kind === 'public'
       ? resolvedProfile.data.restrictedContentMessage
@@ -1307,21 +1299,21 @@ export function ProfilePage() {
   const sectionEyebrow = isRestrictedPublicView
     ? restrictedProfileTitle
     : isOwnerView
-      ? 'Perfil'
-      : 'Perfil publico'
+      ? t('profile.ownerEyebrow')
+      : t('profile.publicEyebrow')
   const canOpenFollowersModal =
     !isRestrictedPublicView && !followLoading && followState.followersCount > 0
   const canOpenFollowingModal =
     !isRestrictedPublicView && !followLoading && followState.followingCount > 0
   const canReportProfile = Boolean(user && activeProfile && !isOwnerView)
   const profileReportButtonLabel = profileReportLoading
-    ? 'Carregando denuncia do perfil'
+    ? t('profile.reportLoading')
     : currentProfileReport
-      ? 'Ver detalhes da sua denuncia deste perfil'
-      : 'Denunciar perfil'
+      ? t('profile.reportDetails')
+      : t('profile.reportProfile')
   const profileReportTargetLabel = activeProfile.username
-    ? `o perfil de @${activeProfile.username}`
-    : 'este perfil'
+    ? t('profile.reportTargetProfile', { username: activeProfile.username })
+    : t('profile.reportTargetThis')
 
   const resetDraft = () => {
     setDraftProfile(createProfileDraft(editableProfile))
@@ -1361,7 +1353,7 @@ export function ProfilePage() {
       if (!result) {
         setAvatarFeedback({
           tone: 'error',
-          message: 'Nao foi possivel enviar a nova foto.',
+          message: t('profile.avatarUploadError'),
         })
         return
       }
@@ -1381,13 +1373,13 @@ export function ProfilePage() {
 
       setAvatarFeedback({
         tone: 'success',
-        message: 'Foto de perfil atualizada com sucesso.',
+        message: t('profile.avatarSuccess'),
       })
     } catch (error) {
       console.error('Erro inesperado ao atualizar avatar do perfil:', error)
       setAvatarFeedback({
         tone: 'error',
-        message: 'Nao foi possivel atualizar a foto agora.',
+        message: t('profile.avatarUpdateError'),
       })
     } finally {
       setIsUploadingAvatar(false)
@@ -1408,7 +1400,7 @@ export function ProfilePage() {
     if (!trimmedUsername) {
       setSaveFeedback({
         tone: 'error',
-        message: 'Username e obrigatorio.',
+        message: t('profile.usernameRequired'),
       })
       return
     }
@@ -1444,14 +1436,14 @@ export function ProfilePage() {
       setDraftProfile(createProfileDraft(data))
       setSaveFeedback({
         tone: 'success',
-        message: 'Perfil atualizado com sucesso.',
+        message: t('profile.saveSuccess'),
       })
       setIsEditing(false)
     } catch (error) {
       console.error('Erro inesperado ao salvar perfil:', error)
       setSaveFeedback({
         tone: 'error',
-        message: 'Nao foi possivel salvar as alteracoes do perfil agora.',
+        message: t('profile.error.saveGeneric'),
       })
     } finally {
       setIsSaving(false)
@@ -1517,7 +1509,7 @@ export function ProfilePage() {
     if (!activeProfile || !wishlistCacheKey || wishlistPreparingReorder) {
       return {
         ok: false,
-        message: 'Nao foi possivel preparar a reordenacao agora.',
+        message: t('profile.error.prepareReorder'),
       }
     }
 
@@ -1569,7 +1561,7 @@ export function ProfilePage() {
     if (!editableProfile) {
       return {
         ok: false,
-        message: 'Nao foi possivel identificar o perfil para salvar este status.',
+        message: t('profile.error.identifyStatusSave'),
       }
     }
 
@@ -1596,7 +1588,7 @@ export function ProfilePage() {
     if (!reloadResult.ok) {
       return {
         ok: false,
-        message: 'O status foi salvo, mas nao foi possivel atualizar a lista agora.',
+        message: t('profile.error.statusSavedRefresh'),
       }
     }
 
@@ -1611,7 +1603,7 @@ export function ProfilePage() {
     if (!editableProfile) {
       return {
         ok: false,
-        message: 'Nao foi possivel identificar o perfil para remover este jogo.',
+        message: t('profile.error.identifyStatusDelete'),
       }
     }
 
@@ -1652,7 +1644,7 @@ export function ProfilePage() {
     if (!editableProfile) {
       return {
         ok: false,
-        message: 'Nao foi possivel identificar o perfil para remover este jogo.',
+        message: t('profile.error.identifyWishlistDelete'),
       }
     }
 
@@ -1695,7 +1687,7 @@ export function ProfilePage() {
     if (!editableProfile) {
       return {
         ok: false,
-        message: 'Nao foi possivel identificar o perfil para atualizar o Top 5.',
+        message: t('profile.error.identifyTopFiveUpdate'),
       }
     }
 
@@ -1724,7 +1716,7 @@ export function ProfilePage() {
     if (!editableProfile) {
       return {
         ok: false,
-        message: 'Nao foi possivel identificar o perfil para apagar esta review.',
+        message: t('profile.error.identifyReviewDelete'),
       }
     }
 
@@ -1846,8 +1838,8 @@ export function ProfilePage() {
       tone: reportResult.status === 'already_exists' ? 'info' : 'success',
       message:
         reportResult.status === 'already_exists'
-          ? 'Voce ja denunciou este perfil. Aqui esta o status atual da sua denuncia.'
-          : 'Denuncia de perfil enviada com sucesso.',
+          ? t('profile.reportAlreadyExists')
+          : t('profile.reportSent'),
     })
     setProfileReportSubmitting(false)
   }
@@ -1875,7 +1867,7 @@ export function ProfilePage() {
     setCurrentProfileReport(null)
     setProfileReportFeedback({
       tone: 'success',
-      message: 'Denuncia de perfil removida com sucesso.',
+      message: t('profile.reportRemoved'),
     })
     setProfileReportRemoving(false)
   }
@@ -1886,7 +1878,7 @@ export function ProfilePage() {
       avatarPath={activeProfile.avatar_path}
       imageClassName="avatar-img profile-avatar-large"
       fallbackClassName="avatar-placeholder-large profile-avatar-large"
-      alt={`Foto de perfil de ${visibleProfileLabel}`}
+      alt={t('profile.avatarAlt', { name: visibleProfileLabel })}
     />
   )
 
@@ -1905,11 +1897,11 @@ export function ProfilePage() {
                     <label
                       htmlFor="profile-avatar-input"
                       className={`profile-avatar-trigger${isUploadingAvatar ? ' is-uploading' : ''}`}
-                      title="Clique para trocar a foto"
+                      title={t('profile.avatarTitle')}
                     >
                       {avatarContent}
                       <span className="profile-avatar-overlay">
-                        {isUploadingAvatar ? 'Enviando foto...' : 'Trocar foto'}
+                        {isUploadingAvatar ? t('profile.uploadingPhoto') : t('profile.changePhoto')}
                       </span>
                     </label>
 
@@ -1949,7 +1941,7 @@ export function ProfilePage() {
                       className={`profile-edit-button${isEditing ? ' is-active' : ''}`}
                       onClick={isEditing ? handleCancelEditing : handleStartEditing}
                       disabled={isSaving || isUploadingAvatar}
-                      aria-label={isEditing ? 'Cancelar edicao do perfil' : 'Editar perfil'}
+                      aria-label={isEditing ? t('profile.cancelEdit') : t('profile.editProfile')}
                       aria-pressed={isEditing}
                     >
                       <span className="profile-edit-button-icon" aria-hidden="true">
@@ -1970,17 +1962,17 @@ export function ProfilePage() {
                           />
                         </svg>
                       </span>
-                      <span>{isEditing ? 'Cancelar' : 'Editar'}</span>
+                      <span>{isEditing ? t('common.cancel') : t('profile.edit')}</span>
                     </button>
                   ) : (
                     <div className="public-profile-actions">
                       {!user ? (
                         <Link to="/login" className="profile-secondary-button public-profile-follow-link">
-                          Fazer login para seguir
+                          {t('profile.loginToFollow')}
                         </Link>
                       ) : followState.isFollowing ? (
                         <>
-                          <span className="public-profile-follow-status">Seguindo</span>
+                          <span className="public-profile-follow-status">{t('profile.followingStatus')}</span>
                           <button
                             type="button"
                             className="profile-save-button public-profile-follow-button is-following"
@@ -2022,7 +2014,7 @@ export function ProfilePage() {
                 {!isRestrictedPublicView ? (
                   <div className={`profile-meta${!isOwnerView ? ' public-profile-meta' : ''}`}>
                     <div className="profile-meta-item">
-                      <span>Membro desde</span>
+                      <span>{t('profile.memberSince')}</span>
                       <strong>{joinedDate}</strong>
                     </div>
 
@@ -2031,14 +2023,14 @@ export function ProfilePage() {
                         type="button"
                         className="profile-meta-item profile-meta-item-button is-interactive"
                         onClick={() => handleOpenConnectionsModal('followers')}
-                        aria-label={`Abrir lista de seguidores. ${followState.followersCount} seguidores.`}
+                        aria-label={t('profile.followersAria', { count: followState.followersCount })}
                       >
-                        <span>Seguidores</span>
+                        <span>{t('common.followers')}</span>
                         <strong>{followState.followersCount}</strong>
                       </button>
                     ) : (
                       <div className="profile-meta-item profile-meta-item-button is-disabled">
-                        <span>Seguidores</span>
+                        <span>{t('common.followers')}</span>
                         <strong>{followLoading ? '...' : followState.followersCount}</strong>
                       </div>
                     )}
@@ -2048,14 +2040,14 @@ export function ProfilePage() {
                         type="button"
                         className="profile-meta-item profile-meta-item-button is-interactive"
                         onClick={() => handleOpenConnectionsModal('following')}
-                        aria-label={`Abrir lista de perfis seguidos. ${followState.followingCount} perfis seguidos.`}
+                        aria-label={t('profile.followingAria', { count: followState.followingCount })}
                       >
-                        <span>Seguindo</span>
+                        <span>{t('common.following')}</span>
                         <strong>{followState.followingCount}</strong>
                       </button>
                     ) : (
                       <div className="profile-meta-item profile-meta-item-button is-disabled">
-                        <span>Seguindo</span>
+                        <span>{t('common.following')}</span>
                         <strong>{followLoading ? '...' : followState.followingCount}</strong>
                       </div>
                     )}
@@ -2064,11 +2056,11 @@ export function ProfilePage() {
 
                 {isRestrictedPublicView ? (
                   <div className="profile-private-notice" role="status">
-                    <span className="profile-section-label">Privacidade</span>
+                    <span className="profile-section-label">{t('profile.privacyLabel')}</span>
                     <h2>{restrictedProfileTitle}</h2>
                     <p>
                       {restrictedProfileMessage ||
-                        'Este usuario escolheu limitar a visibilidade das informacoes do perfil.'}
+                        t('profile.privateFallback')}
                     </p>
                   </div>
                 ) : isEditing && isOwnerView ? (
@@ -2081,7 +2073,7 @@ export function ProfilePage() {
                   >
                     <div className="profile-form-grid">
                       <label className="profile-field">
-                        <span>Username</span>
+                        <span>{t('common.username')}</span>
                         <div className="profile-input-wrap">
                           <span className="profile-input-prefix">@</span>
                           <input
@@ -2089,33 +2081,33 @@ export function ProfilePage() {
                             className="profile-input profile-input-plain"
                             value={draftProfile.username}
                             onChange={event => handleDraftChange('username', event.target.value)}
-                            placeholder="seuusername"
+                            placeholder={t('profile.usernamePlaceholder')}
                             disabled={isSaving}
                           />
                         </div>
                       </label>
 
                       <label className="profile-field">
-                        <span>Nome completo (opcional)</span>
+                        <span>{t('common.fullNameOptional')}</span>
                         <input
                           type="text"
                           className="profile-input"
                           value={draftProfile.nome_completo}
                           onChange={event => handleDraftChange('nome_completo', event.target.value)}
-                          placeholder="Nome completo (opcional)"
+                          placeholder={t('common.fullNameOptional')}
                           disabled={isSaving}
                         />
                       </label>
                     </div>
 
                     <label className="profile-field">
-                      <span>Bio</span>
+                      <span>{t('common.bio')}</span>
                       <textarea
                         className="profile-textarea"
                         value={draftProfile.bio}
                         onChange={event => handleDraftChange('bio', event.target.value)}
                         maxLength={220}
-                        placeholder="Fale um pouco sobre voce."
+                        placeholder={t('profile.bioPlaceholder')}
                         disabled={isSaving}
                       />
                     </label>
@@ -2130,20 +2122,20 @@ export function ProfilePage() {
                           onClick={handleCancelEditing}
                           disabled={isSaving}
                         >
-                          Cancelar
+                          {t('common.cancel')}
                         </button>
 
                         <button type="submit" className="profile-save-button" disabled={isSaving}>
-                          {isSaving ? 'Salvando...' : 'Salvar alteracoes'}
+                          {isSaving ? t('common.saving') : t('profile.saveChanges')}
                         </button>
                       </div>
                     </div>
                   </form>
                 ) : (
                   <div className="profile-bio-block">
-                    <span className="profile-section-label">Bio</span>
+                    <span className="profile-section-label">{t('common.bio')}</span>
                     <p className={`profile-bio-copy${visibleBio ? '' : ' is-empty'}`}>
-                      {visibleBio || 'Sem bio informada.'}
+                      {visibleBio || t('profile.noBio')}
                     </p>
                   </div>
                 )}
@@ -2168,8 +2160,8 @@ export function ProfilePage() {
           </section>
 
           {!isRestrictedPublicView ? (
-            <section className="profile-tabs-shell" aria-label="Conteudo do perfil">
-              <div className="profile-tabs" role="tablist" aria-label="Navegacao interna do perfil">
+            <section className="profile-tabs-shell" aria-label={t('profile.contentLabel')}>
+              <div className="profile-tabs" role="tablist" aria-label={t('profile.navigationLabel')}>
                 <button
                   id="profile-tab-status"
                   type="button"
@@ -2179,7 +2171,7 @@ export function ProfilePage() {
                   aria-controls="profile-panel-status"
                   onClick={() => setActiveTab('status')}
                 >
-                  <span>Status dos jogos</span>
+                  <span>{t('profile.tab.status')}</span>
                 </button>
 
                 <button
@@ -2191,7 +2183,7 @@ export function ProfilePage() {
                   aria-controls="profile-panel-wishlist"
                   onClick={() => setActiveTab('wishlist')}
                 >
-                  <span>Jogos que quero jogar</span>
+                  <span>{t('profile.tab.wishlist')}</span>
                 </button>
 
                 <button
@@ -2203,7 +2195,7 @@ export function ProfilePage() {
                   aria-controls="profile-panel-reviews"
                   onClick={() => setActiveTab('reviews')}
                 >
-                  <span>Reviews</span>
+                  <span>{t('profile.tab.reviews')}</span>
                 </button>
 
                 <button

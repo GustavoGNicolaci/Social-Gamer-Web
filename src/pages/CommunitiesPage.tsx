@@ -6,8 +6,10 @@ import { useAuth } from '../contexts/AuthContext'
 import { useI18n } from '../i18n/I18nContext'
 import {
   COMMUNITY_CATEGORY_VALUES,
+  getCommunityCreationQuota,
   getCommunities,
   type CommunityCategoryValue,
+  type CommunityCreationQuota,
   type CommunitySummary,
 } from '../services/communityService'
 import { resolvePublicFileUrl } from '../services/storageService'
@@ -48,6 +50,9 @@ function CommunitiesPage() {
   const [categoriaFilter, setCategoriaFilter] = useState<CommunityCategoryValue | ''>('')
   const [currentPage, setCurrentPage] = useState(1)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [creationQuota, setCreationQuota] = useState<CommunityCreationQuota | null>(null)
+  const [creationQuotaError, setCreationQuotaError] = useState<string | null>(null)
+  const [creationQuotaLoading, setCreationQuotaLoading] = useState(false)
 
   const tipoOptions = useMemo(
     () =>
@@ -84,6 +89,22 @@ function CommunitiesPage() {
     return result
   }, [categoriaFilter, search, tipoFilter, user?.id])
 
+  const loadCreationQuota = useCallback(async () => {
+    if (!user?.id) {
+      setCreationQuota(null)
+      setCreationQuotaError(null)
+      setCreationQuotaLoading(false)
+      return null
+    }
+
+    setCreationQuotaLoading(true)
+    const result = await getCommunityCreationQuota(user.id)
+    setCreationQuota(result.data)
+    setCreationQuotaError(result.error ? t('communities.create.quotaLoadError') : null)
+    setCreationQuotaLoading(false)
+    return result
+  }, [t, user?.id])
+
   useEffect(() => {
     setCurrentPage(1)
   }, [categoriaFilter, search, tipoFilter])
@@ -100,15 +121,22 @@ function CommunitiesPage() {
     return () => window.clearTimeout(timeoutId)
   }, [loadCommunities])
 
+  useEffect(() => {
+    void loadCreationQuota()
+  }, [loadCreationQuota])
+
   const handleCommunityCreated = useCallback(async () => {
     setCurrentPage(1)
-    const result = await loadCommunities({ preserveFeedback: true })
+    const [result] = await Promise.all([
+      loadCommunities({ preserveFeedback: true }),
+      loadCreationQuota(),
+    ])
     setFeedback(
       result.error
         ? { tone: 'error', message: result.error.message }
         : { tone: 'success', message: t('communities.create.success') }
     )
-  }, [loadCommunities, t])
+  }, [loadCommunities, loadCreationQuota, t])
 
   return (
     <div className="page-container">
@@ -121,14 +149,33 @@ function CommunitiesPage() {
               <p>{t('communities.heroText')}</p>
             </div>
 
-            <button
-              type="button"
-              className="communities-create-trigger"
-              onClick={() => setIsCreateModalOpen(true)}
-            >
-              <Plus size={20} aria-hidden="true" />
-              <span>{t('communities.create.open')}</span>
-            </button>
+            <div className="communities-hero-actions">
+              <button
+                type="button"
+                className="communities-create-trigger"
+                onClick={() => setIsCreateModalOpen(true)}
+              >
+                <Plus size={20} aria-hidden="true" />
+                <span>{t('communities.create.open')}</span>
+              </button>
+
+              {user && creationQuota ? (
+                <span
+                  className={`communities-create-quota-summary${creationQuota.canCreate ? '' : ' is-full'}`}
+                >
+                  {creationQuota.canCreate
+                    ? t('communities.create.quotaStatus', {
+                        count: creationQuota.createdCount,
+                        limit: creationQuota.limit,
+                        remaining: creationQuota.remaining,
+                      })
+                    : t('communities.create.quotaStatusFull', {
+                        count: creationQuota.createdCount,
+                        limit: creationQuota.limit,
+                      })}
+                </span>
+              ) : null}
+            </div>
           </section>
 
           <section className="communities-layout">
@@ -277,6 +324,9 @@ function CommunitiesPage() {
 
       {isCreateModalOpen ? (
         <CommunityCreateModal
+          creationQuota={creationQuota}
+          quotaError={creationQuotaError}
+          quotaLoading={creationQuotaLoading}
           onClose={() => setIsCreateModalOpen(false)}
           onCreated={handleCommunityCreated}
         />

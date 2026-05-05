@@ -168,6 +168,13 @@ export interface CommunityListFilters {
   limit?: number
 }
 
+export interface CommunityCreationQuota {
+  limit: number
+  createdCount: number
+  remaining: number
+  canCreate: boolean
+}
+
 export interface CommunityMembersOptions {
   search?: string
   limit?: number
@@ -215,6 +222,9 @@ export interface PaginatedServiceResult<T> extends ServiceResult<T> {
 }
 
 export type CommunityJoinAction = 'joined' | 'requested' | 'already_member' | 'already_pending'
+
+export const COMMUNITY_CREATION_LIMIT = 3
+export const COMMUNITY_CREATION_LIMIT_ERROR_CODE = 'SG_COMMUNITY_LIMIT_REACHED'
 
 interface AuthorRow {
   id: string
@@ -448,10 +458,36 @@ function normalizeCommunityError(error: unknown, fallbackMessage: string): Commu
       'details' in error && typeof error.details === 'string' ? error.details : null
     const hint = 'hint' in error && typeof error.hint === 'string' ? error.hint : null
 
+    if (isCommunityCreationLimitError({ code, message, details, hint })) {
+      return {
+        code: COMMUNITY_CREATION_LIMIT_ERROR_CODE,
+        message: COMMUNITY_CREATION_LIMIT_ERROR_CODE,
+        details,
+        hint,
+      }
+    }
+
     return { code, message, details, hint }
   }
 
   return { message: fallbackMessage }
+}
+
+export function isCommunityCreationLimitError(error: unknown) {
+  if (!error || typeof error !== 'object') return false
+
+  const code = 'code' in error && typeof error.code === 'string' ? error.code : ''
+  const message = 'message' in error && typeof error.message === 'string' ? error.message : ''
+  const details = 'details' in error && typeof error.details === 'string' ? error.details : ''
+  const hint = 'hint' in error && typeof error.hint === 'string' ? error.hint : ''
+  const combinedMessage = [code, message, details, hint].join(' ').toLowerCase()
+
+  return (
+    code === COMMUNITY_CREATION_LIMIT_ERROR_CODE ||
+    combinedMessage.includes(COMMUNITY_CREATION_LIMIT_ERROR_CODE.toLowerCase()) ||
+    combinedMessage.includes('community creation limit') ||
+    combinedMessage.includes('limite de comunidades')
+  )
 }
 
 function resolveRelation<T>(value: Relation<T> | undefined) {
@@ -822,6 +858,65 @@ export async function getCommunities(
       data: [],
       error: normalizeCommunityError(error, 'Erro inesperado ao carregar as comunidades.'),
       totalCount: null,
+    }
+  }
+}
+
+function normalizeCommunityCreationQuota(createdCount: number | string | null | undefined): CommunityCreationQuota {
+  const normalizedCount = normalizeNumber(createdCount)
+  const remaining = Math.max(COMMUNITY_CREATION_LIMIT - normalizedCount, 0)
+
+  return {
+    limit: COMMUNITY_CREATION_LIMIT,
+    createdCount: normalizedCount,
+    remaining,
+    canCreate: normalizedCount < COMMUNITY_CREATION_LIMIT,
+  }
+}
+
+export async function getCommunityCreationQuota(
+  userId?: string | null
+): Promise<ServiceResult<CommunityCreationQuota>> {
+  if (!userId) {
+    return {
+      data: normalizeCommunityCreationQuota(0),
+      error: null,
+    }
+  }
+
+  try {
+    const { data, error } = await supabase.rpc('get_community_creation_quota')
+
+    if (!error) {
+      const row = Array.isArray(data) ? data[0] : data
+      const createdCount =
+        row && typeof row === 'object' && 'created_count' in row
+          ? row.created_count as number | string | null
+          : 0
+
+      return {
+        data: normalizeCommunityCreationQuota(createdCount),
+        error: null,
+      }
+    }
+
+    console.warn('Fallback ao contar comunidades criadas pelo usuario:', error)
+
+    const fallbackResponse = await supabase
+      .from('comunidades')
+      .select('id', { count: 'exact', head: true })
+      .eq('lider_id', userId)
+
+    return {
+      data: normalizeCommunityCreationQuota(fallbackResponse.count || 0),
+      error: fallbackResponse.error
+        ? normalizeCommunityError(fallbackResponse.error, 'Nao foi possivel verificar o limite de comunidades.')
+        : null,
+    }
+  } catch (error) {
+    return {
+      data: normalizeCommunityCreationQuota(0),
+      error: normalizeCommunityError(error, 'Erro inesperado ao verificar o limite de comunidades.'),
     }
   }
 }

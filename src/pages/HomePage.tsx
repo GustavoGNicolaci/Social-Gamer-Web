@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
+import { ActiveCommunitiesSection } from '../components/home/ActiveCommunitiesSection'
 import { FeaturedRecentReviewedGames } from '../components/home/FeaturedRecentReviewedGames'
 import { NewReleasesCarousel } from '../components/home/NewReleasesCarousel'
 import { RecentFollowingActivity } from '../components/home/RecentFollowingActivity'
@@ -8,11 +9,13 @@ import { formatCompactDate, formatCount } from '../components/home/homeDisplayUt
 import { useAuth } from '../contexts/AuthContext'
 import { useI18n } from '../i18n/I18nContext'
 import {
+  getHomeActiveCommunities,
   getHomeFeaturedRecentReviewedGames,
   getHomeFollowingActivities,
   getHomeNewReleases,
   getHomeSiteStats,
   getHomeTrendingReviews,
+  type HomeActiveCommunity,
   type HomeFeaturedGame,
   type HomeFollowingActivity,
   type HomeGameSummary,
@@ -27,6 +30,7 @@ interface HomeErrors {
   trending: string | null
   featured: string | null
   releases: string | null
+  communities: string | null
 }
 
 const EMPTY_HOME_ERRORS: HomeErrors = {
@@ -34,6 +38,7 @@ const EMPTY_HOME_ERRORS: HomeErrors = {
   trending: null,
   featured: null,
   releases: null,
+  communities: null,
 }
 
 function iconCatalog() {
@@ -86,6 +91,7 @@ function HomePage() {
   const [followingActivities, setFollowingActivities] = useState<HomeFollowingActivity[]>([])
   const [trendingReviews, setTrendingReviews] = useState<HomeTrendingReview[]>([])
   const [featuredGames, setFeaturedGames] = useState<HomeFeaturedGame[]>([])
+  const [activeCommunities, setActiveCommunities] = useState<HomeActiveCommunity[]>([])
   const [newReleases, setNewReleases] = useState<HomeGameSummary[]>([])
   const [siteStats, setSiteStats] = useState<HomeSiteStats>({
     games: 0,
@@ -105,11 +111,13 @@ function HomePage() {
         const [
           followingResponse,
           featuredGamesResponse,
+          activeCommunitiesResponse,
           releasesResponse,
           statsResponse,
         ] = await Promise.all([
           getHomeFollowingActivities(8, user?.id),
           getHomeFeaturedRecentReviewedGames({ daysWindow: 30, limit: 4 }),
+          getHomeActiveCommunities({ daysWindow: 7, limit: 6 }),
           getHomeNewReleases(36),
           getHomeSiteStats(),
         ])
@@ -138,6 +146,10 @@ function HomePage() {
           console.error('Erro ao buscar lançamentos:', releasesResponse.error)
         }
 
+        if (activeCommunitiesResponse.error) {
+          console.error('Erro ao buscar comunidades ativas:', activeCommunitiesResponse.error)
+        }
+
         if (trendingReviewsResponse.error) {
           console.error('Erro ao buscar reviews em alta:', trendingReviewsResponse.error)
         }
@@ -148,6 +160,7 @@ function HomePage() {
 
         setFollowingActivities(followingResponse.data)
         setFeaturedGames(featuredGamesResponse.data)
+        setActiveCommunities(activeCommunitiesResponse.data)
         setNewReleases(releasesResponse.data)
         setTrendingReviews(trendingReviewsResponse.data)
         setSiteStats(statsResponse.data)
@@ -156,6 +169,7 @@ function HomePage() {
           featured: featuredGamesResponse.error?.message || null,
           releases: releasesResponse.error?.message || null,
           trending: trendingReviewsResponse.error?.message || null,
+          communities: activeCommunitiesResponse.error?.message || null,
         })
       } catch (error) {
         console.error('Erro ao montar a Home:', error)
@@ -163,6 +177,7 @@ function HomePage() {
         if (isMounted) {
           setFollowingActivities([])
           setFeaturedGames([])
+          setActiveCommunities([])
           setNewReleases([])
           setTrendingReviews([])
           setHomeErrors({
@@ -170,6 +185,7 @@ function HomePage() {
             featured: t('home.error.featured'),
             releases: t('home.error.releases'),
             trending: t('home.error.trending'),
+            communities: t('home.error.communities'),
           })
         }
       } finally {
@@ -334,6 +350,12 @@ function HomePage() {
           items={newReleases}
           isLoading={loading}
           errorMessage={homeErrors.releases}
+        />
+
+        <ActiveCommunitiesSection
+          items={activeCommunities}
+          isLoading={loading}
+          errorMessage={homeErrors.communities}
         />
 
         <section className="home-section">
