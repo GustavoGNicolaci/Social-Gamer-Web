@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FocusEvent, type KeyboardEvent } from 'react'
+import { Gamepad2, Home, LogIn, LogOut, Menu, Moon, Settings, Sun, User, Users, X } from 'lucide-react'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { GameCoverImage } from '../GameCoverImage'
+import { NotificationsButton } from '../notifications/NotificationsButton'
 import { UserAvatar } from '../UserAvatar'
 import { useAuth } from '../../contexts/AuthContext'
 import { useI18n } from '../../i18n/I18nContext'
@@ -190,6 +192,7 @@ function isCompactSearchViewport(viewportWidth: number) {
 function Navbar() {
   const [theme, setTheme] = useState<'dark' | 'light'>(() => (document.body.classList.contains('light') ? 'light' : 'dark'))
   const [showMenu, setShowMenu] = useState(false)
+  const [showMobileMenu, setShowMobileMenu] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [gameResults, setGameResults] = useState<CatalogGamePreview[]>([])
   const [userResults, setUserResults] = useState<UserSearchResult[]>([])
@@ -261,6 +264,9 @@ function Navbar() {
     clearMenuCloseTimeout()
     setShowMenu(false)
   }, [clearMenuCloseTimeout])
+  const closeMobileMenu = useCallback(() => {
+    setShowMobileMenu(false)
+  }, [])
   const closeSearch = useCallback((options?: { collapseCompact?: boolean; clearQuery?: boolean }) => {
     clearScheduledSearch()
     searchRequestIdRef.current += 1
@@ -307,6 +313,22 @@ function Navbar() {
     closeSearch({ collapseCompact: true })
     navigate(`/games?q=${encodeURIComponent(currentQuery)}`)
   }, [closeSearch, navigate, searchQuery])
+  const handleThemeAction = useCallback(() => {
+    setTheme(prev => (prev === 'dark' ? 'light' : 'dark'))
+    closeMenu()
+    closeMobileMenu()
+  }, [closeMenu, closeMobileMenu])
+  const handleLogoutAction = useCallback(async () => {
+    await logout()
+    closeMenu()
+    closeMobileMenu()
+    navigate('/')
+  }, [closeMenu, closeMobileMenu, logout, navigate])
+  const handleMobileNavigation = useCallback(() => {
+    closeMobileMenu()
+    closeMenu()
+    closeSearch({ collapseCompact: true })
+  }, [closeMenu, closeMobileMenu, closeSearch])
 
   useEffect(() => {
     document.body.classList.toggle('light', theme === 'light')
@@ -334,12 +356,13 @@ function Navbar() {
     const frameId = window.requestAnimationFrame(() => {
       closeMenu()
       closeSearch({ collapseCompact: true })
+      closeMobileMenu()
     })
     return () => window.cancelAnimationFrame(frameId)
-  }, [closeMenu, closeSearch, location.pathname])
+  }, [closeMenu, closeMobileMenu, closeSearch, location.hash, location.pathname])
 
   useEffect(() => {
-    if (!showMenu && !showSearchDropdown && !showMobileSearch) return
+    if (!showMenu && !showSearchDropdown && !showMobileSearch && !showMobileMenu) return
     const handlePointerDown = (event: PointerEvent) => {
       const target = event.target as Node
       if (showMenu && !menuRef.current?.contains(target)) closeMenu()
@@ -348,6 +371,7 @@ function Navbar() {
     const handleKeyDown = (event: globalThis.KeyboardEvent) => {
       if (event.key === 'Escape') {
         closeMenu()
+        closeMobileMenu()
         closeSearch({ collapseCompact: isCompactSearch })
       }
     }
@@ -357,7 +381,7 @@ function Navbar() {
       document.removeEventListener('pointerdown', handlePointerDown)
       document.removeEventListener('keydown', handleKeyDown)
     }
-  }, [closeMenu, closeSearch, isCompactSearch, showMenu, showMobileSearch, showSearchDropdown])
+  }, [closeMenu, closeMobileMenu, closeSearch, isCompactSearch, showMenu, showMobileMenu, showMobileSearch, showSearchDropdown])
 
   useEffect(() => {
     if (showMobileSearch) searchInputRef.current?.focus()
@@ -562,6 +586,7 @@ function Navbar() {
           </div>
         </div>
         <div className="navbar-actions">
+          {user ? <NotificationsButton userId={user.id} /> : null}
           {user ? (
             <div ref={menuRef} className={`navbar-profile-menu${showMenu ? ' is-open' : ''}`} onMouseEnter={handleMenuMouseEnter} onMouseLeave={handleMenuMouseLeave} onBlur={handleMenuBlur}>
               <button type="button" className={`navbar-profile-trigger${showMenu ? ' is-open' : ''}`} aria-expanded={showMenu} aria-haspopup="menu" aria-label={showMenu ? t('navbar.profile.closeMenu') : t('navbar.profile.openMenu')} onClick={() => { clearMenuCloseTimeout(); setShowMenu(currentValue => !currentValue) }}>
@@ -578,16 +603,74 @@ function Navbar() {
                 <div className="navbar-dropdown" role="menu" aria-label={t('navbar.profile.menuLabel')}>
                   <Link to={ownProfilePath} className="navbar-dropdown-item" role="menuitem" onClick={closeMenu}><span className="navbar-dropdown-icon" aria-hidden="true">{iconMenuUser()}</span><span className="navbar-dropdown-copy"><span className="navbar-dropdown-title">{t('common.profile')}</span><span className="navbar-dropdown-hint">{t('navbar.profile.profileHint')}</span></span></Link>
                   <Link to="/configuracoes/conta" className="navbar-dropdown-item" role="menuitem" onClick={closeMenu}><span className="navbar-dropdown-icon" aria-hidden="true">{iconMenuSettings()}</span><span className="navbar-dropdown-copy"><span className="navbar-dropdown-title">{t('common.settings')}</span><span className="navbar-dropdown-hint">{t('navbar.profile.settingsHint')}</span></span></Link>
-                  <button className="navbar-dropdown-item" type="button" role="menuitem" onClick={() => { setTheme(prev => (prev === 'dark' ? 'light' : 'dark')); closeMenu() }}><span className="navbar-dropdown-icon" aria-hidden="true">{iconMenuTheme()}</span><span className="navbar-dropdown-copy"><span className="navbar-dropdown-title">{themeToggleLabel}</span><span className="navbar-dropdown-hint">{themeStatusLabel}</span></span></button>
-                  <button className="navbar-dropdown-item is-danger" type="button" role="menuitem" onClick={async () => { await logout(); closeMenu(); navigate('/') }}><span className="navbar-dropdown-icon" aria-hidden="true">{iconMenuLogout()}</span><span className="navbar-dropdown-copy"><span className="navbar-dropdown-title">{t('common.logout')}</span><span className="navbar-dropdown-hint">{t('navbar.logoutHint')}</span></span></button>
+                  <button className="navbar-dropdown-item" type="button" role="menuitem" onClick={handleThemeAction}><span className="navbar-dropdown-icon" aria-hidden="true">{iconMenuTheme()}</span><span className="navbar-dropdown-copy"><span className="navbar-dropdown-title">{themeToggleLabel}</span><span className="navbar-dropdown-hint">{themeStatusLabel}</span></span></button>
+                  <button className="navbar-dropdown-item is-danger" type="button" role="menuitem" onClick={() => void handleLogoutAction()}><span className="navbar-dropdown-icon" aria-hidden="true">{iconMenuLogout()}</span><span className="navbar-dropdown-copy"><span className="navbar-dropdown-title">{t('common.logout')}</span><span className="navbar-dropdown-hint">{t('navbar.logoutHint')}</span></span></button>
                 </div>
               ) : null}
             </div>
           ) : (
             <Link to="/login" className="navbar-button auth-btn"><span className="navbar-auth-label-full">{t('navbar.auth.full')}</span><span className="navbar-auth-label-short">{t('navbar.auth.short')}</span></Link>
           )}
+          <button
+            type="button"
+            className={`navbar-mobile-menu-trigger${showMobileMenu ? ' is-open' : ''}`}
+            aria-label={showMobileMenu ? t('navbar.mobile.close') : t('navbar.mobile.open')}
+            aria-expanded={showMobileMenu}
+            aria-controls="navbar-mobile-drawer"
+            onClick={() => setShowMobileMenu(currentValue => !currentValue)}
+          >
+            {showMobileMenu ? <X /> : <Menu />}
+          </button>
         </div>
       </div>
+      {showMobileMenu ? (
+        <>
+          <button
+            type="button"
+            className="navbar-mobile-backdrop"
+            aria-label={t('navbar.mobile.close')}
+            onClick={closeMobileMenu}
+          />
+          <aside id="navbar-mobile-drawer" className="navbar-mobile-drawer" aria-label={t('navbar.mobile.menuLabel')}>
+            <header className="navbar-mobile-drawer-header">
+              <div>
+                <span>{t('navbar.mobile.eyebrow')}</span>
+                <strong>{t('navbar.mobile.title')}</strong>
+              </div>
+              <button type="button" className="navbar-mobile-close" aria-label={t('navbar.mobile.close')} onClick={closeMobileMenu}>
+                <X />
+              </button>
+            </header>
+
+            <nav className="navbar-mobile-nav" aria-label={t('navbar.mobile.menuLabel')}>
+              <NavLink to="/" className={({ isActive }) => `navbar-mobile-link${isActive ? ' is-active' : ''}`} onClick={handleMobileNavigation}><Home /><span>{t('common.home')}</span></NavLink>
+              <NavLink to="/games" className={({ isActive }) => `navbar-mobile-link${isActive ? ' is-active' : ''}`} onClick={handleMobileNavigation}><Gamepad2 /><span>{t('common.games')}</span></NavLink>
+              <NavLink to="/comunidades" className={({ isActive }) => `navbar-mobile-link${isActive ? ' is-active' : ''}`} onClick={handleMobileNavigation}><Users /><span>{t('communities.nav')}</span></NavLink>
+              {user ? (
+                <>
+                  <NavLink to={ownProfilePath} className={({ isActive }) => `navbar-mobile-link${isActive ? ' is-active' : ''}`} onClick={handleMobileNavigation}><User /><span>{t('common.profile')}</span></NavLink>
+                  <NavLink to="/configuracoes/conta" className={({ isActive }) => `navbar-mobile-link${isActive ? ' is-active' : ''}`} onClick={handleMobileNavigation}><Settings /><span>{t('common.settings')}</span></NavLink>
+                </>
+              ) : (
+                <NavLink to="/login" className={({ isActive }) => `navbar-mobile-link${isActive ? ' is-active' : ''}`} onClick={handleMobileNavigation}><LogIn /><span>{t('navbar.auth.short')}</span></NavLink>
+              )}
+            </nav>
+
+            <div className="navbar-mobile-actions">
+              <button type="button" className="navbar-mobile-link" onClick={handleThemeAction}>
+                {theme === 'dark' ? <Sun /> : <Moon />}
+                <span>{themeToggleLabel}</span>
+              </button>
+              {user ? (
+                <button type="button" className="navbar-mobile-link is-danger" onClick={() => void handleLogoutAction()}>
+                  <LogOut />
+                  <span>{t('common.logout')}</span>
+                </button>
+              ) : null}
+            </div>
+          </aside>
+        </>
+      ) : null}
     </nav>
   )
 }

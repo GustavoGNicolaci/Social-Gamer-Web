@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { CommunityAboutCard } from '../components/communities/CommunityAboutCard'
 import { CommunityConfirmModal } from '../components/communities/CommunityConfirmModal'
 import { CommunityFilePicker } from '../components/communities/CommunityFilePicker'
@@ -138,6 +138,7 @@ function getReportPreview(report: CommunityReport) {
 function CommunityDetailsPage() {
   const { id } = useParams()
   const communityId = id || ''
+  const location = useLocation()
   const { user } = useAuth()
   const { t, formatDate, formatNumber } = useI18n()
   const navigate = useNavigate()
@@ -181,6 +182,7 @@ function CommunityDetailsPage() {
   const bannerUrl = getCommunityBanner(community)
   const canViewContent = Boolean(community?.canViewContent)
   const totalPostPages = postsTotalCount ? Math.max(1, Math.ceil(postsTotalCount / POST_PAGE_SIZE)) : 1
+  const activeAnchorId = location.hash ? decodeURIComponent(location.hash.slice(1)) : ''
 
   const visibleTabs = useMemo<CommunityTab[]>(() => {
     if (!canViewContent) return isModerator ? [] : ['memberSettings']
@@ -1004,6 +1006,7 @@ function CommunityDetailsPage() {
               }
               onReport={setReportTarget}
               onOpenImage={(url, alt) => setLightbox({ url, alt })}
+              activeAnchorId={activeAnchorId}
             />
           ))}
 

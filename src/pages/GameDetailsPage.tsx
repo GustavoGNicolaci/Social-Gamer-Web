@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useLocation, useParams } from 'react-router-dom'
 import { GameCoverImage } from '../components/GameCoverImage'
 import { ContentReportModal } from '../components/reviews/ContentReportModal'
 import { UserAvatar } from '../components/UserAvatar'
@@ -374,6 +374,7 @@ function iconFlag(isFilled: boolean) {
 
 function GameDetailsPage() {
   const { id } = useParams()
+  const location = useLocation()
   const { user } = useAuth()
   const { t, formatNumber } = useI18n()
 
@@ -705,6 +706,64 @@ function GameDetailsPage() {
       : getInitialVisibleReviewCount(reviews.length)
   const visibleReviews = reviews.slice(0, effectiveVisibleReviewCount)
   const hiddenReviewsCount = Math.max(reviews.length - visibleReviews.length, 0)
+
+  useEffect(() => {
+    if (!location.hash || reviews.length === 0) return
+
+    const targetId = decodeURIComponent(location.hash.slice(1))
+    if (!targetId) return
+
+    let expanded = false
+
+    if (targetId.startsWith('review-')) {
+      const reviewId = targetId.replace('review-', '')
+      const reviewIndex = reviews.findIndex(review => review.id === reviewId)
+
+      if (reviewIndex >= effectiveVisibleReviewCount && reviewIndex >= 0) {
+        setVisibleReviewCount(reviewIndex + 1)
+        expanded = true
+      }
+    }
+
+    if (targetId.startsWith('comment-')) {
+      const commentId = targetId.replace('comment-', '')
+      const reviewIndex = reviews.findIndex(review =>
+        review.comentarios.some(comment => comment.id === commentId)
+      )
+      const parentReview = reviewIndex >= 0 ? reviews[reviewIndex] : null
+
+      if (parentReview && reviewIndex >= effectiveVisibleReviewCount) {
+        setVisibleReviewCount(reviewIndex + 1)
+        expanded = true
+      }
+
+      if (parentReview) {
+        const commentIndex = parentReview.comentarios.findIndex(comment => comment.id === commentId)
+        const visibleCommentCount =
+          visibleCommentsByReviewId[parentReview.id] ??
+          getInitialVisibleCommentCount(parentReview.comentarios.length)
+
+        if (commentIndex >= visibleCommentCount && commentIndex >= 0) {
+          setVisibleCommentsByReviewId(currentVisibleComments => ({
+            ...currentVisibleComments,
+            [parentReview.id]: commentIndex + 1,
+          }))
+          expanded = true
+        }
+      }
+    }
+
+    if (expanded) return
+
+    const frameId = window.requestAnimationFrame(() => {
+      document.getElementById(targetId)?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      })
+    })
+
+    return () => window.cancelAnimationFrame(frameId)
+  }, [effectiveVisibleReviewCount, location.hash, reviews, visibleCommentsByReviewId])
 
   const currentUserReview = useMemo(() => {
     if (!user) return null
@@ -1850,7 +1909,7 @@ function GameDetailsPage() {
                   : t('game.details.reportReview')
 
                 return (
-                  <article key={review.id} className="game-review-card">
+                  <article key={review.id} id={`review-${review.id}`} className="game-review-card">
                     <div className="game-review-card-header">
                       {avaliadorProfilePath ? (
                         <Link
@@ -2027,7 +2086,7 @@ function GameDetailsPage() {
                               : t('game.details.reportComment')
 
                             return (
-                              <div key={comentario.id} className="game-review-comment-card">
+                              <div key={comentario.id} id={`comment-${comentario.id}`} className="game-review-comment-card">
                                 <div className="game-review-comment-header">
                                   {autorComentarioProfilePath ? (
                                     <Link

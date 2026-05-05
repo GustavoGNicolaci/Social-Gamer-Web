@@ -797,6 +797,12 @@
   box-shadow: 0 24px 44px rgba(0, 0, 0, 0.22);
 }
 
+.game-review-card:target,
+.game-review-comment-card:target {
+  border-color: var(--ring);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 24%, transparent), 0 24px 44px rgba(0, 0, 0, 0.22);
+}
+
 .game-review-card-header {
   display: flex;
   justify-content: space-between;

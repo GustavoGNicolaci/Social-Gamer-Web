@@ -1331,6 +1331,12 @@
   padding: 1rem;
 }
 
+.community-post-card:target,
+.community-comment-card:target {
+  border-color: var(--ring);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 24%, transparent), 0 18px 36px var(--shadow-color);
+}
+
 .community-post-header,
 .community-comment-header,
 .community-member-header {

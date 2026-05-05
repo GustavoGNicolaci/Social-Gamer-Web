@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { UserAvatar } from '../UserAvatar'
 import { useI18n } from '../../i18n/I18nContext'
@@ -29,6 +29,7 @@ interface CommunityPostCardProps {
   onDeleteComment: (post: CommunityPost, commentId: string) => void
   onReport: (target: CommunityReportTarget) => void
   onOpenImage: (imageUrl: string, alt: string) => void
+  activeAnchorId?: string
 }
 
 const INITIAL_VISIBLE_COMMENTS = 3
@@ -105,6 +106,7 @@ export function CommunityPostCard({
   onDeleteComment,
   onReport,
   onOpenImage,
+  activeAnchorId,
 }: CommunityPostCardProps) {
   const { t, formatDate, formatNumber } = useI18n()
   const [visibleCommentCount, setVisibleCommentCount] = useState(INITIAL_VISIBLE_COMMENTS)
@@ -122,6 +124,42 @@ export function CommunityPostCard({
   const hiddenCommentsCount = post.comentarios.length - visibleComments.length
   const isModerator = currentUserRole === 'lider' || currentUserRole === 'admin'
   const canReport = Boolean(post.canInteract && currentUserId && post.autor_id !== currentUserId)
+
+  useEffect(() => {
+    if (!activeAnchorId) return
+
+    if (activeAnchorId === `post-${post.id}`) {
+      const frameId = window.requestAnimationFrame(() => {
+        document.getElementById(activeAnchorId)?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center',
+        })
+      })
+
+      return () => window.cancelAnimationFrame(frameId)
+    }
+
+    if (!activeAnchorId.startsWith('community-comment-')) return
+
+    const commentId = activeAnchorId.replace('community-comment-', '')
+    const commentIndex = post.comentarios.findIndex(comment => comment.id === commentId)
+
+    if (commentIndex < 0) return
+
+    if (commentIndex >= visibleCommentCount) {
+      setVisibleCommentCount(commentIndex + 1)
+      return
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      document.getElementById(activeAnchorId)?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      })
+    })
+
+    return () => window.cancelAnimationFrame(frameId)
+  }, [activeAnchorId, post.comentarios, post.id, visibleCommentCount])
 
   const handleReaction = async (reaction: CommunityReactionType) => {
     setPendingAction(reaction)
@@ -213,7 +251,7 @@ export function CommunityPostCard({
     )
 
     return (
-      <div key={comment.id} className="community-comment-card">
+      <div key={comment.id} id={`community-comment-${comment.id}`} className="community-comment-card">
         <div className="community-comment-header">
           {commentAuthorPath ? (
             <Link to={commentAuthorPath} className="community-comment-author">
@@ -260,7 +298,7 @@ export function CommunityPostCard({
   }
 
   return (
-    <article className="community-post-card">
+    <article id={`post-${post.id}`} className="community-post-card">
       <header className="community-post-header">
         {renderAuthor()}
 
