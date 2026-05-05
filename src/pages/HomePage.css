@@ -351,8 +351,11 @@
   isolation: isolate;
   display: grid;
   place-items: center;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  contain: paint;
   overflow: hidden;
-  aspect-ratio: 16 / 9;
   background:
     radial-gradient(circle at top left, rgba(255, 255, 255, 0.12), transparent 34%),
     linear-gradient(135deg, rgba(20, 184, 166, 0.22), rgba(79, 70, 229, 0.2)),
@@ -390,6 +393,7 @@
   display: block;
   width: 100%;
   height: 100%;
+  pointer-events: none;
 }
 
 .home-active-community-media-backdrop {
@@ -403,9 +407,12 @@
 }
 
 .home-active-community-media-foreground {
-  position: relative;
+  position: absolute;
+  inset: 0;
   z-index: 2;
-  padding: 0.45rem;
+  padding: 0;
+  max-width: 100%;
+  max-height: 100%;
   object-fit: contain;
   object-position: center;
   filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.28));
