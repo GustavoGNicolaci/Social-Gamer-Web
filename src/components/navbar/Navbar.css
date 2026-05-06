@@ -1428,12 +1428,24 @@ body.light .navbar-mobile-link.is-danger {
 
   .navbar-container {
     padding: 0.68rem 0.72rem;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 0.45rem;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 0.35rem;
   }
 
   .navbar-logo {
-    display: none;
+    display: inline-flex;
+  }
+
+  .navbar-logo-icon {
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 13px;
+    font-size: 1.15rem;
+  }
+
+  .navbar-search-shell {
+    width: 100%;
+    min-width: 0;
   }
 
   .navbar-avatar-shell {
@@ -1442,30 +1454,31 @@ body.light .navbar-mobile-link.is-danger {
   }
 
   .navbar-actions {
-    gap: 0.25rem;
+    gap: 0.2rem;
   }
 
   .navbar-mobile-menu-trigger,
   .notifications-trigger {
-    width: 38px;
-    height: 38px;
-    min-width: 38px;
-    min-height: 38px;
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    min-height: 40px;
     border-radius: 13px;
   }
 
   .navbar-profile-trigger {
-    min-height: 38px;
+    min-height: 40px;
     padding: 0.2rem;
   }
 
   .navbar-search-toggle {
-    min-width: clamp(132px, 42vw, 168px);
-    max-width: 168px;
-    height: 42px;
-    padding-inline: 0.82rem;
-    border-radius: 14px;
-    font-size: 0.88rem;
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    height: 38px;
+    padding-inline: 0.58rem;
+    border-radius: 12px;
+    font-size: 0.8rem;
   }
 
   .navbar-search-panel {
