@@ -2,6 +2,12 @@
 .institutional-page {
   display: grid;
   gap: 1.25rem;
+  justify-items: center;
+}
+
+.support-page > *,
+.institutional-page > * {
+  width: 100%;
 }
 
 .support-hero,
@@ -38,7 +44,9 @@
 .support-hero-copy {
   display: grid;
   align-content: center;
+  justify-items: center;
   gap: 0.85rem;
+  text-align: center;
 }
 
 .support-kicker,
@@ -97,10 +105,12 @@
   display: grid;
   gap: 0.55rem;
   align-content: start;
+  justify-items: center;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface);
   padding: 1rem;
+  text-align: center;
 }
 
 .support-contact-icon,
@@ -152,8 +162,11 @@
 
 .support-section-head {
   display: grid;
+  justify-items: center;
   gap: 0.65rem;
   max-width: 780px;
+  margin-inline: auto;
+  text-align: center;
 }
 
 .support-request-grid {
@@ -165,12 +178,14 @@
 
 .support-request-card {
   display: grid;
+  justify-items: center;
   gap: 0.65rem;
   min-width: 0;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface);
   padding: 1rem;
+  text-align: center;
 }
 
 .support-request-card h3 {
@@ -187,12 +202,14 @@
 
 .support-panel {
   display: grid;
+  justify-items: center;
   gap: 1rem;
 }
 
 .support-warning {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: 1fr;
+  justify-items: center;
   gap: 0.7rem;
   align-items: start;
   border: 1px solid color-mix(in srgb, var(--warning) 34%, var(--border));
@@ -200,6 +217,7 @@
   background: var(--warning-surface);
   color: var(--warning);
   padding: 0.85rem;
+  text-align: center;
 }
 
 .support-warning svg {
@@ -213,6 +231,7 @@
 }
 
 .support-checklist {
+  width: 100%;
   display: grid;
   gap: 0.65rem;
   margin: 0;
@@ -251,7 +270,9 @@
 
 .support-email-section > div:first-child {
   display: grid;
+  justify-items: center;
   gap: 0.65rem;
+  text-align: center;
 }
 
 .support-email-box {
