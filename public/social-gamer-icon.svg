@@ -1,0 +1,85 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Logo Social Gamer - controle com estrelas</title>
+  <desc id="desc">Controle de videogame em gradiente azul e roxo, com botões brancos e estrelas douradas.</desc>
+  <defs>
+    <linearGradient id="controllerGradient" x1="125" y1="470" x2="900" y2="735" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#667EEA"/>
+      <stop offset="0.52" stop-color="#6C63E8"/>
+      <stop offset="1" stop-color="#764BA2"/>
+    </linearGradient>
+    <linearGradient id="medalGradient" x1="405" y1="424" x2="645" y2="695" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#B98CFF"/>
+      <stop offset="0.55" stop-color="#8A62EA"/>
+      <stop offset="1" stop-color="#667EEA"/>
+    </linearGradient>
+    <linearGradient id="starGold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFE986"/>
+      <stop offset="1" stop-color="#FFC247"/>
+    </linearGradient>
+    <filter id="softShadow" x="-25%" y="-25%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#0B0715" flood-opacity="0.16"/>
+    </filter>
+    <filter id="buttonShadow" x="-40%" y="-40%" width="180%" height="180%">
+      <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#0B0715" flood-opacity="0.18"/>
+    </filter>
+    <filter id="starShadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="5" stdDeviation="5" flood-color="#A86B00" flood-opacity="0.22"/>
+    </filter>
+  </defs>
+
+  <rect width="1024" height="1024" fill="none"/>
+
+  <!-- Estrelas superiores -->
+  <g filter="url(#starShadow)">
+    <path d="M512 146 L535 196 L590 201 L548 238 L561 292 L512 263 L463 292 L476 238 L434 201 L489 196 Z" fill="url(#starGold)"/>
+    <path d="M352 208 L368 243 L407 246 L377 273 L386 312 L352 291 L318 312 L327 273 L297 246 L336 243 Z" fill="url(#starGold)"/>
+    <path d="M672 208 L688 243 L727 246 L697 273 L706 312 L672 291 L638 312 L647 273 L617 246 L656 243 Z" fill="url(#starGold)"/>
+  </g>
+
+  <!-- Corpo do controle -->
+  <path filter="url(#softShadow)" fill="url(#controllerGradient)" d="
+    M134 520
+    C148 430 195 342 316 314
+    C402 294 460 355 512 357
+    C564 359 622 294 708 314
+    C829 342 876 430 890 520
+    C903 603 911 726 854 779
+    C809 821 745 857 721 839
+    C696 821 705 789 727 751
+    C748 714 736 688 686 688
+    L338 688
+    C301 688 284 729 220 733
+    C160 737 123 703 115 642
+    C110 602 125 562 134 520 Z"/>
+
+  <!-- Cruz direcional -->
+  <g filter="url(#buttonShadow)" fill="#FFFFFF">
+    <rect x="239" y="439" width="54" height="166" rx="10"/>
+    <rect x="184" y="495" width="166" height="54" rx="10"/>
+  </g>
+
+  <!-- Medalhão central -->
+  <circle cx="512" cy="565" r="143" fill="url(#medalGradient)" filter="url(#softShadow)"/>
+  <circle cx="512" cy="565" r="143" fill="none" stroke="#C9B6FF" stroke-opacity="0.55" stroke-width="4"/>
+
+  <!-- Estrela do medalhão -->
+  <path filter="url(#buttonShadow)" fill="#FFFFFF" d="
+    M512 483
+    L538 542
+    L602 548
+    L553 590
+    L568 653
+    L512 620
+    L456 653
+    L471 590
+    L422 548
+    L486 542 Z"/>
+
+  <!-- Botões direitos -->
+  <g filter="url(#buttonShadow)" fill="#FFFFFF">
+    <circle cx="765" cy="463" r="29"/>
+    <circle cx="707" cy="522" r="29"/>
+    <circle cx="823" cy="522" r="29"/>
+    <circle cx="765" cy="580" r="29"/>
+  </g>
+</svg>

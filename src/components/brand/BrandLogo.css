@@ -10,51 +10,19 @@
 }
 
 .brand-logo-mark {
-  width: 3rem;
-  height: 3rem;
+  width: clamp(3.25rem, 5vw, 4.5rem);
+  height: clamp(3.25rem, 5vw, 4.5rem);
   display: grid;
   place-items: center;
   flex: 0 0 auto;
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  border-radius: 18px;
-  background:
-    radial-gradient(circle at 26% 18%, rgba(255, 255, 255, 0.38), transparent 30%),
-    linear-gradient(135deg, rgba(102, 126, 234, 0.98), rgba(20, 184, 166, 0.9));
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.28),
-    0 12px 24px rgba(45, 72, 150, 0.32);
+  filter: drop-shadow(0 10px 16px rgba(46, 12, 135, 0.32));
 }
 
-.brand-logo-mark svg {
-  width: 82%;
-  height: 82%;
+.brand-logo-image {
+  width: 100%;
+  height: 100%;
   display: block;
-}
-
-.brand-logo-controller {
-  fill: rgba(7, 12, 26, 0.54);
-  stroke: rgba(255, 255, 255, 0.92);
-  stroke-width: 2.1;
-  stroke-linejoin: round;
-}
-
-.brand-logo-dpad,
-.brand-logo-star,
-.brand-logo-button {
-  fill: #f8fbff;
-}
-
-.brand-logo-star {
-  fill: #fde68a;
-  stroke: rgba(120, 53, 15, 0.22);
-  stroke-width: 0.7;
-}
-
-.brand-logo-spark {
-  fill: none;
-  stroke: rgba(248, 251, 255, 0.78);
-  stroke-width: 1.6;
-  stroke-linecap: round;
+  object-fit: contain;
 }
 
 .brand-logo-wordmark {
@@ -84,18 +52,9 @@
   text-transform: uppercase;
 }
 
-body.light .brand-logo-mark {
-  border-color: rgba(79, 70, 229, 0.18);
-  background:
-    radial-gradient(circle at 26% 18%, rgba(255, 255, 255, 0.95), transparent 32%),
-    linear-gradient(135deg, rgba(79, 70, 229, 0.95), rgba(14, 165, 233, 0.88));
-  box-shadow: 0 12px 24px rgba(79, 70, 229, 0.16);
-}
-
 @media (max-width: 420px) {
   .brand-logo-mark {
-    width: 2.25rem;
-    height: 2.25rem;
-    border-radius: 13px;
+    width: 3rem;
+    height: 3rem;
   }
 }
