@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react'
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
+import SiteFooter from './components/footer/SiteFooter'
 import Navbar from './components/navbar/Navbar'
 import { useI18n } from './i18n/I18nContext'
 import './App.css'
@@ -17,6 +18,8 @@ const LoginPage = lazy(() => import('./pages/LoginPage'))
 const RegisterPage = lazy(() => import('./pages/RegisterPage'))
 const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'))
 const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'))
+const SupportPage = lazy(() => import('./pages/SupportPage'))
+const InstitutionalPage = lazy(() => import('./pages/InstitutionalPage'))
 
 function RouteFallback() {
   const { t } = useI18n()
@@ -50,8 +53,13 @@ function App() {
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/esqueci-a-senha" element={<ForgotPasswordPage />} />
           <Route path="/resetar-senha" element={<ResetPasswordPage />} />
+          <Route path="/suporte" element={<SupportPage />} />
+          <Route path="/sobre" element={<InstitutionalPage page="about" />} />
+          <Route path="/termos" element={<InstitutionalPage page="terms" />} />
+          <Route path="/privacidade" element={<InstitutionalPage page="privacy" />} />
         </Routes>
       </Suspense>
+      <SiteFooter />
     </Router>
   )
 }

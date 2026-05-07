@@ -1,0 +1,338 @@
+.support-page,
+.institutional-page {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.support-hero,
+.support-section,
+.support-panel,
+.support-email-section,
+.institutional-hero,
+.institutional-panel {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background:
+    radial-gradient(circle at top left, color-mix(in srgb, var(--primary) 15%, transparent), transparent 32%),
+    var(--card);
+  color: var(--card-foreground);
+  box-shadow: 0 18px 42px var(--shadow-color);
+}
+
+.support-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 360px);
+  gap: 1rem;
+  align-items: stretch;
+  padding: clamp(1.25rem, 3vw, 2rem);
+}
+
+.support-hero-copy,
+.support-section-head,
+.support-email-section > div,
+.institutional-hero,
+.institutional-panel {
+  min-width: 0;
+}
+
+.support-hero-copy {
+  display: grid;
+  align-content: center;
+  gap: 0.85rem;
+}
+
+.support-kicker,
+.institutional-kicker {
+  display: inline-flex;
+  width: fit-content;
+  border: 1px solid var(--badge-border);
+  border-radius: 999px;
+  padding: 0.38rem 0.72rem;
+  background: var(--badge);
+  color: var(--badge-foreground);
+  font-size: 0.76rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.support-hero h1,
+.support-section h2,
+.support-panel h2,
+.support-email-section h2,
+.institutional-hero h1,
+.institutional-panel h2 {
+  margin: 0;
+  color: var(--foreground);
+  line-height: 1.08;
+}
+
+.support-hero h1,
+.institutional-hero h1 {
+  font-size: clamp(2rem, 4vw, 3.3rem);
+}
+
+.support-section h2,
+.support-panel h2,
+.support-email-section h2,
+.institutional-panel h2 {
+  font-size: clamp(1.4rem, 3vw, 2rem);
+}
+
+.support-hero p,
+.support-section-head p,
+.support-request-card p,
+.support-panel p,
+.support-email-section p,
+.institutional-hero p,
+.institutional-panel p,
+.institutional-list li {
+  margin: 0;
+  color: var(--muted-foreground);
+  line-height: 1.7;
+}
+
+.support-contact-card,
+.support-email-box {
+  display: grid;
+  gap: 0.55rem;
+  align-content: start;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 1rem;
+}
+
+.support-contact-icon,
+.support-request-icon {
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--badge-border);
+  border-radius: 8px;
+  background: var(--badge);
+  color: var(--badge-foreground);
+}
+
+.support-contact-icon svg,
+.support-request-icon svg,
+.support-email-box svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.support-contact-card span,
+.support-email-box span {
+  color: var(--muted-foreground);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.support-contact-card strong,
+.support-email-box strong {
+  color: var(--foreground);
+  overflow-wrap: anywhere;
+  font-size: 1.08rem;
+}
+
+.support-section,
+.support-panel,
+.support-email-section,
+.institutional-hero,
+.institutional-panel {
+  padding: clamp(1.1rem, 3vw, 1.6rem);
+}
+
+.institutional-hero,
+.institutional-panel {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.support-section-head {
+  display: grid;
+  gap: 0.65rem;
+  max-width: 780px;
+}
+
+.support-request-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.9rem;
+  margin-top: 1rem;
+}
+
+.support-request-card {
+  display: grid;
+  gap: 0.65rem;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 1rem;
+}
+
+.support-request-card h3 {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 1rem;
+}
+
+.support-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: 1rem;
+}
+
+.support-panel {
+  display: grid;
+  gap: 1rem;
+}
+
+.support-warning {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.7rem;
+  align-items: start;
+  border: 1px solid color-mix(in srgb, var(--warning) 34%, var(--border));
+  border-radius: 8px;
+  background: var(--warning-surface);
+  color: var(--warning);
+  padding: 0.85rem;
+}
+
+.support-warning svg {
+  width: 1.2rem;
+  height: 1.2rem;
+  margin-top: 0.15rem;
+}
+
+.support-warning p {
+  color: inherit;
+}
+
+.support-checklist {
+  display: grid;
+  gap: 0.65rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.support-checklist li {
+  position: relative;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--foreground);
+  line-height: 1.6;
+  padding: 0.72rem 0.85rem 0.72rem 2.05rem;
+}
+
+.support-checklist li::before {
+  content: "";
+  position: absolute;
+  top: 1.28rem;
+  left: 0.9rem;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: var(--primary);
+}
+
+.support-email-section {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 380px);
+  gap: 1rem;
+  align-items: center;
+}
+
+.support-email-section > div:first-child {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.support-email-box {
+  align-items: center;
+  text-align: center;
+}
+
+.support-email-box svg {
+  justify-self: center;
+  color: var(--primary);
+}
+
+.institutional-list {
+  display: grid;
+  gap: 0.7rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.institutional-list li {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 0.85rem 0.95rem;
+}
+
+.institutional-link {
+  display: inline-flex;
+  width: fit-content;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: var(--primary-gradient);
+  color: var(--primary-foreground);
+  padding: 0.65rem 0.9rem;
+  text-decoration: none;
+  font-weight: 900;
+}
+
+.institutional-link:hover {
+  color: var(--primary-foreground);
+  opacity: 0.94;
+}
+
+body.light .support-hero,
+body.light .support-section,
+body.light .support-panel,
+body.light .support-email-section,
+body.light .institutional-hero,
+body.light .institutional-panel {
+  background:
+    radial-gradient(circle at top left, color-mix(in srgb, var(--primary) 8%, transparent), transparent 32%),
+    var(--card);
+}
+
+@media (max-width: 960px) {
+  .support-hero,
+  .support-layout,
+  .support-email-section {
+    grid-template-columns: 1fr;
+  }
+
+  .support-request-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .support-request-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 420px) {
+  .support-contact-card,
+  .support-email-box,
+  .support-request-card,
+  .support-warning,
+  .support-checklist li {
+    padding-inline: 0.8rem;
+  }
+}

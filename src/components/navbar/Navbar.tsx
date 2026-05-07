@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FocusEvent, type KeyboardEvent } from 'react'
-import { Gamepad2, Home, LogIn, LogOut, Menu, Moon, Settings, Sun, User, Users, X } from 'lucide-react'
+import { Gamepad2, Home, LifeBuoy, LogIn, LogOut, Menu, Moon, Settings, Sun, User, Users, X } from 'lucide-react'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
+import BrandLogo from '../brand/BrandLogo'
 import { GameCoverImage } from '../GameCoverImage'
 import { NotificationsButton } from '../notifications/NotificationsButton'
 import { UserAvatar } from '../UserAvatar'
@@ -522,9 +523,9 @@ function Navbar() {
     <nav className="navbar">
       <div className="navbar-container">
         <Link to="/" className="navbar-logo">
-          <span className="navbar-logo-icon">SG</span>
-            <span className="navbar-logo-copy">
-              <span className="navbar-logo-title">Social Gamer</span>
+          <BrandLogo className="navbar-brand-logo" />
+          <span className="navbar-logo-copy">
+            <span className="navbar-logo-title">{t('common.appName')}</span>
             <span className="navbar-logo-subtitle">{t('navbar.subtitle')}</span>
           </span>
         </Link>
@@ -533,6 +534,7 @@ function Navbar() {
             <NavLink to="/" className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>{t('common.home')}</NavLink>
             <NavLink to="/games" className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>{t('common.games')}</NavLink>
             <NavLink to="/comunidades" className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>{t('communities.nav')}</NavLink>
+            <NavLink to="/suporte" className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>{t('common.support')}</NavLink>
           </div>
           <div ref={searchRef} className={`navbar-search-shell${showMobileSearch ? ' is-open' : ''}${shouldShowSearchDropdown ? ' has-dropdown' : ''}`}>
             <button type="button" className={`navbar-search-toggle${showMobileSearch ? ' is-open' : ''}`} aria-label={showMobileSearch ? t('navbar.search.close') : t('navbar.search.open')} aria-expanded={showMobileSearch} aria-controls="navbar-search-panel" onClick={handleMobileSearchToggle}>{t('common.search')}</button>
@@ -646,6 +648,7 @@ function Navbar() {
               <NavLink to="/" className={({ isActive }) => `navbar-mobile-link${isActive ? ' is-active' : ''}`} onClick={handleMobileNavigation}><Home /><span>{t('common.home')}</span></NavLink>
               <NavLink to="/games" className={({ isActive }) => `navbar-mobile-link${isActive ? ' is-active' : ''}`} onClick={handleMobileNavigation}><Gamepad2 /><span>{t('common.games')}</span></NavLink>
               <NavLink to="/comunidades" className={({ isActive }) => `navbar-mobile-link${isActive ? ' is-active' : ''}`} onClick={handleMobileNavigation}><Users /><span>{t('communities.nav')}</span></NavLink>
+              <NavLink to="/suporte" className={({ isActive }) => `navbar-mobile-link${isActive ? ' is-active' : ''}`} onClick={handleMobileNavigation}><LifeBuoy /><span>{t('common.support')}</span></NavLink>
               {user ? (
                 <>
                   <NavLink to={ownProfilePath} className={({ isActive }) => `navbar-mobile-link${isActive ? ' is-active' : ''}`} onClick={handleMobileNavigation}><User /><span>{t('common.profile')}</span></NavLink>

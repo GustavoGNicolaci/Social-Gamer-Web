@@ -714,13 +714,15 @@ function GameDetailsPage() {
     if (!targetId) return
 
     let expanded = false
+    let nextVisibleReviewCount: number | null = null
+    let nextVisibleCommentCount: { reviewId: string; count: number } | null = null
 
     if (targetId.startsWith('review-')) {
       const reviewId = targetId.replace('review-', '')
       const reviewIndex = reviews.findIndex(review => review.id === reviewId)
 
       if (reviewIndex >= effectiveVisibleReviewCount && reviewIndex >= 0) {
-        setVisibleReviewCount(reviewIndex + 1)
+        nextVisibleReviewCount = reviewIndex + 1
         expanded = true
       }
     }
@@ -733,7 +735,7 @@ function GameDetailsPage() {
       const parentReview = reviewIndex >= 0 ? reviews[reviewIndex] : null
 
       if (parentReview && reviewIndex >= effectiveVisibleReviewCount) {
-        setVisibleReviewCount(reviewIndex + 1)
+        nextVisibleReviewCount = Math.max(nextVisibleReviewCount ?? 0, reviewIndex + 1)
         expanded = true
       }
 
@@ -744,16 +746,33 @@ function GameDetailsPage() {
           getInitialVisibleCommentCount(parentReview.comentarios.length)
 
         if (commentIndex >= visibleCommentCount && commentIndex >= 0) {
-          setVisibleCommentsByReviewId(currentVisibleComments => ({
-            ...currentVisibleComments,
-            [parentReview.id]: commentIndex + 1,
-          }))
+          nextVisibleCommentCount = { reviewId: parentReview.id, count: commentIndex + 1 }
           expanded = true
         }
       }
     }
 
-    if (expanded) return
+    if (expanded) {
+      const timeoutId = window.setTimeout(() => {
+        if (nextVisibleReviewCount !== null) {
+          setVisibleReviewCount(currentCount => Math.max(currentCount, nextVisibleReviewCount))
+        }
+
+        if (nextVisibleCommentCount) {
+          setVisibleCommentsByReviewId(currentVisibleComments => {
+            const currentCount = currentVisibleComments[nextVisibleCommentCount.reviewId] ?? 0
+            if (currentCount >= nextVisibleCommentCount.count) return currentVisibleComments
+
+            return {
+              ...currentVisibleComments,
+              [nextVisibleCommentCount.reviewId]: nextVisibleCommentCount.count,
+            }
+          })
+        }
+      }, 0)
+
+      return () => window.clearTimeout(timeoutId)
+    }
 
     const frameId = window.requestAnimationFrame(() => {
       document.getElementById(targetId)?.scrollIntoView({

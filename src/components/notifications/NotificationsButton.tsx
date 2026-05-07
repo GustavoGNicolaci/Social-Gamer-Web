@@ -49,19 +49,25 @@ export function NotificationsButton({ userId }: NotificationsButtonProps) {
   }, [])
 
   useEffect(() => {
-    setNotifications([])
-    setUnreadCount(0)
-    setErrorMessage(null)
+    const initTimeoutId = window.setTimeout(() => {
+      setNotifications([])
+      setUnreadCount(0)
+      setErrorMessage(null)
+      if (userId) void refreshNotifications()
+    }, 0)
 
-    if (!userId) return
-
-    void refreshNotifications()
+    if (!userId) {
+      return () => window.clearTimeout(initTimeoutId)
+    }
 
     const unsubscribe = subscribeToNotifications(userId, () => {
       void refreshNotifications()
     })
 
-    return unsubscribe
+    return () => {
+      window.clearTimeout(initTimeoutId)
+      unsubscribe()
+    }
   }, [refreshNotifications, userId])
 
   useEffect(() => {
