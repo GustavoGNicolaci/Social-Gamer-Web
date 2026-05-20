@@ -119,12 +119,16 @@ export interface CommunityPost {
   comentarios_count: number
   created_at: string
   updated_at: string
+  fixado: boolean
+  fixado_em: string | null
+  fixado_por: string | null
   autor: CommunityAuthor | null
   comentarios: CommunityPostComment[]
   currentUserReaction: CommunityReactionType | null
   savedByCurrentUser: boolean
   canInteract: boolean
   canDelete: boolean
+  canPin: boolean
   comunidade?: Pick<CommunitySummary, 'id' | 'nome' | 'banner_path' | 'visibilidade'> | null
 }
 
@@ -275,6 +279,9 @@ interface PostRow {
   comentarios_count: number | string | null
   created_at: string
   updated_at: string
+  fixado: boolean | null
+  fixado_em: string | null
+  fixado_por: string | null
   autor?: Relation<AuthorRow>
   comunidade?: Relation<Pick<CommunitySummary, 'id' | 'nome' | 'banner_path' | 'visibilidade'>>
 }
@@ -388,6 +395,9 @@ const POST_SELECT = `
   comentarios_count,
   created_at,
   updated_at,
+  fixado,
+  fixado_em,
+  fixado_por,
   autor:usuarios!comunidade_posts_autor_id_fkey(id, username, nome_completo, avatar_path)
 `
 
@@ -402,6 +412,9 @@ const PROFILE_POST_SELECT = `
   comentarios_count,
   created_at,
   updated_at,
+  fixado,
+  fixado_em,
+  fixado_por,
   autor:usuarios!comunidade_posts_autor_id_fkey(id, username, nome_completo, avatar_path),
   comunidade:comunidades(id, nome, banner_path, visibilidade)
 `
@@ -590,12 +603,16 @@ function normalizePost(
     comentarios_count: normalizeNumber(row.comentarios_count),
     created_at: row.created_at,
     updated_at: row.updated_at,
+    fixado: Boolean(row.fixado),
+    fixado_em: row.fixado_em,
+    fixado_por: row.fixado_por,
     autor: normalizeAuthor(row.autor),
     comentarios: commentsByPostId.get(row.id) || [],
     currentUserReaction: reactionsByPostId.get(row.id) || null,
     savedByCurrentUser: savedPostIds.has(row.id),
     canInteract: Boolean(currentUserId && currentUserRole),
     canDelete: Boolean(currentUserId && (row.autor_id === currentUserId || isModerator)),
+    canPin: Boolean(currentUserId && isModerator),
     comunidade: resolveRelation(row.comunidade),
   }
 }
@@ -1021,6 +1038,8 @@ export async function getCommunityPosts(
       .select(POST_SELECT, { count: 'exact' })
       .eq('comunidade_id', communityId)
       .is('deleted_at', null)
+      .order('fixado', { ascending: false })
+      .order('fixado_em', { ascending: true, nullsFirst: false })
       .order('created_at', { ascending: false })
       .range(from, to)
 
@@ -1335,6 +1354,26 @@ export async function deleteCommunityPost(postId: string): Promise<ServiceResult
   return {
     data: null,
     error: error ? normalizeCommunityError(error, 'Nao foi possivel deletar o post.') : null,
+  }
+}
+
+export async function toggleCommunityPostPinned(
+  postId: string,
+  pinned: boolean
+): Promise<ServiceResult<null>> {
+  const { error } = await supabase.rpc('alterar_fixacao_post_comunidade', {
+    p_post_id: postId,
+    p_fixado: pinned,
+  })
+
+  return {
+    data: null,
+    error: error
+      ? normalizeCommunityError(
+          error,
+          pinned ? 'Nao foi possivel fixar o post.' : 'Nao foi possivel desafixar o post.'
+        )
+      : null,
   }
 }
 

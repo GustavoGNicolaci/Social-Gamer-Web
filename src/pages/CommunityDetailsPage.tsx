@@ -26,6 +26,7 @@ import {
   rejectCommunityJoinRequest,
   removeCommunityMember,
   submitCommunityReport,
+  toggleCommunityPostPinned,
   toggleCommunityPostReaction,
   toggleCommunityPostSave,
   transferCommunityLeadership,
@@ -552,6 +553,27 @@ function CommunityDetailsPage() {
     )
   }
 
+  const handleTogglePinned = async (post: CommunityPost) => {
+    const nextPinned = !post.fixado
+    const result = await toggleCommunityPostPinned(post.id, nextPinned)
+    if (result.error) {
+      setFeedback({ tone: 'error', message: result.error.message })
+      return
+    }
+
+    setFeedback({
+      tone: 'success',
+      message: nextPinned ? t('communities.post.pinned') : t('communities.post.unpinned'),
+    })
+
+    if (postsPage !== 1) {
+      setPostsPage(1)
+      return
+    }
+
+    await loadPosts()
+  }
+
   const handleCreateComment = async (post: CommunityPost, text: string) => {
     const result = await createCommunityComment(post.id, text)
     if (result.error) {
@@ -993,6 +1015,7 @@ function CommunityDetailsPage() {
               currentUserRole={community.currentUserRole}
               onToggleReaction={handleToggleReaction}
               onToggleSave={handleToggleSave}
+              onTogglePin={handleTogglePinned}
               onCreateComment={handleCreateComment}
               onDeletePost={postToDelete =>
                 setConfirmState({ kind: 'delete-post', post: postToDelete })

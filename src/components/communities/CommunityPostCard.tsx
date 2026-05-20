@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { Flag, MoreHorizontal, Pin, PinOff, Trash2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { UserAvatar } from '../UserAvatar'
 import { useI18n } from '../../i18n/I18nContext'
@@ -24,6 +25,7 @@ interface CommunityPostCardProps {
   currentUserRole?: CommunityRole | null
   onToggleReaction: (post: CommunityPost, reaction: CommunityReactionType) => Promise<void>
   onToggleSave: (post: CommunityPost) => Promise<void>
+  onTogglePin: (post: CommunityPost) => Promise<void>
   onCreateComment: (post: CommunityPost, text: string) => Promise<void>
   onDeletePost: (post: CommunityPost) => void
   onDeleteComment: (post: CommunityPost, commentId: string) => void
@@ -101,6 +103,7 @@ export function CommunityPostCard({
   currentUserRole,
   onToggleReaction,
   onToggleSave,
+  onTogglePin,
   onCreateComment,
   onDeletePost,
   onDeleteComment,
@@ -113,6 +116,8 @@ export function CommunityPostCard({
   const [commentText, setCommentText] = useState('')
   const [isSubmittingComment, setIsSubmittingComment] = useState(false)
   const [pendingAction, setPendingAction] = useState<string | null>(null)
+  const [showActionMenu, setShowActionMenu] = useState(false)
+  const actionMenuRef = useRef<HTMLDivElement | null>(null)
 
   const authorName = getAuthorName(post.autor)
   const authorProfilePath = getOptionalPublicProfilePath(post.autor?.username)
@@ -124,6 +129,29 @@ export function CommunityPostCard({
   const hiddenCommentsCount = post.comentarios.length - visibleComments.length
   const isModerator = currentUserRole === 'lider' || currentUserRole === 'admin'
   const canReport = Boolean(post.canInteract && currentUserId && post.autor_id !== currentUserId)
+  const hasPostHeaderActions = post.canPin || canReport || post.canDelete
+
+  useEffect(() => {
+    if (!showActionMenu) return
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!actionMenuRef.current?.contains(event.target as Node)) {
+        setShowActionMenu(false)
+      }
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setShowActionMenu(false)
+    }
+
+    document.addEventListener('mousedown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [showActionMenu])
 
   useEffect(() => {
     if (!activeAnchorId) return
@@ -174,6 +202,16 @@ export function CommunityPostCard({
     setPendingAction('save')
     try {
       await onToggleSave(post)
+    } finally {
+      setPendingAction(null)
+    }
+  }
+
+  const handlePin = async () => {
+    setShowActionMenu(false)
+    setPendingAction('pin')
+    try {
+      await onTogglePin(post)
     } finally {
       setPendingAction(null)
     }
@@ -297,37 +335,94 @@ export function CommunityPostCard({
     )
   }
 
+  const renderPostActionMenu = () => {
+    if (!hasPostHeaderActions) return null
+
+    return (
+      <div className="community-post-menu" ref={actionMenuRef}>
+        <button
+          type="button"
+          className={`community-icon-action community-post-menu-trigger${showActionMenu ? ' is-open' : ''}`}
+          aria-label={t('communities.post.openActions')}
+          aria-haspopup="menu"
+          aria-expanded={showActionMenu}
+          onClick={() => setShowActionMenu(currentValue => !currentValue)}
+          disabled={pendingAction !== null}
+        >
+          <MoreHorizontal aria-hidden="true" />
+        </button>
+
+        {showActionMenu ? (
+          <div className="community-post-action-menu" role="menu" aria-label={t('communities.post.actionsLabel')}>
+            {post.canPin ? (
+              <button
+                type="button"
+                className="community-post-menu-item"
+                role="menuitem"
+                onClick={() => void handlePin()}
+              >
+                {post.fixado ? <PinOff aria-hidden="true" /> : <Pin aria-hidden="true" />}
+                <span>
+                  {post.fixado ? t('communities.post.unpinPost') : t('communities.post.pinPost')}
+                </span>
+              </button>
+            ) : null}
+
+            {canReport ? (
+              <button
+                type="button"
+                className="community-post-menu-item"
+                role="menuitem"
+                onClick={() => {
+                  setShowActionMenu(false)
+                  onReport({
+                    type: 'post',
+                    id: post.id,
+                    label: t('communities.report.postTarget', { author: `@${authorName}` }),
+                  })
+                }}
+              >
+                <Flag aria-hidden="true" />
+                <span>{t('communities.post.reportPost')}</span>
+              </button>
+            ) : null}
+
+            {post.canDelete ? (
+              <button
+                type="button"
+                className="community-post-menu-item is-danger"
+                role="menuitem"
+                onClick={() => {
+                  setShowActionMenu(false)
+                  onDeletePost(post)
+                }}
+              >
+                <Trash2 aria-hidden="true" />
+                <span>{t('communities.post.deletePost')}</span>
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    )
+  }
+
   return (
-    <article id={`post-${post.id}`} className="community-post-card">
+    <article id={`post-${post.id}`} className={`community-post-card${post.fixado ? ' is-pinned' : ''}`}>
       <header className="community-post-header">
         {renderAuthor()}
 
         <div className="community-post-header-actions">
-          {canReport ? (
-            <button
-              type="button"
-              className="community-icon-action"
-              aria-label={t('communities.post.reportPost')}
-              title={t('communities.post.reportPost')}
-              onClick={() =>
-                onReport({
-                  type: 'post',
-                  id: post.id,
-                  label: t('communities.report.postTarget', { author: `@${authorName}` }),
-                })
-              }
-            >
-              {iconFlag()}
-            </button>
-          ) : null}
-
-          {post.canDelete ? (
-            <button type="button" className="community-danger-link" onClick={() => onDeletePost(post)}>
-              {t('communities.post.deletePost')}
-            </button>
-          ) : null}
+          {renderPostActionMenu()}
         </div>
       </header>
+
+      {post.fixado ? (
+        <span className="community-pinned-badge">
+          <Pin aria-hidden="true" />
+          {t('communities.post.pinnedBadge')}
+        </span>
+      ) : null}
 
       {post.texto ? <p className="community-post-text">{post.texto}</p> : null}
 
