@@ -1,4 +1,5 @@
 import { supabase } from '../supabase-client'
+import { logClientError } from '../utils/clientLogging'
 
 const BUCKET_NAME = 'user-uploads'
 const AVATAR_FOLDER = 'avatars'
@@ -6,6 +7,13 @@ const COMMUNITY_BANNER_FOLDER = 'communities'
 const COMMUNITY_POST_FOLDER = 'community-posts'
 const DEFAULT_IMAGE_FOLDER = 'images'
 const MAX_AVATAR_SIZE_MB = 5
+const ALLOWED_IMAGE_MIME_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/avif',
+])
+const ALLOWED_IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.avif'])
 
 export interface StorageUploadResult {
   path: string
@@ -35,6 +43,37 @@ function sanitizeFileName(fileName: string) {
     .replace(/^-|-$/g, '')
 
   return `${normalizedBaseName || 'arquivo'}${extension}`
+}
+
+function getFileExtension(fileName: string) {
+  const extensionIndex = fileName.trim().toLowerCase().lastIndexOf('.')
+  return extensionIndex > 0 ? fileName.trim().toLowerCase().slice(extensionIndex) : ''
+}
+
+function validateImageUpload(file: File, maxSizeMB: number, context: string) {
+  const fileType = file.type.trim().toLowerCase()
+  const fileExtension = getFileExtension(file.name)
+
+  if (!ALLOWED_IMAGE_MIME_TYPES.has(fileType) || !ALLOWED_IMAGE_EXTENSIONS.has(fileExtension)) {
+    logClientError(context, null, {
+      reason: 'unsupported_image_type',
+      mimeType: fileType || 'unknown',
+      extension: fileExtension || 'none',
+    })
+    return false
+  }
+
+  const sizeInMB = file.size / (1024 * 1024)
+  if (sizeInMB > maxSizeMB) {
+    logClientError(context, null, {
+      reason: 'file_too_large',
+      maxSizeMB,
+      sizeMB: Number(sizeInMB.toFixed(2)),
+    })
+    return false
+  }
+
+  return true
 }
 
 function normalizeStoragePath(filePath: string | null | undefined) {
@@ -128,7 +167,7 @@ async function listAllFilePathsByPrefix(prefix: string) {
     })
 
     if (error) {
-      console.error('List error:', error)
+      logClientError('storage.listAllFilePathsByPrefix', error)
       return {
         data: discoveredPaths,
         error,
@@ -164,7 +203,7 @@ async function uploadValidatedFile(
     })
 
     if (error) {
-      console.error('Upload error:', error)
+      logClientError('storage.uploadValidatedFile', error)
       return null
     }
 
@@ -176,7 +215,7 @@ async function uploadValidatedFile(
       url: publicUrl,
     }
   } catch (error) {
-    console.error('Upload exception:', error)
+    logClientError('storage.uploadValidatedFile.exception', error)
     return null
   }
 }
@@ -201,13 +240,13 @@ export async function deleteFile(filePath: string): Promise<boolean> {
     const { error } = await supabase.storage.from(BUCKET_NAME).remove([safePath])
 
     if (error) {
-      console.error('Delete error:', error)
+      logClientError('storage.deleteFile', error)
       return false
     }
 
     return true
   } catch (error) {
-    console.error('Delete exception:', error)
+    logClientError('storage.deleteFile.exception', error)
     return false
   }
 }
@@ -224,13 +263,13 @@ export async function listUserFiles(
     })
 
     if (error) {
-      console.error('List error:', error)
+      logClientError('storage.listUserFiles', error)
       return null
     }
 
     return data.map(file => file.name)
   } catch (error) {
-    console.error('List exception:', error)
+    logClientError('storage.listUserFiles.exception', error)
     return null
   }
 }
@@ -261,7 +300,7 @@ export async function deleteAllUserFiles(userId: string): Promise<StorageCleanup
       const { error } = await supabase.storage.from(BUCKET_NAME).remove(currentChunk)
 
       if (error) {
-        console.error('Bulk delete error:', error)
+        logClientError('storage.deleteAllUserFiles', error)
         return {
           ok: false,
           deletedPaths,
@@ -270,7 +309,7 @@ export async function deleteAllUserFiles(userId: string): Promise<StorageCleanup
 
       deletedPaths.push(...currentChunk)
     } catch (error) {
-      console.error('Bulk delete exception:', error)
+      logClientError('storage.deleteAllUserFiles.exception', error)
       return {
         ok: false,
         deletedPaths,
@@ -289,14 +328,7 @@ export async function uploadImage(
   userId: string,
   maxSizeMB = MAX_AVATAR_SIZE_MB
 ): Promise<StorageUploadResult | null> {
-  if (!file.type.startsWith('image/')) {
-    console.error('File is not an image')
-    return null
-  }
-
-  const sizeInMB = file.size / (1024 * 1024)
-  if (sizeInMB > maxSizeMB) {
-    console.error(`File size exceeds ${maxSizeMB}MB limit`)
+  if (!validateImageUpload(file, maxSizeMB, 'storage.uploadImage.validate')) {
     return null
   }
 
@@ -308,14 +340,7 @@ export async function uploadAvatarImage(
   userId: string,
   maxSizeMB = MAX_AVATAR_SIZE_MB
 ): Promise<StorageUploadResult | null> {
-  if (!file.type.startsWith('image/')) {
-    console.error('Avatar file is not an image')
-    return null
-  }
-
-  const sizeInMB = file.size / (1024 * 1024)
-  if (sizeInMB > maxSizeMB) {
-    console.error(`Avatar file size exceeds ${maxSizeMB}MB limit`)
+  if (!validateImageUpload(file, maxSizeMB, 'storage.uploadAvatarImage.validate')) {
     return null
   }
 
@@ -328,14 +353,7 @@ export async function uploadCommunityBannerImage(
   userId: string,
   maxSizeMB = MAX_AVATAR_SIZE_MB
 ): Promise<StorageUploadResult | null> {
-  if (!file.type.startsWith('image/')) {
-    console.error('Community banner file is not an image')
-    return null
-  }
-
-  const sizeInMB = file.size / (1024 * 1024)
-  if (sizeInMB > maxSizeMB) {
-    console.error(`Community banner file size exceeds ${maxSizeMB}MB limit`)
+  if (!validateImageUpload(file, maxSizeMB, 'storage.uploadCommunityBannerImage.validate')) {
     return null
   }
 
@@ -347,14 +365,7 @@ export async function uploadCommunityPostImage(
   userId: string,
   maxSizeMB = MAX_AVATAR_SIZE_MB
 ): Promise<StorageUploadResult | null> {
-  if (!file.type.startsWith('image/')) {
-    console.error('Community post file is not an image')
-    return null
-  }
-
-  const sizeInMB = file.size / (1024 * 1024)
-  if (sizeInMB > maxSizeMB) {
-    console.error(`Community post file size exceeds ${maxSizeMB}MB limit`)
+  if (!validateImageUpload(file, maxSizeMB, 'storage.uploadCommunityPostImage.validate')) {
     return null
   }
 
@@ -372,13 +383,13 @@ export async function downloadFile(filePath: string): Promise<Blob | null> {
     const { data, error } = await supabase.storage.from(BUCKET_NAME).download(safePath)
 
     if (error) {
-      console.error('Download error:', error)
+      logClientError('storage.downloadFile', error)
       return null
     }
 
     return data
   } catch (error) {
-    console.error('Download exception:', error)
+    logClientError('storage.downloadFile.exception', error)
     return null
   }
 }

@@ -432,8 +432,21 @@ export function CommunityPostCard({
           className="community-post-image-button"
           onClick={() => onOpenImage(postImageUrl, t('communities.post.imageAlt'))}
         >
-          <img className="community-media-backdrop" src={postImageUrl} alt="" aria-hidden="true" />
-          <img className="community-post-image" src={postImageUrl} alt={t('communities.post.imageAlt')} />
+          <img
+            className="community-media-backdrop"
+            src={postImageUrl}
+            alt=""
+            aria-hidden="true"
+            loading="lazy"
+            decoding="async"
+          />
+          <img
+            className="community-post-image"
+            src={postImageUrl}
+            alt={t('communities.post.imageAlt')}
+            loading="lazy"
+            decoding="async"
+          />
         </button>
       ) : null}
 

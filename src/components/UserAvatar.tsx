@@ -33,6 +33,7 @@ export function UserAvatar({
         className={imageClassName}
         onError={() => setFailedSrc(safeSrc)}
         loading="lazy"
+        decoding="async"
       />
     )
   }

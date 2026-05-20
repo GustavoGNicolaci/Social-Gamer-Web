@@ -262,8 +262,21 @@ function CommunitiesPage() {
                           <div className="community-card-media">
                             {imageUrl ? (
                               <>
-                                <img className="community-media-backdrop" src={imageUrl} alt="" aria-hidden="true" />
-                                <img className="community-media-foreground" src={imageUrl} alt="" />
+                                <img
+                                  className="community-media-backdrop"
+                                  src={imageUrl}
+                                  alt=""
+                                  aria-hidden="true"
+                                  loading="lazy"
+                                  decoding="async"
+                                />
+                                <img
+                                  className="community-media-foreground"
+                                  src={imageUrl}
+                                  alt=""
+                                  loading="lazy"
+                                  decoding="async"
+                                />
                               </>
                             ) : (
                               <div className="community-card-fallback">

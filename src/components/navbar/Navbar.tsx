@@ -14,12 +14,40 @@ import { getPublicProfilePath } from '../../utils/profileRoutes'
 import './Navbar.css'
 
 const SEARCH_DEBOUNCE_DELAY = 220
+const THEME_STORAGE_KEY = 'social-gamer-theme'
+
+type SiteTheme = 'dark' | 'light'
 
 type NavbarSearchItem =
   | { kind: 'game'; id: string; game: CatalogGamePreview }
   | { kind: 'user'; id: string; user: UserSearchResult }
 
 type TranslateFunction = (key: string, params?: TranslationParams) => string
+
+function isSiteTheme(value: unknown): value is SiteTheme {
+  return value === 'dark' || value === 'light'
+}
+
+function getInitialTheme(): SiteTheme {
+  if (typeof window !== 'undefined') {
+    try {
+      const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY)
+      if (isSiteTheme(storedTheme)) return storedTheme
+    } catch {
+      // Ignore storage errors so private browsing modes can still render.
+    }
+
+    if (window.matchMedia('(prefers-color-scheme: light)').matches) {
+      return 'light'
+    }
+  }
+
+  if (typeof document !== 'undefined' && document.body.classList.contains('light')) {
+    return 'light'
+  }
+
+  return 'dark'
+}
 
 function normalizeList(value: string[] | string | null | undefined) {
   if (!value) return []
@@ -191,7 +219,7 @@ function isCompactSearchViewport(viewportWidth: number) {
 }
 
 function Navbar() {
-  const [theme, setTheme] = useState<'dark' | 'light'>(() => (document.body.classList.contains('light') ? 'light' : 'dark'))
+  const [theme, setTheme] = useState<SiteTheme>(getInitialTheme)
   const [showMenu, setShowMenu] = useState(false)
   const [showMobileMenu, setShowMobileMenu] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -334,6 +362,12 @@ function Navbar() {
   useEffect(() => {
     document.body.classList.toggle('light', theme === 'light')
     document.documentElement.style.colorScheme = theme
+
+    try {
+      window.localStorage.setItem(THEME_STORAGE_KEY, theme)
+    } catch {
+      // Theme persistence is progressive enhancement.
+    }
   }, [theme])
 
   useEffect(() => () => {

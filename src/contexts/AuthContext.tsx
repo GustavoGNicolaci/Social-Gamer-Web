@@ -7,6 +7,7 @@ import {
   logUnexpectedAuthError,
   mapFriendlyAuthError,
 } from '../utils/authErrorMessages'
+import { logClientError } from '../utils/clientLogging'
 import { translate } from '../i18n'
 
 const getUsernameTakenMessage = () => translate('auth.usernameTaken')
@@ -474,7 +475,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           .limit(1)
 
         if (usernameLookupError) {
-          console.error('Erro ao verificar disponibilidade do nome de usuario:', usernameLookupError)
+          logClientError('auth.register.usernameLookup', usernameLookupError)
           return {
             status: 'system_error',
             message: translate('auth.registerGenericError'),
@@ -505,9 +506,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const nextUser = data.user
 
         if (!nextUser) {
-          console.error('Cadastro concluido sem usuario retornado pelo Supabase.', {
-            email: normalizedInput.email,
-          })
+          logClientError('auth.register.missingUser', null, { hasEmail: Boolean(normalizedInput.email) })
 
           return {
             status: 'system_error',
@@ -548,7 +547,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           message: translate('auth.registerGenericError'),
         }
       } catch (error) {
-        console.error('Erro inesperado ao registrar usuario:', error)
+        logClientError('auth.register.unexpected', error)
 
         return {
           status: 'system_error',
@@ -582,11 +581,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             translate('profile.error.updateFailed')
           )
 
-          console.error('Erro ao atualizar perfil:', {
-            userId: user.id,
-            updates,
-            ...normalizedError,
-          })
+          logClientError('auth.updateOwnProfile', normalizedError, { hasUser: true })
 
           return { data: null, error: normalizedError }
         }
@@ -597,10 +592,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             translate('profile.error.noRecordReturned')
           )
 
-          console.error('Atualizacao do perfil sem retorno de dados:', {
-            userId: user.id,
-            updates,
-          })
+          logClientError('auth.updateOwnProfile.noRecordReturned', null, { hasUser: true })
 
           return { data: null, error: normalizedError }
         }
@@ -614,11 +606,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           translate('profile.error.unexpectedUpdate')
         )
 
-        console.error('Erro inesperado ao atualizar perfil:', {
-          userId: user.id,
-          updates,
-          error,
-        })
+        logClientError('auth.updateOwnProfile.unexpected', error, { hasUser: true })
 
         return { data: null, error: normalizedError }
       }
@@ -904,11 +892,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           : data as FunctionErrorPayload
         const errorCode = payload?.error
 
-        console.error('Erro real ao excluir a propria conta:', {
-          error,
-          data,
-          errorCode,
-          payload,
+        logClientError('auth.deleteOwnAccount.function', error, {
+          errorCode: errorCode || 'unknown',
         })
 
         return {
@@ -919,7 +904,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       try {
         await supabase.auth.signOut({ scope: 'local' })
       } catch (signOutError) {
-        console.error('Erro ao encerrar sessao local apos excluir conta:', signOutError)
+        logClientError('auth.deleteOwnAccount.localSignOut', signOutError)
       }
 
       clearAuthState()
@@ -928,7 +913,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         error: null,
       }
     } catch (error) {
-      console.error('Erro inesperado ao excluir a propria conta:', error)
+      logClientError('auth.deleteOwnAccount.unexpected', error)
       return {
         error: getDeleteAccountErrorMessageFallback(),
       }

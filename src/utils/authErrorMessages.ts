@@ -1,4 +1,5 @@
 import { translate } from '../i18n'
+import { logClientError } from './clientLogging'
 
 export type AuthErrorFlow = 'login' | 'register' | 'password_reset_request' | 'password_update'
 
@@ -211,5 +212,5 @@ export const mapFriendlyAuthError = (
 }
 
 export const logUnexpectedAuthError = (flow: AuthErrorFlow, error: unknown) => {
-  console.error(`Auth error [${flow}]`, error)
+  logClientError('auth.unexpected', error, { flow })
 }

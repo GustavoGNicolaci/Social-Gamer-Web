@@ -59,9 +59,14 @@ export function AvatarUpload({
       {showPreview && (
         <div className="avatar-preview">
           {preview ? (
-            <img src={preview} alt="Preview" />
+            <img src={preview} alt="Preview" decoding="async" />
           ) : currentAvatarPath ? (
-            <img src={resolveAvatarPublicUrl(currentAvatarPath) || ''} alt="Avatar" />
+            <img
+              src={resolveAvatarPublicUrl(currentAvatarPath) || ''}
+              alt="Avatar"
+              loading="lazy"
+              decoding="async"
+            />
           ) : (
             <div className="placeholder">Sem foto de perfil</div>
           )}
