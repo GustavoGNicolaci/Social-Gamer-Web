@@ -32,7 +32,7 @@ function getCommunityImage(community: CommunitySummary) {
 }
 
 function getPostImage(post: CommunityPost) {
-  return resolvePublicFileUrl(post.imagem_path)
+  return resolvePublicFileUrl(post.comunidade?.banner_path)
 }
 
 function getSectionCopy(
@@ -174,7 +174,7 @@ export function ProfileCommunitiesSection({
                 >
                   <div className="profile-community-media">
                     {imageUrl ? (
-                      <img src={imageUrl} alt="" />
+                      <img src={imageUrl} alt="" loading="lazy" decoding="async" />
                     ) : (
                       <span>{community.nome.charAt(0).toUpperCase()}</span>
                     )}
@@ -205,9 +205,9 @@ export function ProfileCommunitiesSection({
                   to={`/comunidades/${post.comunidade_id}`}
                   className="profile-community-card"
                 >
-                  <div className="profile-community-media">
+                  <div className="profile-community-media is-post-cover">
                     {imageUrl ? (
-                      <img src={imageUrl} alt="" />
+                      <img src={imageUrl} alt="" loading="lazy" decoding="async" />
                     ) : (
                       <span>{communityName.charAt(0).toUpperCase()}</span>
                     )}
