@@ -1399,9 +1399,9 @@
 }
 
 .community-post-card.is-pinned {
-  border-color: color-mix(in srgb, var(--warning) 42%, var(--border));
+  border-color: color-mix(in srgb, var(--primary) 42%, var(--border));
   background:
-    radial-gradient(circle at top left, color-mix(in srgb, var(--warning) 16%, transparent), transparent 34%),
+    radial-gradient(circle at top left, color-mix(in srgb, var(--primary) 16%, transparent), transparent 34%),
     var(--card);
 }
 
@@ -1410,11 +1410,11 @@
   align-items: center;
   gap: 0.38rem;
   width: fit-content;
-  border: 1px solid color-mix(in srgb, var(--warning) 36%, var(--border));
+  border: 1px solid var(--badge-border);
   border-radius: 999px;
   padding: 0.34rem 0.62rem;
-  background: var(--warning-surface);
-  color: var(--warning);
+  background: var(--badge);
+  color: var(--badge-foreground);
   font-size: 0.72rem;
   font-weight: 800;
   letter-spacing: 0.04em;
