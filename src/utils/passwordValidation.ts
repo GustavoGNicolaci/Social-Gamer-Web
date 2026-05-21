@@ -1,6 +1,11 @@
 import { translate } from '../i18n'
 
-export type PasswordRequirementId = 'letterAndNumber' | 'minLength' | 'uppercase' | 'symbol'
+export type PasswordRequirementId =
+  | 'letterAndNumber'
+  | 'minLength'
+  | 'lowercase'
+  | 'uppercase'
+  | 'symbol'
 
 export type PasswordRequirementStatus = 'pending' | 'invalid' | 'valid'
 
@@ -20,6 +25,7 @@ export interface PasswordRequirementState {
 const PASSWORD_MIN_LENGTH = 8
 const LETTER_REGEX = /[A-Za-z]/
 const NUMBER_REGEX = /\d/
+const LOWERCASE_REGEX = /[a-z]/
 const UPPERCASE_REGEX = /[A-Z]/
 const SYMBOL_REGEX = /[^A-Za-z0-9\s]/
 
@@ -37,6 +43,11 @@ const PASSWORD_REQUIREMENT_DEFINITIONS: PasswordRequirementDefinition[] = [
     id: 'minLength',
     labelKey: 'auth.passwordRequirement.minLength',
     validate: (password) => password.length >= PASSWORD_MIN_LENGTH,
+  },
+  {
+    id: 'lowercase',
+    labelKey: 'auth.passwordRequirement.lowercase',
+    validate: (password) => LOWERCASE_REGEX.test(password),
   },
   {
     id: 'uppercase',

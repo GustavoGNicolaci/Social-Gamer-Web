@@ -310,7 +310,7 @@
 
 .game-details-profile-status-actions {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
   gap: 0.65rem;
 }
 
@@ -355,6 +355,20 @@
   border-color: rgba(255, 183, 129, 0.22);
   background:
     radial-gradient(circle at top left, rgba(255, 183, 129, 0.14), transparent 34%),
+    rgba(255, 255, 255, 0.05);
+}
+
+.game-details-profile-status-button.is-planejando {
+  border-color: rgba(178, 146, 255, 0.22);
+  background:
+    radial-gradient(circle at top left, rgba(178, 146, 255, 0.14), transparent 34%),
+    rgba(255, 255, 255, 0.05);
+}
+
+.game-details-profile-status-button.is-pausado {
+  border-color: rgba(255, 214, 102, 0.22);
+  background:
+    radial-gradient(circle at top left, rgba(255, 214, 102, 0.14), transparent 34%),
     rgba(255, 255, 255, 0.05);
 }
 
@@ -403,6 +417,24 @@
   box-shadow:
     0 16px 30px rgba(138, 82, 31, 0.24),
     inset 0 1px 0 rgba(255, 241, 229, 0.16);
+}
+
+.game-details-profile-status-button.is-planejando.is-selected {
+  border-color: rgba(178, 146, 255, 0.4);
+  background: linear-gradient(135deg, rgba(84, 58, 174, 0.96), rgba(138, 102, 242, 0.96));
+  color: #fbf8ff;
+  box-shadow:
+    0 16px 30px rgba(74, 54, 154, 0.24),
+    inset 0 1px 0 rgba(244, 238, 255, 0.16);
+}
+
+.game-details-profile-status-button.is-pausado.is-selected {
+  border-color: rgba(255, 214, 102, 0.4);
+  background: linear-gradient(135deg, rgba(142, 105, 22, 0.96), rgba(221, 174, 57, 0.96));
+  color: #fffdf2;
+  box-shadow:
+    0 16px 30px rgba(126, 92, 20, 0.24),
+    inset 0 1px 0 rgba(255, 248, 221, 0.18);
 }
 
 .game-details-profile-status-button.is-selected .game-details-profile-status-button-hint {

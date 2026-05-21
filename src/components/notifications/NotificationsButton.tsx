@@ -29,24 +29,24 @@ export function NotificationsButton({ userId }: NotificationsButtonProps) {
   const [markingAllRead, setMarkingAllRead] = useState(false)
 
   const refreshUnreadCount = useCallback(async () => {
-    const result = await fetchUnreadNotificationCount()
+    const result = await fetchUnreadNotificationCount(userId)
     if (!result.error) setUnreadCount(result.data)
-  }, [])
+  }, [userId])
 
   const refreshNotifications = useCallback(async () => {
     setLoading(true)
     setErrorMessage(null)
 
     const [notificationsResult, unreadCountResult] = await Promise.all([
-      fetchNotifications(),
-      fetchUnreadNotificationCount(),
+      fetchNotifications(userId),
+      fetchUnreadNotificationCount(userId),
     ])
 
     setNotifications(notificationsResult.data)
     setUnreadCount(unreadCountResult.data)
     setErrorMessage(notificationsResult.error?.message || unreadCountResult.error?.message || null)
     setLoading(false)
-  }, [])
+  }, [userId])
 
   useEffect(() => {
     const initTimeoutId = window.setTimeout(() => {

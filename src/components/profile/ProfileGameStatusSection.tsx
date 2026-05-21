@@ -12,6 +12,7 @@ import { Link } from 'react-router-dom'
 import { GameCoverImage } from '../GameCoverImage'
 import { useI18n } from '../../i18n/I18nContext'
 import {
+  STATUS_VALUES,
   type GameStatusSortValue,
   type GameStatusItem,
   type GameStatusValue,
@@ -21,6 +22,7 @@ import {
   type CatalogGamePreview,
   type GameCatalogError,
 } from '../../services/gameCatalogService'
+import { isSupabasePermissionError } from '../../utils/supabaseErrors'
 import './ProfileGameStatusSection.css'
 
 type StatusSortValue = GameStatusSortValue
@@ -66,7 +68,6 @@ interface StatusSearchResultItem {
 
 const SEARCH_DEBOUNCE_DELAY = 220
 const STATUS_SORT_VALUES: StatusSortValue[] = ['recent', 'oldest', 'favorites', 'title']
-const STATUS_VALUES: GameStatusValue[] = ['jogando', 'zerado', 'dropado']
 
 function getInitial(value: string) {
   const firstCharacter = value.trim().charAt(0)
@@ -96,14 +97,7 @@ function getStatusSearchErrorMessage(
     return t('error.genericSearchGames')
   }
 
-  const fullMessage = [error.message, error.details, error.hint].filter(Boolean).join(' ').toLowerCase()
-
-  if (
-    error.code === '42501' ||
-    fullMessage.includes('permission denied') ||
-    fullMessage.includes('row-level security') ||
-    fullMessage.includes('policy')
-  ) {
+  if (isSupabasePermissionError(error)) {
     return t('error.permissionSearchGamesStatus')
   }
 

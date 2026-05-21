@@ -1,4 +1,5 @@
 import { supabase } from '../supabase-client'
+import { isSupabasePermissionError } from '../utils/supabaseErrors'
 import type { CatalogGamePreview } from './gameCatalogService'
 
 export type CommunityRole = 'lider' | 'admin' | 'membro'
@@ -821,7 +822,9 @@ async function normalizePosts(
         resolvedRoles.get(row.comunidade_id) || null
       )
     ),
-    error: commentsResult.error || interactionResult.error,
+    error: isSupabasePermissionError(commentsResult.error || interactionResult.error)
+      ? null
+      : commentsResult.error || interactionResult.error,
   }
 }
 
@@ -991,7 +994,9 @@ export async function getCommunityMembers(
     if (error) {
       return {
         data: [],
-        error: normalizeCommunityError(error, 'Nao foi possivel carregar os membros.'),
+        error: isSupabasePermissionError(error)
+          ? null
+          : normalizeCommunityError(error, 'Nao foi possivel carregar os membros.'),
         totalCount: null,
       }
     }
@@ -1046,7 +1051,9 @@ export async function getCommunityPosts(
     if (error) {
       return {
         data: [],
-        error: normalizeCommunityError(error, 'Nao foi possivel carregar os posts.'),
+        error: isSupabasePermissionError(error)
+          ? null
+          : normalizeCommunityError(error, 'Nao foi possivel carregar os posts.'),
         totalCount: null,
       }
     }
@@ -1548,7 +1555,9 @@ export async function getCommunitiesByUserId(
     if (error) {
       return {
         data: [],
-        error: normalizeCommunityError(error, 'Nao foi possivel carregar as comunidades do perfil.'),
+        error: isSupabasePermissionError(error)
+          ? null
+          : normalizeCommunityError(error, 'Nao foi possivel carregar as comunidades do perfil.'),
       }
     }
 
@@ -1590,7 +1599,9 @@ export async function getCommunityPostsByUserId(
     if (error) {
       return {
         data: [],
-        error: normalizeCommunityError(error, 'Nao foi possivel carregar os posts do perfil.'),
+        error: isSupabasePermissionError(error)
+          ? null
+          : normalizeCommunityError(error, 'Nao foi possivel carregar os posts do perfil.'),
       }
     }
 

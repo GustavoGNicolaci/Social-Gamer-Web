@@ -175,12 +175,12 @@ interface ReviewCommentRow {
 
 interface ReviewRow {
   id: string
-  usuario_id: string
-  jogo_id: number
-  nota: number | string
+  usuario_id: string | null
+  jogo_id: number | null
+  nota: number | string | null
   texto_review: string | null
   curtidas: number | string | null
-  data_publicacao: string
+  data_publicacao: string | null
   editado_em: string | null
   usuario: ReviewAuthorRelation
   comentarios?: ReviewCommentRow[] | null
@@ -390,7 +390,26 @@ function normalizeReviewComment(
   }
 }
 
-function normalizeReviewItem(row: ReviewRow, currentUserId?: string | null): ReviewItem {
+function isCompleteReviewRow(
+  row: ReviewRow
+): row is ReviewRow & {
+  usuario_id: string
+  jogo_id: number
+  nota: number | string
+  data_publicacao: string
+} {
+  return Boolean(row.id && row.usuario_id && row.jogo_id && row.nota !== null && row.data_publicacao)
+}
+
+function normalizeReviewItem(
+  row: ReviewRow & {
+    usuario_id: string
+    jogo_id: number
+    nota: number | string
+    data_publicacao: string
+  },
+  currentUserId?: string | null
+): ReviewItem {
   const comentarios = sortCommentsByRelevance(
     (row.comentarios || []).map(comment => normalizeReviewComment(comment, currentUserId))
   )
@@ -415,7 +434,12 @@ function normalizeReviewItem(row: ReviewRow, currentUserId?: string | null): Rev
   }
 }
 
-function normalizeProfileReviewItem(row: ReviewRow): ProfileReviewItem {
+function normalizeProfileReviewItem(row: ReviewRow & {
+  usuario_id: string
+  jogo_id: number
+  nota: number | string
+  data_publicacao: string
+}): ProfileReviewItem {
   return {
     ...normalizeReviewItem(row, null),
     jogo: resolveSingleRelation(row.jogo),
@@ -487,7 +511,9 @@ export async function getReviewsByGameId(
     }
 
     const visibleReviewRows = await filterReviewRowsByPrivacy((data || []) as ReviewRow[], currentUserId)
-    const visibleReviews = visibleReviewRows.map(row => normalizeReviewItem(row, currentUserId))
+    const visibleReviews = visibleReviewRows
+      .filter(isCompleteReviewRow)
+      .map(row => normalizeReviewItem(row, currentUserId))
 
     if (visibleReviews.length === 0) {
       return {
@@ -597,7 +623,7 @@ export async function getReviewsByUserId(
       : await filterReviewRowsByPrivacy((data || []) as ReviewRow[], options.currentUserId)
 
     return {
-      data: reviewRows.map(normalizeProfileReviewItem),
+      data: reviewRows.filter(isCompleteReviewRow).map(normalizeProfileReviewItem),
       error: null,
     }
   } catch (error) {
@@ -661,7 +687,7 @@ export async function getReviewsPageByUserId(
     timings.privacyFilterMs += getPerformanceNow() - privacyStartedAt
 
     const normalizeStartedAt = getPerformanceNow()
-    const items = reviewRows.map(normalizeProfileReviewItem)
+    const items = reviewRows.filter(isCompleteReviewRow).map(normalizeProfileReviewItem)
     timings.normalizeMs += getPerformanceNow() - normalizeStartedAt
     timings.totalMs = getPerformanceNow() - startedAt
 

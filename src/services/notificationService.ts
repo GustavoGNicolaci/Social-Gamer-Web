@@ -1,4 +1,6 @@
 import { supabase } from '../supabase-client'
+import type { NotificationRow as SupabaseNotificationRow, UsuarioRow } from '../types/supabase'
+import { normalizeSupabaseError } from '../utils/supabaseErrors'
 
 export interface NotificationActor {
   id: string
@@ -31,28 +33,8 @@ export interface NotificationServiceError {
   hint?: string | null
 }
 
-interface NotificationRow {
-  id: string
-  user_id: string
-  actor_id: string | null
-  type: string
-  title: string
-  message: string | null
-  entity_type: string | null
-  entity_id: string | null
-  link: string | null
-  metadata: Record<string, unknown> | null
-  is_read: boolean
-  read_at: string | null
-  created_at: string
-}
-
-interface ActorRow {
-  id: string
-  username: string
-  nome_completo: string | null
-  avatar_path: string | null
-}
+type NotificationRow = SupabaseNotificationRow
+type ActorRow = Pick<UsuarioRow, 'id' | 'username' | 'nome_completo' | 'avatar_path'>
 
 interface ServiceResult<T> {
   data: T
@@ -81,18 +63,7 @@ function normalizeNotificationError(
   error: unknown,
   fallbackMessage: string
 ): NotificationServiceError {
-  if (error && typeof error === 'object') {
-    const message =
-      'message' in error && typeof error.message === 'string' ? error.message : fallbackMessage
-    const code = 'code' in error && typeof error.code === 'string' ? error.code : undefined
-    const details =
-      'details' in error && typeof error.details === 'string' ? error.details : null
-    const hint = 'hint' in error && typeof error.hint === 'string' ? error.hint : null
-
-    return { code, message, details, hint }
-  }
-
-  return { message: fallbackMessage }
+  return normalizeSupabaseError(error, fallbackMessage)
 }
 
 function normalizeNotification(
@@ -128,7 +99,7 @@ async function fetchActors(actorIds: string[]) {
       actor.id,
       {
         id: actor.id,
-        username: actor.username,
+        username: actor.username || '',
         nome_completo: actor.nome_completo,
         avatar_path: actor.avatar_path,
       },
@@ -137,13 +108,22 @@ async function fetchActors(actorIds: string[]) {
 }
 
 export async function fetchNotifications(
+  userId: string,
   limit = DEFAULT_NOTIFICATION_LIMIT
 ): Promise<ServiceResult<UserNotification[]>> {
+  if (!userId) {
+    return {
+      data: [],
+      error: null,
+    }
+  }
+
   try {
     const safeLimit = Math.min(Math.max(limit, 1), 50)
     const { data, error } = await supabase
       .from('notifications')
       .select(NOTIFICATION_SELECT)
+      .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(safeLimit)
 
@@ -171,11 +151,19 @@ export async function fetchNotifications(
   }
 }
 
-export async function fetchUnreadNotificationCount(): Promise<ServiceResult<number>> {
+export async function fetchUnreadNotificationCount(userId: string): Promise<ServiceResult<number>> {
+  if (!userId) {
+    return {
+      data: 0,
+      error: null,
+    }
+  }
+
   try {
     const { count, error } = await supabase
       .from('notifications')
       .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
       .eq('is_read', false)
 
     return {

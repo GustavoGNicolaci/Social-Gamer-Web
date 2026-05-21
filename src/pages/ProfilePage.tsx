@@ -61,6 +61,7 @@ import {
   mergeTopFiveEntriesIntoPrivacySettings,
   type TopFiveStoredEntry,
 } from '../utils/profileTopFive'
+import { isSupabasePermissionError } from '../utils/supabaseErrors'
 import './ProfilePage.css'
 
 type FeedbackTone = 'success' | 'error'
@@ -781,6 +782,16 @@ export function ProfilePage() {
       })
 
       if (statusResult.error) {
+        if (!isOwnerView && isSupabasePermissionError(statusResult.error)) {
+          setStatusGames([])
+          setStatusPageState(createLoadedPageState(0, false, null))
+          setStatusError(null)
+          setStatusLoading(false)
+          setStatusLoadingMore(false)
+          setLoadedProfileTabs(currentTabs => ({ ...currentTabs, status: true }))
+          return { ok: true }
+        }
+
         console.error('Erro ao carregar status dos jogos do perfil:', statusResult.error)
         if (!append) {
           setStatusGames([])
@@ -882,6 +893,16 @@ export function ProfilePage() {
       })
 
       if (wishlistResult.error) {
+        if (!isOwnerView && isSupabasePermissionError(wishlistResult.error)) {
+          setWishlistGames([])
+          setWishlistPageState(createLoadedPageState(0, false, null))
+          setWishlistError(null)
+          setWishlistLoading(false)
+          setWishlistLoadingMore(false)
+          setLoadedProfileTabs(currentTabs => ({ ...currentTabs, wishlist: true }))
+          return { ok: true }
+        }
+
         console.error('Erro ao carregar jogos que quero jogar:', wishlistResult.error)
         if (!append) {
           setWishlistGames([])
@@ -977,6 +998,16 @@ export function ProfilePage() {
       })
 
       if (reviewsResult.error) {
+        if (!isOwnerView && isSupabasePermissionError(reviewsResult.error)) {
+          setUserReviews(reviewsResult.data)
+          setReviewsPageState(createLoadedPageState(reviewsResult.data.length, false, null))
+          setReviewsError(null)
+          setReviewsLoading(false)
+          setReviewsLoadingMore(false)
+          setLoadedProfileTabs(currentTabs => ({ ...currentTabs, reviews: true }))
+          return { ok: true }
+        }
+
         console.error('Erro ao carregar reviews do perfil:', reviewsResult.error)
         if (!append) {
           setUserReviews(reviewsResult.data)

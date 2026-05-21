@@ -30,6 +30,7 @@ import {
   type ReviewReactionState,
 } from '../services/reviewInteractionsService'
 import {
+  STATUS_VALUES,
   deleteGameStatus,
   getGameStatusEntry,
   saveGameStatus,
@@ -46,17 +47,22 @@ import { supabase } from '../supabase-client'
 import { formatLocalizedDate, formatLocalizedNumber, translate } from '../i18n'
 import { useI18n } from '../i18n/I18nContext'
 import { getOptionalPublicProfilePath } from '../utils/profileRoutes'
+import {
+  isSupabaseDuplicateError,
+  isSupabasePermissionError,
+  isSupabaseStructureError,
+} from '../utils/supabaseErrors'
 import './GameDetailsPage.css'
 
 interface Game {
   id: number
   titulo: string
-  capa_url: string
-  desenvolvedora: string[] | string
-  generos: string[] | string
-  data_lancamento: string
-  descricao: string
-  plataformas: string[] | string
+  capa_url: string | null
+  desenvolvedora: string[] | string | null
+  generos: string[] | string | null
+  data_lancamento: string | null
+  descricao: string | null
+  plataformas: string[] | string | null
 }
 
 type FeedbackTone = 'success' | 'error' | 'info'
@@ -84,11 +90,10 @@ const GAME_DETAIL_SELECT =
 const QUICK_PROFILE_STATUS_OPTIONS: Array<{
   value: QuickProfileStatusValue
   labelKey: string
-}> = [
-  { value: 'jogando', labelKey: 'game.status.jogando' },
-  { value: 'zerado', labelKey: 'game.status.zerado' },
-  { value: 'dropado', labelKey: 'game.status.dropado' },
-]
+}> = STATUS_VALUES.map(value => ({
+  value,
+  labelKey: `game.status.${value}`,
+}))
 
 function normalizeList(value: string[] | string | null | undefined) {
   if (!value) return []
@@ -150,24 +155,17 @@ function getWishlistErrorMessage(
       : 'Nao foi possivel remover este jogo da sua lista de desejos agora.'
   }
 
-  const fullMessage = [error.message, error.details, error.hint].filter(Boolean).join(' ').toLowerCase()
-
-  if (
-    error.code === '42501' ||
-    fullMessage.includes('permission denied') ||
-    fullMessage.includes('row-level security') ||
-    fullMessage.includes('policy')
-  ) {
+  if (isSupabasePermissionError(error)) {
     return action === 'save'
       ? 'Nao foi possivel acessar sua lista de desejos por permissao. Verifique as policies da tabela lista_desejos no Supabase.'
       : 'Nao foi possivel remover este jogo da sua lista de desejos por permissao. Verifique as policies DELETE da tabela lista_desejos no Supabase.'
   }
 
-  if (fullMessage.includes('duplicate') || fullMessage.includes('unique')) {
+  if (isSupabaseDuplicateError(error)) {
     return 'Esse jogo já está na sua lista de desejos.'
   }
 
-  if (fullMessage.includes('column')) {
+  if (isSupabaseStructureError(error)) {
     return 'A estrutura da tabela lista_desejos nao corresponde ao frontend.'
   }
 
@@ -186,20 +184,13 @@ function getGameStatusErrorMessage(
       : 'Nao foi possivel remover este jogo do seu perfil agora.'
   }
 
-  const fullMessage = [error.message, error.details, error.hint].filter(Boolean).join(' ').toLowerCase()
-
-  if (
-    error.code === '42501' ||
-    fullMessage.includes('permission denied') ||
-    fullMessage.includes('row-level security') ||
-    fullMessage.includes('policy')
-  ) {
+  if (isSupabasePermissionError(error)) {
     return action === 'save'
       ? 'Nao foi possivel salvar este jogo no perfil por permissao. Verifique as policies da tabela status_jogo no Supabase.'
       : 'Nao foi possivel remover este jogo do perfil por permissao. Verifique as policies DELETE da tabela status_jogo no Supabase.'
   }
 
-  if (fullMessage.includes('column')) {
+  if (isSupabaseStructureError(error)) {
     return 'A estrutura da tabela status_jogo nao corresponde ao frontend.'
   }
 
@@ -241,14 +232,7 @@ function getReviewErrorMessage(
     return 'Nao foi possivel carregar as reviews deste jogo agora.'
   }
 
-  const fullMessage = [error.message, error.details, error.hint].filter(Boolean).join(' ').toLowerCase()
-
-  if (
-    error.code === '42501' ||
-    fullMessage.includes('permission denied') ||
-    fullMessage.includes('row-level security') ||
-    fullMessage.includes('policy')
-  ) {
+  if (isSupabasePermissionError(error)) {
     if (action === 'save') {
       return 'Nao foi possivel salvar sua review por permissao. Verifique as policies da tabela avaliacoes no Supabase.'
     }
@@ -292,7 +276,7 @@ function getReviewErrorMessage(
     return 'Nao foi possivel carregar as reviews por permissao. Verifique as policies das tabelas avaliacoes, comentarios, avaliacao_curtidas, comentario_curtidas, avaliacao_deslikes, comentario_deslikes e denuncias_conteudo no Supabase.'
   }
 
-  if (fullMessage.includes('duplicate') || fullMessage.includes('unique')) {
+  if (isSupabaseDuplicateError(error)) {
     if (action === 'review_like') {
       return 'Essa review já estava curtida por este usuario.'
     }
@@ -312,7 +296,7 @@ function getReviewErrorMessage(
     return 'Ja existe uma review sua para este jogo. Envie novamente para atualizar a avaliacao.'
   }
 
-  if (fullMessage.includes('column')) {
+  if (isSupabaseStructureError(error)) {
     return 'A estrutura das tabelas de reviews nao corresponde ao frontend.'
   }
 
@@ -322,6 +306,8 @@ function getReviewErrorMessage(
 function getGameStatusLabel(status: GameStatusValue | null | undefined) {
   if (status === 'zerado') return translate('game.status.zerado')
   if (status === 'dropado') return translate('game.status.dropado')
+  if (status === 'planejando') return translate('game.status.planejando')
+  if (status === 'pausado') return translate('game.status.pausado')
   return translate('game.status.jogando')
 }
 

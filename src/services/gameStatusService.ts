@@ -1,8 +1,12 @@
 import { supabase } from '../supabase-client'
+import type {
+  GameStatusValue as SupabaseGameStatusValue,
+  StatusJogoRow,
+} from '../types/supabase'
 import { getPerformanceNow, logPerformanceTiming } from '../utils/performanceDiagnostics'
 import type { CatalogGamePreview } from './gameCatalogService'
 
-export type GameStatusValue = 'jogando' | 'zerado' | 'dropado'
+export type GameStatusValue = SupabaseGameStatusValue
 export type GameStatusSortValue = 'recent' | 'oldest' | 'favorites' | 'title'
 
 export interface GameStatusError {
@@ -72,7 +76,13 @@ interface GameStatusRelationRow extends GameStatusEntry {
   jogo: StatusGameRelation
 }
 
-const STATUS_VALUES: GameStatusValue[] = ['jogando', 'zerado', 'dropado']
+export const STATUS_VALUES: GameStatusValue[] = [
+  'jogando',
+  'zerado',
+  'dropado',
+  'planejando',
+  'pausado',
+]
 const DEFAULT_STATUS_PAGE_SIZE = 12
 const STATUS_GAME_SELECT = 'id, titulo, capa_url, desenvolvedora, generos, data_lancamento, plataformas'
 const STATUS_RELATION_SELECT = `
@@ -108,8 +118,8 @@ function normalizeGameStatusError(error: unknown, fallbackMessage: string): Game
   return { message: fallbackMessage }
 }
 
-function normalizeStatusValue(value: string): GameStatusValue {
-  const normalizedValue = value.trim().toLowerCase()
+function normalizeStatusValue(value: string | null | undefined): GameStatusValue {
+  const normalizedValue = value?.trim().toLowerCase() || ''
 
   if (STATUS_VALUES.includes(normalizedValue as GameStatusValue)) {
     return normalizedValue as GameStatusValue
@@ -146,10 +156,19 @@ function resolveStatusGame(game: StatusGameRelation) {
   return game
 }
 
-function normalizeStatusRow(row: GameStatusEntry): GameStatusEntry {
+function isCompleteStatusRow<T extends StatusJogoRow | GameStatusEntry>(
+  row: T
+): row is T & GameStatusEntry {
+  return Boolean(row.id && row.usuario_id && row.jogo_id)
+}
+
+function normalizeStatusRow(row: StatusJogoRow | GameStatusEntry): GameStatusEntry {
   return {
-    ...row,
+    id: row.id,
+    usuario_id: row.usuario_id || '',
+    jogo_id: row.jogo_id || 0,
     status: normalizeStatusValue(row.status),
+    created_at: row.created_at || null,
     favorito: Boolean(row.favorito),
   }
 }
@@ -251,7 +270,9 @@ async function getGameStatusesPageWithFallback(
     )
   }
 
-  const normalizedStatusRows = ((statusRows || []) as GameStatusEntry[]).map(normalizeStatusRow)
+  const normalizedStatusRows = ((statusRows || []) as StatusJogoRow[])
+    .filter(isCompleteStatusRow)
+    .map(normalizeStatusRow)
 
   if (normalizedStatusRows.length === 0) {
     timings.totalMs = timings.queryMs + timings.normalizeMs
@@ -363,7 +384,9 @@ export async function getGameStatusesPageByUserId(
 
     const normalizeStartedAt = getPerformanceNow()
     const items = sortStatusItemsByDisplayOrder(
-      ((data || []) as GameStatusRelationRow[]).map(normalizeStatusRelationRow),
+      ((data || []) as GameStatusRelationRow[])
+        .filter(isCompleteStatusRow)
+        .map(normalizeStatusRelationRow),
       options.sort
     )
     timings.normalizeMs += getPerformanceNow() - normalizeStartedAt
@@ -424,11 +447,9 @@ export async function getGameStatusesByUserId(
       }
     }
 
-    const normalizedStatusRows = ((statusRows || []) as GameStatusEntry[]).map(row => ({
-      ...row,
-      status: normalizeStatusValue(row.status),
-      favorito: Boolean(row.favorito),
-    }))
+    const normalizedStatusRows = ((statusRows || []) as StatusJogoRow[])
+      .filter(isCompleteStatusRow)
+      .map(normalizeStatusRow)
 
     if (normalizedStatusRows.length === 0) {
       return {
@@ -498,14 +519,10 @@ export async function getGameStatusEntry(
       }
     }
 
-    const entry = data as GameStatusEntry
-
     return {
-      data: {
-        ...entry,
-        status: normalizeStatusValue(entry.status),
-        favorito: Boolean(entry.favorito),
-      },
+      data: isCompleteStatusRow(data as StatusJogoRow)
+        ? normalizeStatusRow(data as StatusJogoRow)
+        : null,
       error: null,
     }
   } catch (error) {
@@ -557,12 +574,18 @@ export async function saveGameStatus({
         }
       }
 
+      if (!isCompleteStatusRow(data as StatusJogoRow)) {
+        return {
+          data: null,
+          error: {
+            message:
+              'Nao foi possivel confirmar o status atualizado. Verifique as policies SELECT da tabela status_jogo.',
+          },
+        }
+      }
+
       return {
-        data: {
-          ...(data as GameStatusEntry),
-          status: normalizeStatusValue((data as GameStatusEntry).status),
-          favorito: Boolean((data as GameStatusEntry).favorito),
-        },
+        data: normalizeStatusRow(data as StatusJogoRow),
         error: null,
       }
     }
@@ -586,12 +609,18 @@ export async function saveGameStatus({
       }
     }
 
+    if (!isCompleteStatusRow(data as StatusJogoRow)) {
+      return {
+        data: null,
+        error: {
+          message:
+            'Nao foi possivel confirmar o status criado. Verifique as policies SELECT da tabela status_jogo.',
+        },
+      }
+    }
+
     return {
-      data: {
-        ...(data as GameStatusEntry),
-        status: normalizeStatusValue((data as GameStatusEntry).status),
-        favorito: Boolean((data as GameStatusEntry).favorito),
-      },
+      data: normalizeStatusRow(data as StatusJogoRow),
       error: null,
     }
   } catch (error) {
