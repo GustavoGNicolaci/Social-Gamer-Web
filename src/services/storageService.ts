@@ -1,12 +1,16 @@
 import { supabase } from '../supabase-client'
 import { logClientError } from '../utils/clientLogging'
+import { isSupabasePermissionError } from '../utils/supabaseErrors'
 
-const BUCKET_NAME = 'user-uploads'
+const PUBLIC_UPLOADS_BUCKET = 'user-uploads'
+const COMMUNITY_POST_MEDIA_BUCKET = 'community-post-media'
 const AVATAR_FOLDER = 'avatars'
 const COMMUNITY_BANNER_FOLDER = 'communities'
 const COMMUNITY_POST_FOLDER = 'community-posts'
 const DEFAULT_IMAGE_FOLDER = 'images'
 const MAX_AVATAR_SIZE_MB = 5
+const COMMUNITY_POST_MEDIA_REFERENCE_PREFIX = `${COMMUNITY_POST_MEDIA_BUCKET}/`
+const SIGNED_URL_EXPIRES_IN_SECONDS = 60 * 60
 const ALLOWED_IMAGE_MIME_TYPES = new Set([
   'image/jpeg',
   'image/png',
@@ -21,14 +25,28 @@ export interface StorageUploadResult {
   url: string
 }
 
-interface StorageCleanupResult {
+export interface StorageCleanupResult {
   ok: boolean
   deletedPaths: string[]
+  failedPaths: string[]
 }
 
 interface StorageListEntry {
   name: string
   id?: string | null
+}
+
+interface UploadValidatedFileOptions {
+  bucketName?: string
+  includePublicUrl?: boolean
+  includeBucketInPath?: boolean
+  context?: string
+}
+
+interface StorageLocation {
+  bucketName: string
+  objectPath: string
+  referencePath: string
 }
 
 function sanitizeFileName(fileName: string) {
@@ -88,16 +106,85 @@ function normalizeStoragePath(filePath: string | null | undefined) {
   return normalizedPath
 }
 
+function stripBucketPrefix(filePath: string, bucketName: string) {
+  const prefix = `${bucketName}/`
+  return filePath.startsWith(prefix) ? filePath.slice(prefix.length) : filePath
+}
+
+function isCommunityPostObjectPath(filePath: string) {
+  const [ownerId, folderName, fileName] = filePath.split('/')
+  return Boolean(ownerId && folderName === COMMUNITY_POST_FOLDER && fileName)
+}
+
+function getCommunityPostMediaObjectPath(filePath: string | null | undefined) {
+  const safePath = normalizeStoragePath(filePath)
+  if (!safePath) return null
+
+  if (!safePath.startsWith(COMMUNITY_POST_MEDIA_REFERENCE_PREFIX)) {
+    return null
+  }
+
+  const objectPath = safePath.slice(COMMUNITY_POST_MEDIA_REFERENCE_PREFIX.length)
+  return isCommunityPostObjectPath(objectPath) ? objectPath : null
+}
+
+function getLegacyCommunityPostPublicPath(filePath: string | null | undefined) {
+  const safePath = normalizeStoragePath(filePath)
+  if (!safePath) return null
+
+  const publicPath = stripBucketPrefix(safePath, PUBLIC_UPLOADS_BUCKET)
+  return isCommunityPostObjectPath(publicPath) ? publicPath : null
+}
+
+function getStorageLocation(filePath: string | null | undefined): StorageLocation | null {
+  const safePath = normalizeStoragePath(filePath)
+  if (!safePath) return null
+
+  if (safePath.startsWith(COMMUNITY_POST_MEDIA_REFERENCE_PREFIX)) {
+    const objectPath = safePath.slice(COMMUNITY_POST_MEDIA_REFERENCE_PREFIX.length)
+    return objectPath
+      ? {
+          bucketName: COMMUNITY_POST_MEDIA_BUCKET,
+          objectPath,
+          referencePath: safePath,
+        }
+      : null
+  }
+
+  const publicPath = stripBucketPrefix(safePath, PUBLIC_UPLOADS_BUCKET)
+  return publicPath
+    ? {
+        bucketName: PUBLIC_UPLOADS_BUCKET,
+        objectPath: publicPath,
+        referencePath: safePath,
+      }
+    : null
+}
+
+function getUniqueStorageLocations(filePaths: Array<string | null | undefined>) {
+  const locationsByKey = new Map<string, StorageLocation>()
+
+  filePaths.forEach(filePath => {
+    const location = getStorageLocation(filePath)
+    if (!location) return
+
+    locationsByKey.set(`${location.bucketName}/${location.objectPath}`, location)
+  })
+
+  return Array.from(locationsByKey.values())
+}
+
 export function getPublicUrl(filePath: string): string {
-  const { data } = supabase.storage.from(BUCKET_NAME).getPublicUrl(filePath)
+  const { data } = supabase.storage.from(PUBLIC_UPLOADS_BUCKET).getPublicUrl(filePath)
   return data.publicUrl
 }
 
 export function resolvePublicFileUrl(filePath: string | null | undefined) {
   const safePath = normalizeStoragePath(filePath)
   if (!safePath) return null
+  if (safePath.startsWith(COMMUNITY_POST_MEDIA_REFERENCE_PREFIX)) return null
 
-  return getPublicUrl(safePath)
+  return getPublicUrl(stripBucketPrefix(safePath, PUBLIC_UPLOADS_BUCKET))
 }
 
 export function sanitizeAvatarPath(avatarPath: string | null | undefined) {
@@ -125,7 +212,7 @@ export function extractAvatarPathFromPublicUrl(avatarUrl: string | null | undefi
 
   try {
     const parsedUrl = new URL(normalizedUrl)
-    const publicPrefix = `/storage/v1/object/public/${BUCKET_NAME}/`
+    const publicPrefix = `/storage/v1/object/public/${PUBLIC_UPLOADS_BUCKET}/`
     const prefixIndex = parsedUrl.pathname.indexOf(publicPrefix)
 
     if (prefixIndex < 0) return null
@@ -161,7 +248,7 @@ async function listAllFilePathsByPrefix(prefix: string) {
       continue
     }
 
-    const { data, error } = await supabase.storage.from(BUCKET_NAME).list(currentPrefix, {
+    const { data, error } = await supabase.storage.from(PUBLIC_UPLOADS_BUCKET).list(currentPrefix, {
       limit: 100,
       offset: 0,
     })
@@ -194,28 +281,34 @@ async function listAllFilePathsByPrefix(prefix: string) {
 
 async function uploadValidatedFile(
   file: File,
-  filePath: string
+  filePath: string,
+  options: UploadValidatedFileOptions = {}
 ): Promise<StorageUploadResult | null> {
+  const bucketName = options.bucketName || PUBLIC_UPLOADS_BUCKET
+  const includePublicUrl = options.includePublicUrl ?? true
+  const context = options.context || 'storage.uploadValidatedFile'
+
   try {
-    const { data, error } = await supabase.storage.from(BUCKET_NAME).upload(filePath, file, {
+    const { data, error } = await supabase.storage.from(bucketName).upload(filePath, file, {
       cacheControl: '3600',
       upsert: false,
     })
 
     if (error) {
-      logClientError('storage.uploadValidatedFile', error)
+      logClientError(context, error)
       return null
     }
 
-    const publicUrl = getPublicUrl(data.path)
+    const publicUrl = includePublicUrl ? getPublicUrl(data.path) : ''
+    const storedPath = options.includeBucketInPath ? `${bucketName}/${data.path}` : data.path
 
     return {
-      path: data.path,
+      path: storedPath,
       publicUrl,
       url: publicUrl,
     }
   } catch (error) {
-    logClientError('storage.uploadValidatedFile.exception', error)
+    logClientError(`${context}.exception`, error)
     return null
   }
 }
@@ -230,24 +323,65 @@ export async function uploadFile(
 }
 
 export async function deleteFile(filePath: string): Promise<boolean> {
-  const safePath = normalizeStoragePath(filePath)
+  const result = await deleteStorageFiles([filePath])
+  return result.ok && result.deletedPaths.length > 0
+}
 
-  if (!safePath) {
-    return false
+export async function deleteStorageFiles(
+  filePaths: Array<string | null | undefined>
+): Promise<StorageCleanupResult> {
+  const locations = getUniqueStorageLocations(filePaths)
+
+  if (locations.length === 0) {
+    return {
+      ok: true,
+      deletedPaths: [],
+      failedPaths: [],
+    }
   }
 
-  try {
-    const { error } = await supabase.storage.from(BUCKET_NAME).remove([safePath])
+  const deletedPaths: string[] = []
+  const failedPaths: string[] = []
+  const locationsByBucket = new Map<string, StorageLocation[]>()
 
-    if (error) {
-      logClientError('storage.deleteFile', error)
-      return false
+  locations.forEach(location => {
+    const currentLocations = locationsByBucket.get(location.bucketName) || []
+    locationsByBucket.set(location.bucketName, [...currentLocations, location])
+  })
+
+  for (const [bucketName, bucketLocations] of locationsByBucket) {
+    for (let startIndex = 0; startIndex < bucketLocations.length; startIndex += 1000) {
+      const currentChunk = bucketLocations.slice(startIndex, startIndex + 1000)
+
+      try {
+        const { error } = await supabase.storage
+          .from(bucketName)
+          .remove(currentChunk.map(location => location.objectPath))
+
+        if (error) {
+          logClientError('storage.deleteStorageFiles', error, {
+            bucketName,
+            paths: currentChunk.map(location => location.referencePath).join(','),
+          })
+          failedPaths.push(...currentChunk.map(location => location.referencePath))
+          continue
+        }
+
+        deletedPaths.push(...currentChunk.map(location => location.referencePath))
+      } catch (error) {
+        logClientError('storage.deleteStorageFiles.exception', error, {
+          bucketName,
+          paths: currentChunk.map(location => location.referencePath).join(','),
+        })
+        failedPaths.push(...currentChunk.map(location => location.referencePath))
+      }
     }
+  }
 
-    return true
-  } catch (error) {
-    logClientError('storage.deleteFile.exception', error)
-    return false
+  return {
+    ok: failedPaths.length === 0,
+    deletedPaths,
+    failedPaths,
   }
 }
 
@@ -256,7 +390,7 @@ export async function listUserFiles(
   folder = DEFAULT_IMAGE_FOLDER
 ): Promise<string[] | null> {
   try {
-    const { data, error } = await supabase.storage.from(BUCKET_NAME).list(`${userId}/${folder}`, {
+    const { data, error } = await supabase.storage.from(PUBLIC_UPLOADS_BUCKET).list(`${userId}/${folder}`, {
       limit: 100,
       offset: 0,
       sortBy: { column: 'created_at', order: 'desc' },
@@ -281,6 +415,7 @@ export async function deleteAllUserFiles(userId: string): Promise<StorageCleanup
     return {
       ok: false,
       deletedPaths: listResult.data,
+      failedPaths: [],
     }
   }
 
@@ -288,22 +423,25 @@ export async function deleteAllUserFiles(userId: string): Promise<StorageCleanup
     return {
       ok: true,
       deletedPaths: [],
+      failedPaths: [],
     }
   }
 
   const deletedPaths: string[] = []
+  const failedPaths: string[] = []
 
   for (let startIndex = 0; startIndex < listResult.data.length; startIndex += 1000) {
     const currentChunk = listResult.data.slice(startIndex, startIndex + 1000)
 
     try {
-      const { error } = await supabase.storage.from(BUCKET_NAME).remove(currentChunk)
+      const { error } = await supabase.storage.from(PUBLIC_UPLOADS_BUCKET).remove(currentChunk)
 
       if (error) {
         logClientError('storage.deleteAllUserFiles', error)
         return {
           ok: false,
           deletedPaths,
+          failedPaths: currentChunk,
         }
       }
 
@@ -313,6 +451,7 @@ export async function deleteAllUserFiles(userId: string): Promise<StorageCleanup
       return {
         ok: false,
         deletedPaths,
+        failedPaths: currentChunk,
       }
     }
   }
@@ -320,6 +459,7 @@ export async function deleteAllUserFiles(userId: string): Promise<StorageCleanup
   return {
     ok: true,
     deletedPaths,
+    failedPaths,
   }
 }
 
@@ -369,7 +509,60 @@ export async function uploadCommunityPostImage(
     return null
   }
 
-  return await uploadFile(file, userId, COMMUNITY_POST_FOLDER)
+  const filePath = buildStoragePath(userId, COMMUNITY_POST_FOLDER, file.name)
+  return await uploadValidatedFile(file, filePath, {
+    bucketName: COMMUNITY_POST_MEDIA_BUCKET,
+    includePublicUrl: false,
+    includeBucketInPath: true,
+    context: 'storage.uploadCommunityPostImage.upload',
+  })
+}
+
+export async function resolveCommunityPostImageUrl(
+  filePath: string | null | undefined
+): Promise<string | null> {
+  const privateObjectPath = getCommunityPostMediaObjectPath(filePath)
+
+  if (privateObjectPath) {
+    try {
+      const { data, error } = await supabase.storage
+        .from(COMMUNITY_POST_MEDIA_BUCKET)
+        .createSignedUrl(privateObjectPath, SIGNED_URL_EXPIRES_IN_SECONDS)
+
+      if (error) {
+        if (!isSupabasePermissionError(error)) {
+          logClientError('storage.resolveCommunityPostImageUrl', error)
+        }
+        return null
+      }
+
+      return data.signedUrl || null
+    } catch (error) {
+      logClientError('storage.resolveCommunityPostImageUrl.exception', error)
+      return null
+    }
+  }
+
+  const legacyPublicPath = getLegacyCommunityPostPublicPath(filePath)
+  return legacyPublicPath ? getPublicUrl(legacyPublicPath) : null
+}
+
+export async function resolveCommunityPostImageUrls(
+  filePaths: Array<string | null | undefined>
+): Promise<Map<string, string>> {
+  const imageUrlsByPath = new Map<string, string>()
+  const uniquePaths = Array.from(
+    new Set(filePaths.filter((path): path is string => Boolean(normalizeStoragePath(path))))
+  )
+
+  await Promise.all(
+    uniquePaths.map(async filePath => {
+      const imageUrl = await resolveCommunityPostImageUrl(filePath)
+      if (imageUrl) imageUrlsByPath.set(filePath, imageUrl)
+    })
+  )
+
+  return imageUrlsByPath
 }
 
 export async function downloadFile(filePath: string): Promise<Blob | null> {
@@ -380,7 +573,7 @@ export async function downloadFile(filePath: string): Promise<Blob | null> {
   }
 
   try {
-    const { data, error } = await supabase.storage.from(BUCKET_NAME).download(safePath)
+    const { data, error } = await supabase.storage.from(PUBLIC_UPLOADS_BUCKET).download(safePath)
 
     if (error) {
       logClientError('storage.downloadFile', error)

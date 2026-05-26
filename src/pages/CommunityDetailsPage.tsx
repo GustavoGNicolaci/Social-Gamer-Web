@@ -49,6 +49,7 @@ import {
   type CommunityVisibility,
 } from '../services/communityService'
 import {
+  deleteFile,
   resolvePublicFileUrl,
   uploadCommunityBannerImage,
   uploadCommunityPostImage,
@@ -590,6 +591,7 @@ function CommunityDetailsPage() {
 
     setSettingsSaving(true)
     setFeedback(null)
+    const previousBannerPath = community.banner_path
 
     try {
       let bannerPath = community.banner_path
@@ -626,6 +628,9 @@ function CommunityDetailsPage() {
         setFeedback({ tone: 'error', message: result.error.message })
       } else {
         setBannerFile(null)
+        if (bannerPath && previousBannerPath && bannerPath !== previousBannerPath) {
+          void deleteFile(previousBannerPath)
+        }
         setFeedback({ tone: 'success', message: t('communities.settings.saved') })
         await loadCommunityData()
       }
@@ -656,7 +661,13 @@ function CommunityDetailsPage() {
       if (confirmState.kind === 'delete-post') {
         const result = await deleteCommunityPost(confirmState.post.id)
         if (result.error) throw result.error
-        setFeedback({ tone: 'success', message: t('communities.post.deleted') })
+        setFeedback({
+          tone: result.data.failedPaths.length > 0 ? 'info' : 'success',
+          message:
+            result.data.failedPaths.length > 0
+              ? 'Post excluido, mas algumas imagens antigas nao puderam ser removidas automaticamente.'
+              : t('communities.post.deleted'),
+        })
       }
 
       if (confirmState.kind === 'delete-comment') {

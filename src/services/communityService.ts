@@ -1,6 +1,7 @@
 import { supabase } from '../supabase-client'
 import { isSupabasePermissionError } from '../utils/supabaseErrors'
 import type { CatalogGamePreview } from './gameCatalogService'
+import { deleteStorageFiles, resolveCommunityPostImageUrls } from './storageService'
 
 export type CommunityRole = 'lider' | 'admin' | 'membro'
 export type CommunityPostingPermission = 'todos_membros' | 'somente_admins' | 'somente_lider'
@@ -115,6 +116,7 @@ export interface CommunityPost {
   autor_id: string
   texto: string | null
   imagem_path: string | null
+  imagem_url: string | null
   curtidas_count: number
   dislikes_count: number
   comentarios_count: number
@@ -220,6 +222,11 @@ export interface UpdateCommunityModeratedInput {
 export interface ServiceResult<T> {
   data: T
   error: CommunityError | null
+}
+
+export interface CommunityMediaCleanupResult {
+  deletedPaths: string[]
+  failedPaths: string[]
 }
 
 export interface PaginatedServiceResult<T> extends ServiceResult<T> {
@@ -588,17 +595,20 @@ function normalizePost(
   commentsByPostId: Map<string, CommunityPostComment[]>,
   reactionsByPostId: Map<string, CommunityReactionType>,
   savedPostIds: Set<string>,
+  imageUrlsByPath: Map<string, string>,
   currentUserId: string | null | undefined,
   currentUserRole: CommunityRole | null
 ): CommunityPost {
   const isModerator = currentUserRole === 'lider' || currentUserRole === 'admin'
+  const imagePath = row.imagem_path
 
   return {
     id: row.id,
     comunidade_id: row.comunidade_id,
     autor_id: row.autor_id,
     texto: row.texto,
-    imagem_path: row.imagem_path,
+    imagem_path: imagePath,
+    imagem_url: imagePath ? imageUrlsByPath.get(imagePath) || null : null,
     curtidas_count: normalizeNumber(row.curtidas_count),
     dislikes_count: normalizeNumber(row.dislikes_count),
     comentarios_count: normalizeNumber(row.comentarios_count),
@@ -806,9 +816,10 @@ async function normalizePosts(
   const communityIds = rows.map(row => row.comunidade_id)
   const resolvedRoles =
     roleByCommunityId || await getCurrentUserRoles(communityIds, currentUserId)
-  const [commentsResult, interactionResult] = await Promise.all([
+  const [commentsResult, interactionResult, imageUrlsByPath] = await Promise.all([
     loadCommentsByPostId(postIds),
     getPostsInteractionState(postIds, currentUserId),
+    resolveCommunityPostImageUrls(rows.map(row => row.imagem_path)),
   ])
 
   return {
@@ -818,6 +829,7 @@ async function normalizePosts(
         commentsResult.commentsByPostId,
         interactionResult.reactionsByPostId,
         interactionResult.savedPostIds,
+        imageUrlsByPath,
         currentUserId,
         resolvedRoles.get(row.comunidade_id) || null
       )
@@ -1325,14 +1337,97 @@ export async function transferCommunityLeadership(
   }
 }
 
-export async function deleteCommunity(communityId: string): Promise<ServiceResult<null>> {
+async function getCommunityMediaPaths(communityId: string) {
+  const mediaPaths = new Set<string>()
+  const { data: communityRow, error: communityError } = await supabase
+    .from('comunidades')
+    .select('banner_path')
+    .eq('id', communityId)
+    .maybeSingle()
+
+  if (!communityError && communityRow?.banner_path) {
+    mediaPaths.add(communityRow.banner_path)
+  }
+
+  if (communityError && !isSupabasePermissionError(communityError)) {
+    console.error('Erro ao carregar banner para limpeza da comunidade:', communityError)
+  }
+
+  let from = 0
+  const pageSize = 1000
+
+  while (true) {
+    const { data, error } = await supabase
+      .from('comunidade_posts')
+      .select('imagem_path')
+      .eq('comunidade_id', communityId)
+      .not('imagem_path', 'is', null)
+      .is('deleted_at', null)
+      .range(from, from + pageSize - 1)
+
+    if (error) {
+      if (!isSupabasePermissionError(error)) {
+        console.error('Erro ao carregar imagens para limpeza da comunidade:', error)
+      }
+      break
+    }
+
+    ;((data || []) as Array<{ imagem_path: string | null }>).forEach(row => {
+      if (row.imagem_path) mediaPaths.add(row.imagem_path)
+    })
+
+    if (!data || data.length < pageSize) break
+    from += pageSize
+  }
+
+  return Array.from(mediaPaths)
+}
+
+async function getCommunityPostMediaPath(postId: string) {
+  const { data, error } = await supabase
+    .from('comunidade_posts')
+    .select('imagem_path')
+    .eq('id', postId)
+    .maybeSingle()
+
+  if (error) {
+    if (!isSupabasePermissionError(error)) {
+      console.error('Erro ao carregar imagem para limpeza do post:', error)
+    }
+    return null
+  }
+
+  return data?.imagem_path || null
+}
+
+async function cleanupCommunityMediaPaths(paths: Array<string | null | undefined>): Promise<CommunityMediaCleanupResult> {
+  const cleanupResult = await deleteStorageFiles(paths)
+  return {
+    deletedPaths: cleanupResult.deletedPaths,
+    failedPaths: cleanupResult.failedPaths,
+  }
+}
+
+export async function deleteCommunity(
+  communityId: string
+): Promise<ServiceResult<CommunityMediaCleanupResult>> {
+  const mediaPaths = await getCommunityMediaPaths(communityId)
   const { error } = await supabase.rpc('excluir_comunidade', {
     p_comunidade_id: communityId,
   })
 
+  if (error) {
+    return {
+      data: { deletedPaths: [], failedPaths: [] },
+      error: normalizeCommunityError(error, 'Nao foi possivel excluir a comunidade.'),
+    }
+  }
+
+  const cleanupResult = await cleanupCommunityMediaPaths(mediaPaths)
+
   return {
-    data: null,
-    error: error ? normalizeCommunityError(error, 'Nao foi possivel excluir a comunidade.') : null,
+    data: cleanupResult,
+    error: null,
   }
 }
 
@@ -1353,14 +1448,26 @@ export async function createCommunityPost(
   }
 }
 
-export async function deleteCommunityPost(postId: string): Promise<ServiceResult<null>> {
+export async function deleteCommunityPost(
+  postId: string
+): Promise<ServiceResult<CommunityMediaCleanupResult>> {
+  const imagePath = await getCommunityPostMediaPath(postId)
   const { error } = await supabase.rpc('excluir_post_comunidade', {
     p_post_id: postId,
   })
 
+  if (error) {
+    return {
+      data: { deletedPaths: [], failedPaths: [] },
+      error: normalizeCommunityError(error, 'Nao foi possivel deletar o post.'),
+    }
+  }
+
+  const cleanupResult = await cleanupCommunityMediaPaths([imagePath])
+
   return {
-    data: null,
-    error: error ? normalizeCommunityError(error, 'Nao foi possivel deletar o post.') : null,
+    data: cleanupResult,
+    error: null,
   }
 }
 

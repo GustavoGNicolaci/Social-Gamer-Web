@@ -10,7 +10,6 @@ import {
   type CommunityReportTargetType,
   type CommunityRole,
 } from '../../services/communityService'
-import { resolvePublicFileUrl } from '../../services/storageService'
 import { getOptionalPublicProfilePath } from '../../utils/profileRoutes'
 
 interface CommunityReportTarget {
@@ -121,7 +120,7 @@ export function CommunityPostCard({
 
   const authorName = getAuthorName(post.autor)
   const authorProfilePath = getOptionalPublicProfilePath(post.autor?.username)
-  const postImageUrl = resolvePublicFileUrl(post.imagem_path)
+  const postImageUrl = post.imagem_url
   const visibleComments = useMemo(
     () => post.comentarios.slice(0, visibleCommentCount),
     [post.comentarios, visibleCommentCount]

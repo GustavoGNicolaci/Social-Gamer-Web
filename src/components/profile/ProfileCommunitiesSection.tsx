@@ -32,7 +32,7 @@ function getCommunityImage(community: CommunitySummary) {
 }
 
 function getPostImage(post: CommunityPost) {
-  return resolvePublicFileUrl(post.comunidade?.banner_path)
+  return post.imagem_url || resolvePublicFileUrl(post.comunidade?.banner_path)
 }
 
 function getSectionCopy(
