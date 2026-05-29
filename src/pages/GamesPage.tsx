@@ -9,9 +9,8 @@ import {
 import { Link, useSearchParams } from 'react-router-dom'
 import { GameCoverImage } from '../components/GameCoverImage'
 import RatingCircle from '../components/RatingCircle'
-import { useAuth } from '../contexts/AuthContext'
 import {
-  getVisibleGameRatingSummaries,
+  getGameRatingSummaries,
   type GameRatingSummary,
 } from '../services/reviewService'
 import { supabase } from '../supabase-client'
@@ -363,7 +362,6 @@ function PaginationControls({ currentPage, totalPages, onChangePage }: Paginatio
 }
 
 function GamesPage() {
-  const { user } = useAuth()
   const { t, formatNumber } = useI18n()
   const [searchParams, setSearchParams] = useSearchParams()
   const [games, setGames] = useState<Game[]>([])
@@ -418,7 +416,7 @@ function GamesPage() {
     return () => {
       isMounted = false
     }
-  }, [user?.id])
+  }, [])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -728,7 +726,7 @@ function GamesPage() {
     let isMounted = true
 
     const fetchRatingSummaries = async () => {
-      const ratingSummariesResult = await getVisibleGameRatingSummaries(missingRatingIds, user?.id)
+      const ratingSummariesResult = await getGameRatingSummaries(missingRatingIds)
 
       if (!isMounted) return
 
@@ -757,7 +755,7 @@ function GamesPage() {
     return () => {
       isMounted = false
     }
-  }, [loading, ratingSummariesByGameId, ratingSummaryTargetIds, t, user?.id])
+  }, [loading, ratingSummariesByGameId, ratingSummaryTargetIds, t])
 
   const handleShowGenres = useCallback((genres: string[]) => {
     setSelectedGameGenres(genres)

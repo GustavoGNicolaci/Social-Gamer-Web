@@ -8,6 +8,7 @@ import {
   createReviewComment,
   deleteReviewComment,
   deleteReview,
+  getGameRatingSummaries,
   getReviewsByGameId,
   saveReview,
   sortCommentsByRelevance,
@@ -15,6 +16,7 @@ import {
   toggleReviewLike,
   type ReviewComment,
   type ReviewError,
+  type GameRatingSummary,
   type ReviewItem,
 } from '../services/reviewService'
 import {
@@ -130,6 +132,14 @@ function getInitialVisibleReviewCount(totalReviews: number) {
   }
 
   return INITIAL_VISIBLE_REVIEW_COUNT
+}
+
+function getEmptyRatingSummary(gameId: number): GameRatingSummary {
+  return {
+    gameId,
+    averageRating: null,
+    reviewCount: 0,
+  }
 }
 
 function clampVisibleCommentCount(visibleComments: number, totalComments: number) {
@@ -366,6 +376,7 @@ function GameDetailsPage() {
 
   const [game, setGame] = useState<Game | null>(null)
   const [reviews, setReviews] = useState<ReviewItem[]>([])
+  const [ratingSummary, setRatingSummary] = useState<GameRatingSummary | null>(null)
   const [visibleReviewCount, setVisibleReviewCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [reviewsError, setReviewsError] = useState<string | null>(null)
@@ -468,6 +479,22 @@ function GameDetailsPage() {
     [user?.id]
   )
 
+  const refreshRatingSummary = useCallback(async (gameId: number) => {
+    const result = await getGameRatingSummaries([gameId])
+
+    if (result.error) {
+      console.error('Erro ao buscar media do jogo:', result.error)
+      setRatingSummary(null)
+      return result
+    }
+
+    const nextSummary = result.data.find(summary => summary.gameId === gameId) || getEmptyRatingSummary(gameId)
+
+    setRatingSummary(nextSummary)
+
+    return result
+  }, [])
+
   const applyReviewReactionState = useCallback(
     (reviewId: string, nextReactionState: ReviewReactionState) => {
       setReviews(currentReviews =>
@@ -561,6 +588,7 @@ function GameDetailsPage() {
           if (isMounted) {
             setGame(null)
             setReviews([])
+            setRatingSummary(null)
             setVisibleReviewCount(0)
             setReviewsError(null)
             setLoading(false)
@@ -570,9 +598,10 @@ function GameDetailsPage() {
 
       setLoading(true)
 
-      const [gameResponse, reviewsResult] = await Promise.all([
+      const [gameResponse, reviewsResult, ratingSummaryResult] = await Promise.all([
         supabase.from('jogos').select(GAME_DETAIL_SELECT).eq('id', gameId).single(),
         getReviewsByGameId(gameId, user?.id),
+        getGameRatingSummaries([gameId]),
       ])
 
       if (!isMounted) return
@@ -585,6 +614,16 @@ function GameDetailsPage() {
       }
 
       setReviews(reviewsResult.data)
+
+      if (ratingSummaryResult.error) {
+        console.error('Erro ao buscar media do jogo:', ratingSummaryResult.error)
+        setRatingSummary(null)
+      } else {
+        setRatingSummary(
+          ratingSummaryResult.data.find(summary => summary.gameId === gameId) ||
+            getEmptyRatingSummary(gameId)
+        )
+      }
       setVisibleReviewCount(getInitialVisibleReviewCount(reviewsResult.data.length))
       setReviewsError(
         reviewsResult.error && reviewsResult.data.length === 0
@@ -858,7 +897,10 @@ function GameDetailsPage() {
       return
     }
 
-    const refreshResult = await refreshReviews(game.id)
+    const [refreshResult] = await Promise.all([
+      refreshReviews(game.id),
+      refreshRatingSummary(game.id),
+    ])
 
     if (refreshResult.error && refreshResult.data.length === 0) {
       setReviewFeedback({
@@ -1385,7 +1427,10 @@ function GameDetailsPage() {
     )
     setReportModalFeedback(null)
 
-    const refreshResult = await refreshReviews(game.id)
+    const [refreshResult] = await Promise.all([
+      refreshReviews(game.id),
+      refreshRatingSummary(game.id),
+    ])
 
     if (refreshResult.error && refreshResult.data.length === 0) {
       setReviewFeedback({
@@ -1556,16 +1601,18 @@ function GameDetailsPage() {
   const plataformas = normalizeList(game.plataformas)
   const releaseDate = formatDate(game.data_lancamento, t('common.notProvided'))
   const descricaoCompleta = game.descricao?.trim() || t('game.details.noDescription')
-  const totalAvaliacoes = reviews.length
+  const fallbackTotalAvaliacoes = reviews.length
+  const fallbackMediaAvaliacoes =
+    fallbackTotalAvaliacoes > 0
+      ? reviews.reduce((scoreTotal, review) => scoreTotal + review.nota, 0) / fallbackTotalAvaliacoes
+      : null
+  const totalAvaliacoes = ratingSummary?.reviewCount ?? fallbackTotalAvaliacoes
   const totalComentarios = reviews.reduce(
     (commentCount, review) => commentCount + review.comentarios.length,
     0
   )
-  const mediaAvaliacoes =
-    totalAvaliacoes > 0
-      ? reviews.reduce((scoreTotal, review) => scoreTotal + review.nota, 0) / totalAvaliacoes
-      : null
-  const mediaAvaliacoesLabel = mediaAvaliacoes
+  const mediaAvaliacoes = ratingSummary?.averageRating ?? fallbackMediaAvaliacoes
+  const mediaAvaliacoesLabel = mediaAvaliacoes !== null
     ? formatNumber(mediaAvaliacoes, {
         minimumFractionDigits: 1,
         maximumFractionDigits: 1,
@@ -1632,7 +1679,7 @@ function GameDetailsPage() {
               <div className="game-details-cover-bottom">
                 <div className="game-details-score-chip">
                   <span className="game-details-score-label">{t('game.details.averageRating')}</span>
-                  <strong>{mediaAvaliacoes ? `${mediaAvaliacoesLabel}/10` : mediaAvaliacoesLabel}</strong>
+                  <strong>{mediaAvaliacoes !== null ? `${mediaAvaliacoesLabel}/10` : mediaAvaliacoesLabel}</strong>
                 </div>
               </div>
             </div>
@@ -1765,7 +1812,7 @@ function GameDetailsPage() {
 
           <article className="game-details-highlight-card">
             <span className="game-details-highlight-label">{t('game.details.community')}</span>
-            <strong>{mediaAvaliacoes ? `${mediaAvaliacoesLabel}/10` : t('game.details.noRatingYet')}</strong>
+            <strong>{mediaAvaliacoes !== null ? `${mediaAvaliacoesLabel}/10` : t('game.details.noRatingYet')}</strong>
             <small>{`${totalAvaliacoesLabel} | ${totalComentariosLabel}`}</small>
           </article>
         </section>

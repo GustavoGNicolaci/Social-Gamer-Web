@@ -196,9 +196,9 @@ interface RecentReviewActivityRow {
 }
 
 interface GameRatingSummaryRow {
-  jogo_id: number
-  nota: number | string | null
-  usuario: ReviewAuthorRelation
+  jogo_id: number | string | null
+  review_count: number | string | null
+  average_rating: number | string | null
 }
 
 interface SaveReviewResult {
@@ -226,7 +226,7 @@ const GAME_REVIEW_SELECT = `
   curtidas,
   data_publicacao,
   editado_em,
-  usuario:usuarios(id, username, avatar_path, configuracoes_privacidade),
+  usuario:usuarios(id, username, avatar_path),
   comentarios(
     id,
     usuario_id,
@@ -261,8 +261,8 @@ const RECENT_REVIEW_ACTIVITY_SELECT = `
 
 const GAME_RATING_SUMMARY_SELECT = `
   jogo_id,
-  nota,
-  usuario:usuarios(id, username, avatar_path, configuracoes_privacidade)
+  review_count,
+  average_rating
 `
 
 const DEFAULT_PROFILE_REVIEWS_PAGE_SIZE = 6
@@ -324,6 +324,11 @@ async function filterReviewRowsByPrivacy<T extends { usuario?: ReviewAuthorRelat
 function normalizeOptionalText(value: string | null | undefined) {
   const trimmedValue = value?.trim() || ''
   return trimmedValue ? trimmedValue : null
+}
+
+function normalizeNumber(value: number | string | null | undefined) {
+  const normalizedValue = Number(value)
+  return Number.isFinite(normalizedValue) ? normalizedValue : null
 }
 
 function getTimestamp(value: string | null | undefined) {
@@ -510,20 +515,19 @@ export async function getReviewsByGameId(
       }
     }
 
-    const visibleReviewRows = await filterReviewRowsByPrivacy((data || []) as ReviewRow[], currentUserId)
-    const visibleReviews = visibleReviewRows
+    const gameReviews = ((data || []) as ReviewRow[])
       .filter(isCompleteReviewRow)
       .map(row => normalizeReviewItem(row, currentUserId))
 
-    if (visibleReviews.length === 0) {
+    if (gameReviews.length === 0) {
       return {
-        data: visibleReviews,
+        data: gameReviews,
         error: null,
       }
     }
 
-    const reviewIds = visibleReviews.map(review => review.id)
-    const commentIds = visibleReviews.flatMap(review => review.comentarios.map(comment => comment.id))
+    const reviewIds = gameReviews.map(review => review.id)
+    const commentIds = gameReviews.flatMap(review => review.comentarios.map(comment => comment.id))
 
     const [
       likeStatesResult,
@@ -540,7 +544,7 @@ export async function getReviewsByGameId(
         getCurrentUserContentReports(reviewIds, commentIds, currentUserId),
       ])
 
-    const reviewsWithInteractionState = sortReviewsByRelevance(visibleReviews.map(review => {
+    const reviewsWithInteractionState = sortReviewsByRelevance(gameReviews.map(review => {
       const likeState = likeStatesResult.data.get(review.id)
       const dislikeState = dislikeStatesResult.data.get(review.id)
 
@@ -767,9 +771,8 @@ export async function getRecentPublicReviewActivities(
   }
 }
 
-export async function getVisibleGameRatingSummaries(
-  gameIds: number[],
-  currentUserId?: string | null
+export async function getGameRatingSummaries(
+  gameIds: number[]
 ): Promise<ServiceResult<GameRatingSummary[]>> {
   const normalizedGameIds = Array.from(
     new Set(gameIds.filter(gameId => Number.isInteger(gameId) && gameId > 0))
@@ -784,7 +787,7 @@ export async function getVisibleGameRatingSummaries(
 
   try {
     const { data, error } = await supabase
-      .from('avaliacoes')
+      .from('game_rating_summaries')
       .select(GAME_RATING_SUMMARY_SELECT)
       .in('jogo_id', normalizedGameIds)
 
@@ -795,35 +798,32 @@ export async function getVisibleGameRatingSummaries(
       }
     }
 
-    const visibleRows = await filterReviewRowsByPrivacy(
-      (data || []) as GameRatingSummaryRow[],
-      currentUserId
-    )
-    const ratingStatsByGameId = new Map<number, { count: number; total: number }>()
+    const ratingSummariesByGameId = new Map<number, GameRatingSummary>()
 
-    visibleRows.forEach(row => {
+    ;((data || []) as GameRatingSummaryRow[]).forEach(row => {
       const gameId = Number(row.jogo_id)
-      const score = Number(row.nota)
+      const averageRating = normalizeNumber(row.average_rating)
+      const reviewCount = normalizeNumber(row.review_count)
 
-      if (!Number.isInteger(gameId) || !Number.isFinite(score)) {
+      if (!Number.isInteger(gameId)) {
         return
       }
 
-      const currentStats = ratingStatsByGameId.get(gameId) || { count: 0, total: 0 }
-      ratingStatsByGameId.set(gameId, {
-        count: currentStats.count + 1,
-        total: currentStats.total + score,
+      ratingSummariesByGameId.set(gameId, {
+        gameId,
+        averageRating,
+        reviewCount: reviewCount === null ? 0 : Math.max(Math.trunc(reviewCount), 0),
       })
     })
 
     return {
       data: normalizedGameIds.map(gameId => {
-        const stats = ratingStatsByGameId.get(gameId)
+        const summary = ratingSummariesByGameId.get(gameId)
 
         return {
           gameId,
-          averageRating: stats && stats.count > 0 ? stats.total / stats.count : null,
-          reviewCount: stats?.count || 0,
+          averageRating: summary?.averageRating ?? null,
+          reviewCount: summary?.reviewCount || 0,
         }
       }),
       error: null,
