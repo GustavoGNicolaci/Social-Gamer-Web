@@ -1325,7 +1325,9 @@ export function ProfilePage() {
       : t('profile.restrictedPrivateTitle')
   const restrictedProfileMessage =
     resolvedProfile?.kind === 'public'
-      ? resolvedProfile.data.restrictedContentMessage
+      ? resolvedProfile.data.privacyMode === 'friends'
+        ? t('profile.restricted.friends')
+        : t('profile.restricted.private')
       : null
   const sectionEyebrow = isRestrictedPublicView
     ? restrictedProfileTitle
