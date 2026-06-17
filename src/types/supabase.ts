@@ -44,9 +44,9 @@ export interface JogoRow {
 
 export interface AvaliacaoRow {
   id: string
-  usuario_id: Nullable<string>
-  jogo_id: Nullable<number>
-  nota: Nullable<number | string>
+  usuario_id: string
+  jogo_id: number
+  nota: number | string
   texto_review: Nullable<string>
   curtidas: number | string | null
   data_publicacao: Nullable<string>
@@ -64,9 +64,9 @@ export interface ComentarioRow {
 
 export interface StatusJogoRow {
   id: string
-  usuario_id: Nullable<string>
-  jogo_id: Nullable<number>
-  status: Nullable<string>
+  usuario_id: string
+  jogo_id: number
+  status: GameStatusValue
   created_at: Nullable<string>
   favorito: Nullable<boolean>
 }

@@ -331,6 +331,28 @@ function normalizeNumber(value: number | string | null | undefined) {
   return Number.isFinite(normalizedValue) ? normalizedValue : null
 }
 
+function validateSaveReviewParams({ userId, gameId, nota }: SaveReviewParams): ReviewError | null {
+  if (!userId.trim()) {
+    return {
+      message: 'Nao foi possivel identificar o usuario da review.',
+    }
+  }
+
+  if (!Number.isInteger(gameId) || gameId <= 0) {
+    return {
+      message: 'Nao foi possivel identificar o jogo da review.',
+    }
+  }
+
+  if (!Number.isFinite(nota) || nota < 1 || nota > 10) {
+    return {
+      message: 'Escolha uma nota de 1 a 10 para publicar a review.',
+    }
+  }
+
+  return null
+}
+
 function getTimestamp(value: string | null | undefined) {
   if (!value) return 0
 
@@ -842,6 +864,15 @@ export async function saveReview({
   nota,
   textoReview,
 }: SaveReviewParams): Promise<SaveReviewResult> {
+  const validationError = validateSaveReviewParams({ userId, gameId, nota, textoReview })
+
+  if (validationError) {
+    return {
+      status: 'error',
+      error: validationError,
+    }
+  }
+
   const normalizedText = normalizeOptionalText(textoReview)
 
   try {

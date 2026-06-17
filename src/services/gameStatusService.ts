@@ -128,6 +128,32 @@ function normalizeStatusValue(value: string | null | undefined): GameStatusValue
   return 'jogando'
 }
 
+function validateSaveGameStatusParams({
+  userId,
+  gameId,
+  status,
+}: SaveGameStatusParams): GameStatusError | null {
+  if (!userId.trim()) {
+    return {
+      message: 'Nao foi possivel identificar o usuario do status.',
+    }
+  }
+
+  if (!Number.isInteger(gameId) || gameId <= 0) {
+    return {
+      message: 'Nao foi possivel identificar o jogo do status.',
+    }
+  }
+
+  if (!STATUS_VALUES.includes(status as GameStatusValue)) {
+    return {
+      message: 'Escolha um status valido para salvar o jogo no perfil.',
+    }
+  }
+
+  return null
+}
+
 function normalizePageOptions(options: GameStatusPageOptions = {}) {
   const page = Math.max(0, options.page || 0)
   const pageSize = Math.min(Math.max(1, options.pageSize || DEFAULT_STATUS_PAGE_SIZE), 48)
@@ -159,7 +185,13 @@ function resolveStatusGame(game: StatusGameRelation) {
 function isCompleteStatusRow<T extends StatusJogoRow | GameStatusEntry>(
   row: T
 ): row is T & GameStatusEntry {
-  return Boolean(row.id && row.usuario_id && row.jogo_id)
+  return Boolean(
+    row.id &&
+      row.usuario_id &&
+      row.jogo_id &&
+      typeof row.status === 'string' &&
+      STATUS_VALUES.includes(row.status as GameStatusValue)
+  )
 }
 
 function normalizeStatusRow(row: StatusJogoRow | GameStatusEntry): GameStatusEntry {
@@ -540,6 +572,15 @@ export async function saveGameStatus({
   status,
   favorito,
 }: SaveGameStatusParams): Promise<ServiceResult<GameStatusEntry | null>> {
+  const validationError = validateSaveGameStatusParams({ userId, gameId, status, favorito })
+
+  if (validationError) {
+    return {
+      data: null,
+      error: validationError,
+    }
+  }
+
   try {
     const { data: existingEntry, error: existingError } = await supabase
       .from('status_jogo')
