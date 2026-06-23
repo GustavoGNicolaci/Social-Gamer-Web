@@ -116,6 +116,7 @@ export const ptBR: TranslationDictionary = {
   'auth.deleteMissingConfirmation': 'Confirme seu nome de usuário e senha atual para excluir a conta.',
   'auth.deleteStorageCleanupFailed': 'Não foi possível remover seus arquivos agora. Tente novamente em alguns instantes.',
   'auth.deleteDataCleanupFailed': 'Não foi possível remover os dados vinculados à conta agora. Verifique os logs da Edge Function.',
+  'auth.deleteCommunityLeadershipTransferRequired': 'Antes de excluir sua conta, promova pelo menos um admin nas comunidades que você lidera para receber a liderança.',
   'auth.deleteAuthCleanupFailed': 'Os dados foram limpos, mas não foi possível finalizar a exclusão do login. Verifique os logs da Edge Function.',
   'auth.passwordRequirement.letterAndNumber': 'Letra e número',
   'auth.passwordRequirement.minLength': 'Mínimo de 8 caracteres',

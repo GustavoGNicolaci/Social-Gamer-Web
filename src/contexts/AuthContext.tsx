@@ -201,6 +201,8 @@ function getDeleteAccountErrorMessage(errorCode: string | null | undefined) {
       return translate('auth.deleteStorageCleanupFailed')
     case 'data_cleanup_failed':
       return translate('auth.deleteDataCleanupFailed')
+    case 'community_leadership_transfer_required':
+      return translate('auth.deleteCommunityLeadershipTransferRequired')
     case 'auth_delete_failed':
       return translate('auth.deleteAuthCleanupFailed')
     default:

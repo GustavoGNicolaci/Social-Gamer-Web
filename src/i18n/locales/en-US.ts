@@ -116,6 +116,7 @@ export const enUS: TranslationDictionary = {
   'auth.deleteMissingConfirmation': 'Confirm your username and current password to delete the account.',
   'auth.deleteStorageCleanupFailed': 'We could not remove your files right now. Please try again in a moment.',
   'auth.deleteDataCleanupFailed': 'We could not remove the data linked to the account right now. Check the Edge Function logs.',
+  'auth.deleteCommunityLeadershipTransferRequired': 'Before deleting your account, promote at least one admin in the communities you lead so leadership can be transferred.',
   'auth.deleteAuthCleanupFailed': 'The data was cleaned up, but we could not finish deleting the login. Check the Edge Function logs.',
   'auth.passwordRequirement.letterAndNumber': 'Letter and number',
   'auth.passwordRequirement.minLength': 'At least 8 characters',

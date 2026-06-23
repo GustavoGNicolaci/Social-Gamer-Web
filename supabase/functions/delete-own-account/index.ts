@@ -21,13 +21,30 @@ interface StorageEntry {
   id?: string | null
 }
 
+interface OwnedCommunityRow {
+  id: string
+  nome: string | null
+  banner_path: string | null
+}
+
+interface CommunityAdminRow {
+  comunidade_id: string
+}
+
+interface StoragePreserveEntry {
+  bucket: string
+  path: string
+}
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
-const storageBuckets = ['user-uploads', 'community-post-media']
+const publicUploadsBucket = 'user-uploads'
+const communityPostMediaBucket = 'community-post-media'
+const storageBuckets = [publicUploadsBucket, communityPostMediaBucket]
 const storagePageSize = 100
 const removalChunkSize = 100
 
@@ -53,6 +70,86 @@ function getRequiredEnv(name: string) {
 
 function normalizeText(value: unknown) {
   return typeof value === 'string' ? value.trim() : ''
+}
+
+function getErrorField(error: unknown, fieldName: 'code' | 'message' | 'details' | 'hint' | 'name') {
+  if (!error || typeof error !== 'object' || !(fieldName in error)) {
+    return null
+  }
+
+  const value = (error as Record<string, unknown>)[fieldName]
+  return typeof value === 'string' ? value : null
+}
+
+function getErrorCode(error: unknown) {
+  return getErrorField(error, 'code')
+}
+
+function getErrorMessage(error: unknown) {
+  return getErrorField(error, 'message') || (error instanceof Error ? error.message : null)
+}
+
+function normalizeErrorForLog(error: unknown) {
+  if (!error) return null
+
+  if (typeof error !== 'object') {
+    return { message: String(error) }
+  }
+
+  return {
+    name: getErrorField(error, 'name'),
+    code: getErrorCode(error),
+    message: getErrorMessage(error),
+    details: getErrorField(error, 'details'),
+    hint: getErrorField(error, 'hint'),
+  }
+}
+
+function logEdgeError(message: string, error: unknown, context: Record<string, unknown> = {}) {
+  console.error(message, {
+    ...context,
+    error: normalizeErrorForLog(error),
+  })
+}
+
+function isMissingRpcError(error: unknown) {
+  const code = getErrorCode(error)
+  return code === 'PGRST202' || code === '42883'
+}
+
+function isCommunityLeadershipTransferRequiredError(error: unknown) {
+  const message = getErrorMessage(error) || ''
+  return message.includes('community_leadership_transfer_required')
+}
+
+function normalizeStorageObjectPath(bucket: string, filePath: string | null | undefined) {
+  const normalizedPath = filePath?.trim()
+
+  if (!normalizedPath) return null
+  if (/^(null|undefined)$/i.test(normalizedPath)) return null
+  if (/^([a-z]+:)?\/\//i.test(normalizedPath)) return null
+  if (normalizedPath.includes('..') || normalizedPath.includes('\\')) return null
+  if (normalizedPath.startsWith('/')) return null
+
+  const bucketPrefix = `${bucket}/`
+  return normalizedPath.startsWith(bucketPrefix)
+    ? normalizedPath.slice(bucketPrefix.length)
+    : normalizedPath
+}
+
+function createPreservedPathsByBucket(preserveEntries: StoragePreserveEntry[]) {
+  const preservedPathsByBucket = new Map<string, Set<string>>()
+
+  preserveEntries.forEach(entry => {
+    const normalizedPath = normalizeStorageObjectPath(entry.bucket, entry.path)
+    if (!normalizedPath) return
+
+    const currentPaths = preservedPathsByBucket.get(entry.bucket) || new Set<string>()
+    currentPaths.add(normalizedPath)
+    preservedPathsByBucket.set(entry.bucket, currentPaths)
+  })
+
+  return preservedPathsByBucket
 }
 
 async function readDeleteAccountBody(request: Request): Promise<DeleteAccountBody> {
@@ -193,7 +290,13 @@ async function listUserFiles(adminClient: SupabaseClient, bucket: string, userId
   return { paths, error: null }
 }
 
-async function removeUserStorageFiles(adminClient: SupabaseClient, userId: string) {
+async function removeUserStorageFilesExcept(
+  adminClient: SupabaseClient,
+  userId: string,
+  preserveEntries: StoragePreserveEntry[]
+) {
+  const preservedPathsByBucket = createPreservedPathsByBucket(preserveEntries)
+
   for (const bucket of storageBuckets) {
     const { paths, error } = await listUserFiles(adminClient, bucket, userId)
 
@@ -201,8 +304,13 @@ async function removeUserStorageFiles(adminClient: SupabaseClient, userId: strin
       return { ok: false, error }
     }
 
-    for (let index = 0; index < paths.length; index += removalChunkSize) {
-      const chunk = paths.slice(index, index + removalChunkSize)
+    const preservedPaths = preservedPathsByBucket.get(bucket)
+    const removablePaths = preservedPaths
+      ? paths.filter(path => !preservedPaths.has(path))
+      : paths
+
+    for (let index = 0; index < removablePaths.length; index += removalChunkSize) {
+      const chunk = removablePaths.slice(index, index + removalChunkSize)
 
       if (chunk.length === 0) {
         continue
@@ -219,10 +327,88 @@ async function removeUserStorageFiles(adminClient: SupabaseClient, userId: strin
   return { ok: true, error: null }
 }
 
+async function getAccountDeletionPreparation(adminClient: SupabaseClient, userId: string) {
+  const { data: ownedCommunitiesData, error: ownedCommunitiesError } = await adminClient
+    .from('comunidades')
+    .select('id, nome, banner_path')
+    .eq('lider_id', userId)
+    .is('deleted_at', null)
+
+  if (ownedCommunitiesError) {
+    return {
+      ok: false,
+      error: ownedCommunitiesError,
+      missingAdminCommunities: [] as string[],
+      preserveStorageEntries: [] as StoragePreserveEntry[],
+    }
+  }
+
+  const ownedCommunities = (ownedCommunitiesData || []) as OwnedCommunityRow[]
+
+  if (ownedCommunities.length === 0) {
+    return {
+      ok: true,
+      error: null,
+      missingAdminCommunities: [] as string[],
+      preserveStorageEntries: [] as StoragePreserveEntry[],
+    }
+  }
+
+  const communityIds = ownedCommunities.map(community => community.id)
+  const { data: adminRowsData, error: adminRowsError } = await adminClient
+    .from('comunidade_membros')
+    .select('comunidade_id')
+    .in('comunidade_id', communityIds)
+    .eq('cargo', 'admin')
+    .neq('usuario_id', userId)
+
+  if (adminRowsError) {
+    return {
+      ok: false,
+      error: adminRowsError,
+      missingAdminCommunities: [] as string[],
+      preserveStorageEntries: [] as StoragePreserveEntry[],
+    }
+  }
+
+  const communityIdsWithAdmin = new Set(
+    ((adminRowsData || []) as CommunityAdminRow[]).map(row => row.comunidade_id)
+  )
+  const missingAdminCommunities = ownedCommunities
+    .filter(community => !communityIdsWithAdmin.has(community.id))
+    .map(community => community.nome || community.id)
+
+  if (missingAdminCommunities.length > 0) {
+    return {
+      ok: false,
+      error: null,
+      missingAdminCommunities,
+      preserveStorageEntries: [] as StoragePreserveEntry[],
+    }
+  }
+
+  const preserveStorageEntries = ownedCommunities.flatMap(community => {
+    const bannerPath = normalizeStorageObjectPath(publicUploadsBucket, community.banner_path)
+    return bannerPath
+      ? [{
+          bucket: publicUploadsBucket,
+          path: bannerPath,
+        }]
+      : []
+  })
+
+  return {
+    ok: true,
+    error: null,
+    missingAdminCommunities: [] as string[],
+    preserveStorageEntries,
+  }
+}
+
 async function deleteAccountData(adminClient: SupabaseClient, userId: string) {
   const argumentCandidates = [
-    { p_user_id: userId },
     { target_user_id: userId },
+    { p_user_id: userId },
     { user_id: userId },
   ]
 
@@ -233,7 +419,7 @@ async function deleteAccountData(adminClient: SupabaseClient, userId: string) {
       return { ok: true, error: null }
     }
 
-    if (error.code !== 'PGRST202' && error.code !== '42883') {
+    if (!isMissingRpcError(error)) {
       return { ok: false, error }
     }
   }
@@ -300,21 +486,59 @@ Deno.serve(async request => {
     return jsonResponse(400, { error: 'invalid_password' })
   }
 
-  const storageCleanupResult = await removeUserStorageFiles(adminClient, user.id)
+  const deletionPreparationResult = await getAccountDeletionPreparation(adminClient, user.id)
+
+  if (!deletionPreparationResult.ok) {
+    if (deletionPreparationResult.missingAdminCommunities.length > 0) {
+      return jsonResponse(409, {
+        error: 'community_leadership_transfer_required',
+        communities: deletionPreparationResult.missingAdminCommunities,
+      })
+    }
+
+    logEdgeError('delete-own-account preparation error', deletionPreparationResult.error, {
+      step: 'prepare_community_transfer',
+      userId: user.id,
+    })
+    return jsonResponse(500, { error: 'data_cleanup_failed' })
+  }
+
+  const storageCleanupResult = await removeUserStorageFilesExcept(
+    adminClient,
+    user.id,
+    deletionPreparationResult.preserveStorageEntries
+  )
 
   if (!storageCleanupResult.ok) {
+    logEdgeError('delete-own-account storage cleanup error', storageCleanupResult.error, {
+      step: 'storage_cleanup',
+      userId: user.id,
+    })
     return jsonResponse(500, { error: 'storage_cleanup_failed' })
   }
 
   const dataCleanupResult = await deleteAccountData(adminClient, user.id)
 
   if (!dataCleanupResult.ok) {
+    logEdgeError('delete-own-account rpc error', dataCleanupResult.error, {
+      step: 'data_cleanup',
+      userId: user.id,
+    })
+
+    if (isCommunityLeadershipTransferRequiredError(dataCleanupResult.error)) {
+      return jsonResponse(409, { error: 'community_leadership_transfer_required' })
+    }
+
     return jsonResponse(500, { error: 'data_cleanup_failed' })
   }
 
   const { error: deleteUserError } = await adminClient.auth.admin.deleteUser(user.id)
 
   if (deleteUserError) {
+    logEdgeError('delete-own-account auth delete error', deleteUserError, {
+      step: 'auth_delete',
+      userId: user.id,
+    })
     return jsonResponse(500, { error: 'auth_delete_failed' })
   }
 
