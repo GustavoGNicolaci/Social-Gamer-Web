@@ -265,6 +265,49 @@ function buildPageMetadata(totalCount: number | null, page: number, pageSize: nu
   }
 }
 
+async function updateSavedGameStatus(
+  { userId, gameId, status, favorito }: SaveGameStatusParams,
+  statusId?: string
+): Promise<ServiceResult<GameStatusEntry | null>> {
+  let updateQuery = supabase
+    .from('status_jogo')
+    .update({
+      status,
+      favorito,
+    })
+    .eq('usuario_id', userId)
+
+  updateQuery = statusId
+    ? updateQuery.eq('id', statusId)
+    : updateQuery.eq('jogo_id', gameId)
+
+  const { data, error } = await updateQuery
+    .select('id, usuario_id, jogo_id, status, created_at, favorito')
+    .single()
+
+  if (error) {
+    return {
+      data: null,
+      error: normalizeGameStatusError(error, 'Nao foi possivel atualizar o status deste jogo.'),
+    }
+  }
+
+  if (!isCompleteStatusRow(data as StatusJogoRow)) {
+    return {
+      data: null,
+      error: {
+        message:
+          'Nao foi possivel confirmar o status atualizado. Verifique as policies SELECT da tabela status_jogo.',
+      },
+    }
+  }
+
+  return {
+    data: normalizeStatusRow(data as StatusJogoRow),
+    error: null,
+  }
+}
+
 async function getGameStatusesPageWithFallback(
   userId: string,
   options: ReturnType<typeof normalizePageOptions>,
@@ -597,38 +640,7 @@ export async function saveGameStatus({
     }
 
     if (existingEntry) {
-      const { data, error } = await supabase
-        .from('status_jogo')
-        .update({
-          status,
-          favorito,
-        })
-        .eq('id', existingEntry.id)
-        .eq('usuario_id', userId)
-        .select('id, usuario_id, jogo_id, status, created_at, favorito')
-        .single()
-
-      if (error) {
-        return {
-          data: null,
-          error: normalizeGameStatusError(error, 'Nao foi possivel atualizar o status deste jogo.'),
-        }
-      }
-
-      if (!isCompleteStatusRow(data as StatusJogoRow)) {
-        return {
-          data: null,
-          error: {
-            message:
-              'Nao foi possivel confirmar o status atualizado. Verifique as policies SELECT da tabela status_jogo.',
-          },
-        }
-      }
-
-      return {
-        data: normalizeStatusRow(data as StatusJogoRow),
-        error: null,
-      }
+      return await updateSavedGameStatus({ userId, gameId, status, favorito }, existingEntry.id)
     }
 
     const { data, error } = await supabase
@@ -644,6 +656,10 @@ export async function saveGameStatus({
       .single()
 
     if (error) {
+      if (error.code === '23505') {
+        return await updateSavedGameStatus({ userId, gameId, status, favorito })
+      }
+
       return {
         data: null,
         error: normalizeGameStatusError(error, 'Nao foi possivel criar o status deste jogo.'),

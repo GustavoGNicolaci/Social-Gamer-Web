@@ -1,4 +1,5 @@
 import { supabase } from '../supabase-client'
+import { logClientError } from '../utils/clientLogging'
 import { isSupabasePermissionError } from '../utils/supabaseErrors'
 import type { CatalogGamePreview } from './gameCatalogService'
 import { deleteStorageFiles, resolveCommunityPostImageUrls } from './storageService'
@@ -172,6 +173,8 @@ export interface CommunityListFilters {
   tipo?: string
   categoria?: string
   gameId?: number | null
+  page?: number
+  pageSize?: number
   limit?: number
 }
 
@@ -692,7 +695,7 @@ async function getCurrentUserRoles(
     .in('comunidade_id', uniqueIds)
 
   if (error) {
-    console.error('Erro ao carregar cargos em comunidades:', error)
+    logClientError('community.roles.load', error)
     return roles
   }
 
@@ -720,7 +723,7 @@ async function getCurrentUserJoinRequestStatuses(
     .order('created_at', { ascending: false })
 
   if (error) {
-    console.error('Erro ao carregar solicitacoes de entrada:', error)
+    logClientError('community.joinRequests.status.load', error)
     return requests
   }
 
@@ -845,12 +848,15 @@ export async function getCommunities(
   currentUserId?: string | null
 ): Promise<PaginatedServiceResult<CommunitySummary[]>> {
   try {
-    const limit = Math.min(Math.max(filters.limit || 48, 1), 100)
+    const pageSize = Math.min(Math.max(filters.pageSize || filters.limit || 48, 1), 100)
+    const page = Math.max(filters.page || 1, 1)
+    const from = (page - 1) * pageSize
+    const to = from + pageSize - 1
     let query = supabase
       .from('comunidades')
       .select(COMMUNITY_SELECT, { count: 'exact' })
       .order('created_at', { ascending: false })
-      .limit(limit)
+      .range(from, to)
 
     const search = filters.search?.trim()
     if (search) {
@@ -894,6 +900,42 @@ export async function getCommunities(
   }
 }
 
+export async function getCommunityTypeOptions(): Promise<ServiceResult<string[]>> {
+  try {
+    const { data, error } = await supabase
+      .from('comunidades')
+      .select('tipo')
+      .not('tipo', 'is', null)
+      .order('tipo', { ascending: true })
+      .limit(500)
+
+    if (error) {
+      return {
+        data: [],
+        error: normalizeCommunityError(error, 'Nao foi possivel carregar os temas das comunidades.'),
+      }
+    }
+
+    const options = Array.from(
+      new Set(
+        ((data || []) as Array<{ tipo: string | null }>)
+          .map(row => row.tipo?.trim())
+          .filter((value): value is string => Boolean(value))
+      )
+    )
+
+    return {
+      data: options,
+      error: null,
+    }
+  } catch (error) {
+    return {
+      data: [],
+      error: normalizeCommunityError(error, 'Erro inesperado ao carregar os temas das comunidades.'),
+    }
+  }
+}
+
 function normalizeCommunityCreationQuota(createdCount: number | string | null | undefined): CommunityCreationQuota {
   const normalizedCount = normalizeNumber(createdCount)
   const remaining = Math.max(COMMUNITY_CREATION_LIMIT - normalizedCount, 0)
@@ -932,7 +974,7 @@ export async function getCommunityCreationQuota(
       }
     }
 
-    console.warn('Fallback ao contar comunidades criadas pelo usuario:', error)
+    logClientError('community.creationQuota.rpcFallback', error)
 
     const fallbackResponse = await supabase
       .from('comunidades')
@@ -1350,7 +1392,7 @@ async function getCommunityMediaPaths(communityId: string) {
   }
 
   if (communityError && !isSupabasePermissionError(communityError)) {
-    console.error('Erro ao carregar banner para limpeza da comunidade:', communityError)
+    logClientError('community.mediaCleanup.banner.load', communityError)
   }
 
   let from = 0
@@ -1367,7 +1409,7 @@ async function getCommunityMediaPaths(communityId: string) {
 
     if (error) {
       if (!isSupabasePermissionError(error)) {
-        console.error('Erro ao carregar imagens para limpeza da comunidade:', error)
+        logClientError('community.mediaCleanup.posts.load', error)
       }
       break
     }
@@ -1392,7 +1434,7 @@ async function getCommunityPostMediaPath(postId: string) {
 
   if (error) {
     if (!isSupabasePermissionError(error)) {
-      console.error('Erro ao carregar imagem para limpeza do post:', error)
+      logClientError('community.mediaCleanup.post.load', error)
     }
     return null
   }

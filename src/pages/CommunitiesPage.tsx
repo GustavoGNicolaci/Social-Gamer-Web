@@ -7,6 +7,7 @@ import { useI18n } from '../i18n/I18nContext'
 import {
   COMMUNITY_CATEGORY_VALUES,
   getCommunityCreationQuota,
+  getCommunityTypeOptions,
   getCommunities,
   type CommunityCategoryValue,
   type CommunityCreationQuota,
@@ -54,34 +55,32 @@ function CommunitiesPage() {
   const [creationQuota, setCreationQuota] = useState<CommunityCreationQuota | null>(null)
   const [creationQuotaError, setCreationQuotaError] = useState<string | null>(null)
   const [creationQuotaLoading, setCreationQuotaLoading] = useState(false)
+  const [totalCommunitiesCount, setTotalCommunitiesCount] = useState<number | null>(null)
+  const [tipoOptions, setTipoOptions] = useState<string[]>([])
 
-  const tipoOptions = useMemo(
-    () =>
-      Array.from(new Set(communities.map(community => community.tipo).filter(Boolean) as string[]))
-        .sort((a, b) => a.localeCompare(b)),
-    [communities]
+  const totalPages = Math.max(
+    1,
+    Math.ceil((totalCommunitiesCount ?? communities.length) / COMMUNITIES_PAGE_SIZE)
   )
-
-  const totalPages = Math.max(1, Math.ceil(communities.length / COMMUNITIES_PAGE_SIZE))
   const safeCurrentPage = Math.min(currentPage, totalPages)
-  const currentCommunities = useMemo(() => {
-    const startIndex = (safeCurrentPage - 1) * COMMUNITIES_PAGE_SIZE
-    return communities.slice(startIndex, startIndex + COMMUNITIES_PAGE_SIZE)
-  }, [communities, safeCurrentPage])
+  const currentCommunities = useMemo(() => communities, [communities])
 
-  const loadCommunities = useCallback(async (options: { preserveFeedback?: boolean } = {}) => {
+  const loadCommunities = useCallback(async (options: { preserveFeedback?: boolean; page?: number } = {}) => {
     setLoading(true)
+    const requestedPage = options.page ?? safeCurrentPage
     const result = await getCommunities(
       {
         search,
         tipo: tipoFilter || undefined,
         categoria: categoriaFilter || undefined,
-        limit: 100,
+        page: requestedPage,
+        pageSize: COMMUNITIES_PAGE_SIZE,
       },
       userId
     )
 
     setCommunities(result.data)
+    setTotalCommunitiesCount(result.totalCount)
     if (result.error) {
       setFeedback({ tone: 'error', message: result.error.message })
     } else if (!options.preserveFeedback) {
@@ -89,7 +88,15 @@ function CommunitiesPage() {
     }
     setLoading(false)
     return result
-  }, [categoriaFilter, search, tipoFilter, userId])
+  }, [categoriaFilter, safeCurrentPage, search, tipoFilter, userId])
+
+  const loadCommunityTypeOptions = useCallback(async () => {
+    const result = await getCommunityTypeOptions()
+
+    if (!result.error) {
+      setTipoOptions(result.data)
+    }
+  }, [])
 
   const loadCreationQuota = useCallback(async () => {
     if (!userId) {
@@ -123,18 +130,27 @@ function CommunitiesPage() {
     return () => window.clearTimeout(timeoutId)
   }, [loadCreationQuota])
 
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      void loadCommunityTypeOptions()
+    }, 0)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [loadCommunityTypeOptions])
+
   const handleCommunityCreated = useCallback(async () => {
     setCurrentPage(1)
     const [result] = await Promise.all([
-      loadCommunities({ preserveFeedback: true }),
+      loadCommunities({ preserveFeedback: true, page: 1 }),
       loadCreationQuota(),
+      loadCommunityTypeOptions(),
     ])
     setFeedback(
       result.error
         ? { tone: 'error', message: result.error.message }
         : { tone: 'success', message: t('communities.create.success') }
     )
-  }, [loadCommunities, loadCreationQuota, t])
+  }, [loadCommunities, loadCommunityTypeOptions, loadCreationQuota, t])
 
   return (
     <div className="page-container">

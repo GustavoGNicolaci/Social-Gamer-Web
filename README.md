@@ -1,73 +1,61 @@
-# React + TypeScript + Vite
+# Social Gamer Web
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Aplicacao Vite + React + TypeScript integrada ao Supabase para catalogo social de jogos, perfis, reviews, comunidades, notificacoes e upload de imagens.
 
-Currently, two official plugins are available:
+## Requisitos
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- Node.js compativel com Vite 7.
+- Projeto Supabase configurado com Auth, Database, Storage e Edge Functions.
+- Variaveis de ambiente baseadas em `.env.example`.
 
-## React Compiler
+## Setup local
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+cp .env.example .env
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Configure no `.env`:
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+- `VITE_SUPABASE_URL`: URL publica do projeto Supabase.
+- `VITE_SUPABASE_ANON_KEY`: anon key publica usada pelo frontend.
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+As variaveis sem prefixo `VITE_` em `.env.example` sao para Edge Functions e nao devem ser expostas ao bundle do navegador.
+
+## Scripts
+
+```bash
+npm run dev
+npm run lint
+npm run build
+npm run preview
 ```
+
+## Supabase
+
+Os artefatos versionados ficam em:
+
+- `supabase/migrations`: alteracoes de schema, policies, grants e indices.
+- `supabase/functions/delete-own-account`: Edge Function de exclusao de conta.
+
+Antes de aplicar migrations em producao, rode em staging e revise:
+
+- grants de funcoes `SECURITY DEFINER`;
+- policies de `usuarios`, especialmente exposicao de `bio` e `configuracoes_privacidade`;
+- unicidade de `status_jogo(usuario_id, jogo_id)`;
+- triggers de contagem em curtidas de reviews;
+- buckets `user-uploads` e `community-post-media`.
+
+## Deploy na Vercel
+
+O arquivo `vercel.json` redireciona todas as rotas para `index.html`, necessario para o `BrowserRouter` funcionar em refresh direto de rotas como `/games/:id`, `/u/:username` e `/comunidades/:id`.
+
+Checklist minimo antes do deploy:
+
+- Definir `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` no projeto Vercel.
+- Aplicar migrations revisadas no Supabase.
+- Publicar a Edge Function `delete-own-account` com `SUPABASE_URL`, `SUPABASE_ANON_KEY` e `SUPABASE_SERVICE_ROLE_KEY`.
+- Conferir redirect URLs do Supabase Auth para o dominio final.
+- Ativar leaked password protection no Supabase Auth.
+- Rodar `npm run lint` e `npm run build`.
