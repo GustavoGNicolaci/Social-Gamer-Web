@@ -187,7 +187,7 @@ function CommunityDetailsPage() {
   const activeAnchorId = location.hash ? decodeURIComponent(location.hash.slice(1)) : ''
 
   const visibleTabs = useMemo<CommunityTab[]>(() => {
-    if (!canViewContent) return isModerator ? [] : ['memberSettings']
+    if (!canViewContent) return ['about', 'memberSettings']
 
     const baseTabs: CommunityTab[] = ['posts', 'members', 'about']
     if (isModerator) return [...baseTabs, 'moderation', 'settings']
@@ -838,7 +838,9 @@ function CommunityDetailsPage() {
           ? t('communities.participation.memberHelp')
           : isPending
             ? t('communities.participation.pendingHelp')
-            : t('communities.participation.visitorHelp')
+            : community.visibilidade === 'privada'
+              ? t('communities.private.text')
+              : t('communities.participation.visitorHelp')
 
     return (
       <section className="community-section community-member-settings-card">

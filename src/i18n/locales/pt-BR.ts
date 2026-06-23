@@ -967,7 +967,7 @@ export const ptBR: TranslationDictionary = {
   'communities.tabs.settings': 'Configurações da comunidade',
   'communities.tabs.memberSettings': 'Participação',
   'communities.private.title': 'Comunidade privada',
-  'communities.private.text': 'O conteúdo desta comunidade fica disponível apenas para membros aprovados.',
+  'communities.private.text': 'Esta comunidade é privada. Posts e membros ficam visíveis apenas para membros aprovados.',
   'communities.private.requestJoin': 'Solicitar entrada',
   'communities.private.requestSent': 'Solicitação enviada',
   'communities.participation.kicker': 'Área pessoal',

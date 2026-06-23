@@ -967,7 +967,7 @@ export const enUS: TranslationDictionary = {
   'communities.tabs.settings': 'Community settings',
   'communities.tabs.memberSettings': 'Participation',
   'communities.private.title': 'Private community',
-  'communities.private.text': 'This community content is available only to approved members.',
+  'communities.private.text': 'This community is private. Posts and members are visible only to approved members.',
   'communities.private.requestJoin': 'Request to join',
   'communities.private.requestSent': 'Request sent',
   'communities.participation.kicker': 'Personal area',
