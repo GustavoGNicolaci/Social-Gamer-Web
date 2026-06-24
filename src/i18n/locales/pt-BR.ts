@@ -220,6 +220,7 @@ export const ptBR: TranslationDictionary = {
   'navbar.profile.closeMenu': 'Fechar menu do perfil',
   'navbar.profile.menuLabel': 'Menu do perfil',
   'navbar.profile.eyebrow': 'Seu perfil',
+  'navbar.profile.fallbackName': 'Usuário',
   'navbar.profile.profileHint': 'Abrir seu perfil pela rota pública da aplicação',
   'navbar.profile.settingsHint': 'Privacidade, senha, idioma e exclusão da conta',
   'navbar.theme.light': 'Ativar tema claro',

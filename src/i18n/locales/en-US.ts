@@ -220,6 +220,7 @@ export const enUS: TranslationDictionary = {
   'navbar.profile.closeMenu': 'Close profile menu',
   'navbar.profile.menuLabel': 'Profile menu',
   'navbar.profile.eyebrow': 'Your profile',
+  'navbar.profile.fallbackName': 'User',
   'navbar.profile.profileHint': 'Open your profile through the public app route',
   'navbar.profile.settingsHint': 'Privacy, password, language, and account deletion',
   'navbar.theme.light': 'Enable light theme',

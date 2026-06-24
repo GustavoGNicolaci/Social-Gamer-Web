@@ -236,7 +236,7 @@ function Navbar() {
   const [isCompactSearch, setIsCompactSearch] = useState(() => (typeof window === 'undefined' ? false : isCompactSearchViewport(window.innerWidth)))
   const [followPendingIds, setFollowPendingIds] = useState<string[]>([])
 
-  const { user, profile, logout } = useAuth()
+  const { user, profile, loading: authLoading, logout } = useAuth()
   const { t } = useI18n()
   const navigate = useNavigate()
   const location = useLocation()
@@ -247,8 +247,11 @@ function Navbar() {
   const searchTimeoutRef = useRef<number | null>(null)
   const searchRequestIdRef = useRef(0)
 
-  const displayName = profile?.username || user?.email || t('common.profile')
-  const profileLabel = profile?.nome_completo?.trim() || displayName
+  const profileUsername = profile?.username?.trim() || ''
+  const profileFullName = profile?.nome_completo?.trim() || ''
+  const fallbackProfileName = t('navbar.profile.fallbackName')
+  const displayName = profileUsername || profileFullName || (authLoading ? t('common.loading') : fallbackProfileName)
+  const profileLabel = profileFullName || profileUsername || fallbackProfileName
   const ownProfilePath = profile?.username ? getPublicProfilePath(profile.username) : '/profile'
   const themeToggleLabel = theme === 'dark' ? t('navbar.theme.light') : t('navbar.theme.dark')
   const themeStatusLabel = t('navbar.theme.current', {

@@ -336,6 +336,17 @@ export type Database = {
         data_lancamento: string | null
         descricao: string | null
         plataformas: string[] | null
+        slug: string | null
+        descricao_curta: string | null
+        source_primary: string
+        external_updated_at: string | null
+        status_importacao: string
+        nota_media_externa: number | null
+        nota_media_externa_count: number
+        metadados: Json
+        created_at: string
+        updated_at: string
+        search_vector: unknown | null
       }>
       lista_desejos: Table<'lista_desejos', {
         id: string
@@ -511,6 +522,14 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: { can_create: boolean; created_count: number; limit_count: number; remaining_count: number }[]
       }
+      get_catalog_facets: {
+        Args: { p_query?: string | null }
+        Returns: {
+          category: string
+          value: string | null
+          result_count: number
+        }[]
+      }
       get_home_active_communities: {
         Args: { p_days_window?: number; p_limit?: number }
         Returns: {
@@ -599,6 +618,29 @@ export type Database = {
       sair_comunidade: {
         Args: { p_comunidade_id: string }
         Returns: undefined
+      }
+      search_catalog_games: {
+        Args: {
+          p_query?: string | null
+          p_genres?: string[]
+          p_platforms?: string[]
+          p_developers?: string[]
+          p_sort?: string
+          p_limit?: number
+          p_offset?: number
+        }
+        Returns: {
+          id: number
+          titulo: string
+          capa_url: string | null
+          desenvolvedora: string | null
+          generos: string[] | null
+          data_lancamento: string | null
+          plataformas: string[] | null
+          average_rating: number | null
+          review_count: number
+          total_count: number
+        }[]
       }
       solicitar_entrada_comunidade: {
         Args: { p_comunidade_id: string }
