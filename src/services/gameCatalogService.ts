@@ -1,11 +1,10 @@
+import { getRuntimeLocale } from '../i18n'
 import { supabase } from '../supabase-client'
 import {
   normalizeGameDetails,
-  normalizeGameMedia,
   normalizeGamePreview,
   type GameDetails,
   type GameDetailsSourceRow,
-  type GameMediaSourceRow,
   type GamePreview,
   type GamePreviewSourceRow,
 } from './gameAdapter'
@@ -19,13 +18,12 @@ export interface GameCatalogError {
 
 export type CatalogGamePreview = GamePreview
 export type CatalogGameDetails = GameDetails
+export type CatalogSortOption = 'release-desc' | 'release-asc' | 'rating-desc' | 'rating-asc'
 
 interface CatalogResult<T> {
   data: T
   error: GameCatalogError | null
 }
-
-export type CatalogSortOption = 'release-desc' | 'release-asc' | 'rating-desc' | 'rating-asc'
 
 interface SearchCatalogGamesOptions {
   limit?: number
@@ -56,17 +54,41 @@ export interface CatalogFacetOptions {
   developers: string[]
 }
 
-interface CatalogGameRpcRow {
-  id: number
-  titulo: string
-  capa_url: string | null
-  desenvolvedora: string | null
-  generos: string[] | null
-  data_lancamento: string | null
-  plataformas: string[] | null
-  average_rating: number | string | null
-  review_count: number | string | null
-  total_count: number | string | null
+interface GameCatalogFunctionBody {
+  action: 'catalog' | 'search' | 'details' | 'facets'
+  locale?: string
+  page?: number
+  pageSize?: number
+  query?: string
+  sort?: CatalogSortOption
+  filters?: {
+    genres: string[]
+    platforms: string[]
+    developers: string[]
+  }
+  gameId?: number
+  igdbId?: number
+}
+
+interface GameCatalogFunctionListResponse {
+  items?: GamePreviewSourceRow[]
+  page?: number | string
+  pageSize?: number | string
+  hasNextPage?: boolean
+  totalCount?: number | string | null
+  error?: string
+}
+
+interface GameCatalogFunctionFacetsResponse {
+  genres?: string[]
+  platforms?: string[]
+  developers?: string[]
+  error?: string
+}
+
+interface GameCatalogFunctionDetailsResponse {
+  game?: GameDetailsSourceRow
+  error?: string
 }
 
 interface GameExternalIdRow {
@@ -74,23 +96,11 @@ interface GameExternalIdRow {
   external_id: string | null
 }
 
-interface CatalogFacetRpcRow {
-  category: 'genre' | 'platform' | 'developer' | string
-  value: string | null
-  result_count: number | string | null
-}
-
-interface ImportGamesResponse {
-  games?: CatalogGamePreview[]
-}
-
 const DEFAULT_SEARCH_LIMIT = 8
 const DEFAULT_PAGE_SIZE = 20
 const MAX_PAGE_SIZE = 100
 const CATALOG_GAME_SELECT =
   'id, titulo, capa_url, desenvolvedora, generos, data_lancamento, plataformas, source_primary, status_importacao'
-const CATALOG_GAME_DETAIL_SELECT =
-  'id, titulo, capa_url, desenvolvedora, generos, data_lancamento, descricao, plataformas, slug, descricao_curta, source_primary, status_importacao, nota_media_externa, nota_media_externa_count, external_updated_at, metadados'
 
 function normalizeCatalogError(error: unknown, fallbackMessage: string): GameCatalogError {
   if (error && typeof error === 'object') {
@@ -113,12 +123,18 @@ function normalizeNumber(value: unknown) {
     const parsedValue = Number(value)
     return Number.isFinite(parsedValue) ? parsedValue : null
   }
+
   return null
 }
 
 function normalizeInteger(value: unknown) {
   const normalizedValue = normalizeNumber(value)
   return normalizedValue === null ? 0 : Math.max(0, Math.trunc(normalizedValue))
+}
+
+function normalizeNullableInteger(value: unknown) {
+  const normalizedValue = normalizeNumber(value)
+  return normalizedValue === null ? null : Math.max(0, Math.trunc(normalizedValue))
 }
 
 function normalizePositiveInteger(value: unknown, fallback: number, max = Number.MAX_SAFE_INTEGER) {
@@ -130,24 +146,93 @@ function normalizeStringFilters(values: string[] | undefined) {
   return Array.from(new Set((values || []).map(value => value.trim()).filter(Boolean)))
 }
 
-function normalizeCatalogGame(row: CatalogGameRpcRow | CatalogGamePreview): CatalogGamePreview {
-  if ('average_rating' in row || 'review_count' in row) {
-    const rpcRow = row as CatalogGameRpcRow
-
-    return normalizeGamePreview({
-      id: rpcRow.id,
-      titulo: rpcRow.titulo,
-      capa_url: rpcRow.capa_url,
-      desenvolvedora: rpcRow.desenvolvedora,
-      generos: rpcRow.generos,
-      data_lancamento: rpcRow.data_lancamento,
-      plataformas: rpcRow.plataformas,
-      average_rating: normalizeNumber(rpcRow.average_rating),
-      review_count: normalizeInteger(rpcRow.review_count),
-    })
+function mapFunctionErrorCode(code: string | undefined) {
+  if (code === 'server_misconfigured') {
+    return 'A fonte externa de jogos nao esta configurada no backend.'
   }
 
-  return normalizeGamePreview(row)
+  if (code === 'game_not_identified') {
+    return 'Nao foi possivel identificar o jogo.'
+  }
+
+  return null
+}
+
+async function invokeGameCatalog<T>(
+  body: GameCatalogFunctionBody,
+  fallbackMessage: string
+): Promise<CatalogResult<T | null>> {
+  try {
+    const { data, error } = await supabase.functions.invoke<T & { error?: string }>('game-catalog', {
+      body: {
+        locale: getRuntimeLocale(),
+        ...body,
+      },
+    })
+
+    if (error) {
+      return {
+        data: null,
+        error: normalizeCatalogError(error, fallbackMessage),
+      }
+    }
+
+    if (data?.error) {
+      return {
+        data: null,
+        error: {
+          code: data.error,
+          message: mapFunctionErrorCode(data.error) || fallbackMessage,
+        },
+      }
+    }
+
+    return {
+      data: data || null,
+      error: null,
+    }
+  } catch (error) {
+    return {
+      data: null,
+      error: normalizeCatalogError(error, fallbackMessage),
+    }
+  }
+}
+
+function getEstimatedCatalogTotals({
+  page,
+  pageSize,
+  itemCount,
+  hasNextPage,
+  totalCount,
+}: {
+  page: number
+  pageSize: number
+  itemCount: number
+  hasNextPage: boolean
+  totalCount: number | null
+}) {
+  if (totalCount !== null) {
+    return {
+      totalCount,
+      totalPages: totalCount === 0 ? 0 : Math.ceil(totalCount / pageSize),
+    }
+  }
+
+  if (itemCount === 0) {
+    return {
+      totalCount: 0,
+      totalPages: 0,
+    }
+  }
+
+  const knownCount = (page - 1) * pageSize + itemCount
+  const estimatedCount = hasNextPage ? knownCount + pageSize : knownCount
+
+  return {
+    totalCount: estimatedCount,
+    totalPages: hasNextPage ? page + 1 : page,
+  }
 }
 
 async function getIgdbIdsByGameId(gameIds: number[]) {
@@ -191,57 +276,6 @@ async function attachIgdbIdsToGames<T extends CatalogGamePreview>(games: T[]): P
   }))
 }
 
-async function invokeSearchImport(query: string, limit: number) {
-  try {
-    const { data, error } = await supabase.functions.invoke<ImportGamesResponse>(
-      'search-import-games',
-      {
-        body: {
-          query,
-          limit,
-        },
-      }
-    )
-
-    if (error || !Array.isArray(data?.games)) {
-      return null
-    }
-
-    return data.games.map(game => normalizeCatalogGame(game))
-  } catch {
-    return null
-  }
-}
-
-async function fetchCatalogGamesByTitle(
-  query: string,
-  limit: number
-): Promise<CatalogResult<CatalogGamePreview[]>> {
-  const { data, error } = await supabase.rpc('search_catalog_games', {
-    p_query: query,
-    p_genres: [],
-    p_platforms: [],
-    p_developers: [],
-    p_sort: 'release-desc',
-    p_limit: limit,
-    p_offset: 0,
-  })
-
-  if (error) {
-    return {
-      data: [],
-      error: normalizeCatalogError(error, 'Nao foi possivel buscar jogos no catalogo.'),
-    }
-  }
-
-  const games = ((data || []) as CatalogGameRpcRow[]).map(normalizeCatalogGame)
-
-  return {
-    data: await attachIgdbIdsToGames(games),
-    error: null,
-  }
-}
-
 export async function searchCatalogGamesByTitle(
   query: string,
   options: SearchCatalogGamesOptions = {}
@@ -256,39 +290,26 @@ export async function searchCatalogGamesByTitle(
   }
 
   const limit = normalizePositiveInteger(options.limit, DEFAULT_SEARCH_LIMIT, MAX_PAGE_SIZE)
+  const result = await invokeGameCatalog<GameCatalogFunctionListResponse>(
+    {
+      action: 'search',
+      query: normalizedQuery,
+      page: 1,
+      pageSize: limit,
+    },
+    'Nao foi possivel buscar jogos no catalogo externo.'
+  )
 
-  try {
-    const localResult = await fetchCatalogGamesByTitle(normalizedQuery, limit)
-
-    if (
-      !localResult.error &&
-      localResult.data.length < limit &&
-      options.importIfMissing !== false
-    ) {
-      const importedGames = await invokeSearchImport(normalizedQuery, limit)
-
-      if (importedGames) {
-        const refreshedResult = await fetchCatalogGamesByTitle(normalizedQuery, limit)
-
-        if (!refreshedResult.error && refreshedResult.data.length > 0) {
-          return refreshedResult
-        }
-
-        if (importedGames.length > localResult.data.length) {
-          return {
-            data: await attachIgdbIdsToGames(importedGames),
-            error: null,
-          }
-        }
-      }
-    }
-
-    return localResult
-  } catch (error) {
+  if (result.error || !result.data) {
     return {
       data: [],
-      error: normalizeCatalogError(error, 'Erro inesperado ao buscar jogos no catalogo.'),
+      error: result.error,
     }
+  }
+
+  return {
+    data: (result.data.items || []).map(row => normalizeGamePreview(row)),
+    error: null,
   }
 }
 
@@ -298,70 +319,24 @@ export async function getCatalogGamesPage(
   const page = normalizePositiveInteger(pageOptions.page, 1)
   const pageSize = normalizePositiveInteger(pageOptions.pageSize, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE)
   const query = pageOptions.query?.trim() || ''
-  const offset = (page - 1) * pageSize
-  const sort = pageOptions.sort || 'release-desc'
-
-  async function fetchPage(): Promise<CatalogResult<CatalogGamesPage>> {
-    const { data, error } = await supabase.rpc('search_catalog_games', {
-      p_query: query || null,
-      p_genres: normalizeStringFilters(pageOptions.genres),
-      p_platforms: normalizeStringFilters(pageOptions.platforms),
-      p_developers: normalizeStringFilters(pageOptions.developers),
-      p_sort: sort,
-      p_limit: pageSize,
-      p_offset: offset,
-    })
-
-    if (error) {
-      return {
-        data: {
-          items: [],
-          totalCount: 0,
-          totalPages: 0,
-          page,
-          pageSize,
-        },
-        error: normalizeCatalogError(error, 'Nao foi possivel carregar o catalogo de jogos.'),
-      }
-    }
-
-    const rows = await attachIgdbIdsToGames(
-      ((data || []) as CatalogGameRpcRow[]).map(normalizeCatalogGame)
-    )
-    const totalCount = data && data.length > 0
-      ? normalizeInteger((data[0] as CatalogGameRpcRow).total_count)
-      : 0
-
-    return {
-      data: {
-        items: rows,
-        totalCount,
-        totalPages: totalCount === 0 ? 0 : Math.ceil(totalCount / pageSize),
-        page,
-        pageSize,
+  const action = query.length >= 2 ? 'search' : 'catalog'
+  const result = await invokeGameCatalog<GameCatalogFunctionListResponse>(
+    {
+      action,
+      page,
+      pageSize,
+      query: action === 'search' ? query : undefined,
+      sort: pageOptions.sort || 'release-desc',
+      filters: {
+        genres: normalizeStringFilters(pageOptions.genres),
+        platforms: normalizeStringFilters(pageOptions.platforms),
+        developers: normalizeStringFilters(pageOptions.developers),
       },
-      error: null,
-    }
-  }
+    },
+    'Nao foi possivel carregar o catalogo de jogos externo.'
+  )
 
-  try {
-    const localResult = await fetchPage()
-
-    if (
-      !localResult.error &&
-      query.length >= 2 &&
-      page === 1 &&
-      localResult.data.totalCount === 0
-    ) {
-      const importedGames = await invokeSearchImport(query, pageSize)
-
-      if (importedGames) {
-        return await fetchPage()
-      }
-    }
-
-    return localResult
-  } catch (error) {
+  if (result.error || !result.data) {
     return {
       data: {
         items: [],
@@ -370,62 +345,60 @@ export async function getCatalogGamesPage(
         page,
         pageSize,
       },
-      error: normalizeCatalogError(error, 'Erro inesperado ao carregar o catalogo de jogos.'),
+      error: result.error,
     }
+  }
+
+  const items = (result.data.items || []).map(row => normalizeGamePreview(row))
+  const hasNextPage = Boolean(result.data.hasNextPage)
+  const totals = getEstimatedCatalogTotals({
+    page,
+    pageSize,
+    itemCount: items.length,
+    hasNextPage,
+    totalCount: normalizeNullableInteger(result.data.totalCount),
+  })
+
+  return {
+    data: {
+      items,
+      ...totals,
+      page,
+      pageSize,
+    },
+    error: null,
   }
 }
 
 export async function getCatalogFacetOptions(
   query?: string
 ): Promise<CatalogResult<CatalogFacetOptions>> {
-  try {
-    const { data, error } = await supabase.rpc('get_catalog_facets', {
-      p_query: query?.trim() || null,
-    })
+  const result = await invokeGameCatalog<GameCatalogFunctionFacetsResponse>(
+    {
+      action: 'facets',
+      query: query?.trim() || undefined,
+    },
+    'Nao foi possivel carregar os filtros do catalogo externo.'
+  )
 
-    if (error) {
-      return {
-        data: {
-          genres: [],
-          platforms: [],
-          developers: [],
-        },
-        error: normalizeCatalogError(error, 'Nao foi possivel carregar os filtros do catalogo.'),
-      }
-    }
-
-    const facets: CatalogFacetOptions = {
-      genres: [],
-      platforms: [],
-      developers: [],
-    }
-
-    ;((data || []) as CatalogFacetRpcRow[]).forEach(row => {
-      const value = row.value?.trim()
-      if (!value) return
-
-      if (row.category === 'genre') {
-        facets.genres.push(value)
-      } else if (row.category === 'platform') {
-        facets.platforms.push(value)
-      } else if (row.category === 'developer') {
-        facets.developers.push(value)
-      }
-    })
-
-    return {
-      data: facets,
-      error: null,
-    }
-  } catch (error) {
+  if (result.error || !result.data) {
     return {
       data: {
         genres: [],
         platforms: [],
         developers: [],
       },
-      error: normalizeCatalogError(error, 'Erro inesperado ao carregar os filtros do catalogo.'),
+      error: result.error,
     }
+  }
+
+  return {
+    data: {
+      genres: result.data.genres || [],
+      platforms: result.data.platforms || [],
+      developers: result.data.developers || [],
+    },
+    error: null,
   }
 }
 
@@ -480,53 +453,23 @@ export async function getCatalogGameDetailsById(
     }
   }
 
-  try {
-    const [gameResponse, externalIdResponse, mediaResponse] = await Promise.all([
-      supabase
-        .from('jogos')
-        .select(CATALOG_GAME_DETAIL_SELECT)
-        .eq('id', gameId)
-        .single(),
-      supabase
-        .from('game_external_ids')
-        .select('jogo_id, external_id')
-        .eq('provider', 'igdb')
-        .eq('jogo_id', gameId)
-        .maybeSingle(),
-      supabase
-        .from('jogo_midias')
-        .select('id, tipo, url, thumbnail_url, provider, external_media_id, width, height, ordem, is_primary')
-        .eq('jogo_id', gameId)
-        .order('ordem', { ascending: true }),
-    ])
+  const result = await invokeGameCatalog<GameCatalogFunctionDetailsResponse>(
+    {
+      action: 'details',
+      gameId,
+    },
+    'Nao foi possivel carregar este jogo pelo catalogo externo.'
+  )
 
-    if (gameResponse.error) {
-      return {
-        data: null,
-        error: normalizeCatalogError(gameResponse.error, 'Nao foi possivel carregar este jogo.'),
-      }
-    }
-
-    const externalId = externalIdResponse.error
-      ? null
-      : ((externalIdResponse.data as GameExternalIdRow | null)?.external_id || null)
-    const media = mediaResponse.error
-      ? []
-      : ((mediaResponse.data || []) as GameMediaSourceRow[])
-        .map(normalizeGameMedia)
-        .filter((item): item is NonNullable<typeof item> => Boolean(item))
-
-    return {
-      data: normalizeGameDetails(gameResponse.data as GameDetailsSourceRow, {
-        igdbId: externalId,
-        media,
-      }),
-      error: null,
-    }
-  } catch (error) {
+  if (result.error || !result.data?.game) {
     return {
       data: null,
-      error: normalizeCatalogError(error, 'Erro inesperado ao carregar este jogo.'),
+      error: result.error || { message: 'Nao foi possivel carregar este jogo.' },
     }
+  }
+
+  return {
+    data: normalizeGameDetails(result.data.game),
+    error: null,
   }
 }

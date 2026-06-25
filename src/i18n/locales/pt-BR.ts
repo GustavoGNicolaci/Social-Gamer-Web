@@ -557,6 +557,7 @@ export const ptBR: TranslationDictionary = {
   'game.details.statusUpdated': 'Status do jogo atualizado no seu perfil.',
   'game.details.statusAdded': 'Jogo adicionado ao seu perfil.',
   'game.details.noDescription': 'Descrição não informada.',
+  'game.details.descriptionFallbackEnglish': 'Descricao em portugues indisponivel no momento. Exibindo a descricao original em ingles.',
   'game.details.noRatingYet': 'Ainda sem notas',
   'game.details.community': 'Comunidade',
   'game.details.aboutTitle': 'Sobre o jogo',

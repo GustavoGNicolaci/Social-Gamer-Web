@@ -39,6 +39,7 @@ export interface GameDetails extends GamePreview {
   slug: string | null
   description: string | null
   descricao: string | null
+  sourceDescription: string | null
   shortDescription: string | null
   externalRating: number | null
   externalRatingCount: number
@@ -47,19 +48,30 @@ export interface GameDetails extends GamePreview {
   media: GameMedia[]
   screenshots: GameMedia[]
   coverMedia: GameMedia | null
+  descriptionLocale: string | null
+  descriptionFallback: boolean
+  translationStatus: string | null
 }
 
 export interface GamePreviewSourceRow {
   id: number
-  titulo: string | null
-  capa_url: string | null
-  desenvolvedora: GameListField
-  generos: GameListField
-  data_lancamento: string | null
-  plataformas: GameListField
+  title?: string | null
+  titulo?: string | null
+  coverUrl?: string | null
+  capa_url?: string | null
+  developer?: GameListField
+  desenvolvedora?: GameListField
+  genres?: GameListField
+  generos?: GameListField
+  releaseDate?: string | null
+  data_lancamento?: string | null
+  platforms?: GameListField
+  plataformas?: GameListField
   igdb_id?: string | number | null
   igdbId?: string | number | null
+  sourcePrimary?: string | null
   source_primary?: string | null
+  importStatus?: string | null
   status_importacao?: string | null
   averageRating?: number | string | null
   reviewCount?: number | string | null
@@ -69,12 +81,29 @@ export interface GamePreviewSourceRow {
 
 export interface GameDetailsSourceRow extends GamePreviewSourceRow {
   slug?: string | null
+  description?: string | null
   descricao?: string | null
+  sourceDescription?: string | null
+  source_description?: string | null
+  shortDescription?: string | null
   descricao_curta?: string | null
+  externalRating?: number | string | null
   nota_media_externa?: number | string | null
+  externalRatingCount?: number | string | null
   nota_media_externa_count?: number | string | null
+  externalUpdatedAt?: string | null
   external_updated_at?: string | null
+  metadata?: unknown
   metadados?: unknown
+  media?: GameMedia[]
+  screenshots?: GameMedia[]
+  coverMedia?: GameMedia | null
+  descriptionLocale?: string | null
+  description_locale?: string | null
+  descriptionFallback?: boolean | null
+  description_fallback?: boolean | null
+  translationStatus?: string | null
+  translation_status?: string | null
 }
 
 export interface GameMediaSourceRow {
@@ -105,7 +134,7 @@ function normalizeInteger(value: unknown) {
   return normalizedValue === null ? 0 : Math.max(0, Math.trunc(normalizedValue))
 }
 
-export function normalizeGameListField(value: GameListField): string[] {
+export function normalizeGameListField(value: GameListField | undefined): string[] {
   if (!value) return []
 
   if (Array.isArray(value)) {
@@ -145,31 +174,35 @@ export function normalizeGamePreview(
   row: GamePreviewSourceRow,
   options: { igdbId?: string | number | null } = {}
 ): GamePreview {
-  const title = row.titulo?.trim() || 'Jogo desconhecido'
-  const developer = normalizeGameListField(row.desenvolvedora)
-  const genres = normalizeGameListField(row.generos)
-  const platforms = normalizeGameListField(row.plataformas)
+  const title = row.title?.trim() || row.titulo?.trim() || 'Jogo desconhecido'
+  const coverUrl = row.coverUrl ?? row.capa_url ?? null
+  const developer = normalizeGameListField(row.developer ?? row.desenvolvedora)
+  const genres = normalizeGameListField(row.genres ?? row.generos)
+  const releaseDate = row.releaseDate ?? row.data_lancamento ?? null
+  const platforms = normalizeGameListField(row.platforms ?? row.plataformas)
   const igdbId = options.igdbId ?? row.igdbId ?? row.igdb_id ?? null
   const averageRating = row.averageRating ?? row.average_rating
   const reviewCount = row.reviewCount ?? row.review_count
+  const sourcePrimary = row.sourcePrimary ?? row.source_primary ?? null
+  const importStatus = row.importStatus ?? row.status_importacao ?? null
 
   return {
     id: row.id,
     igdbId: igdbId === null || typeof igdbId === 'undefined' ? null : String(igdbId),
     title,
     titulo: title,
-    coverUrl: row.capa_url || null,
-    capa_url: row.capa_url || null,
+    coverUrl,
+    capa_url: coverUrl,
     developer,
     desenvolvedora: developer.length > 0 ? developer : null,
     genres,
     generos: genres.length > 0 ? genres : null,
-    releaseDate: row.data_lancamento || null,
-    data_lancamento: row.data_lancamento || null,
+    releaseDate,
+    data_lancamento: releaseDate,
     platforms,
     plataformas: platforms.length > 0 ? platforms : null,
-    sourcePrimary: row.source_primary || null,
-    importStatus: row.status_importacao || null,
+    sourcePrimary,
+    importStatus,
     averageRating: normalizeNumber(averageRating),
     reviewCount: normalizeInteger(reviewCount),
   }
@@ -183,23 +216,37 @@ export function normalizeGameDetails(
   } = {}
 ): GameDetails {
   const preview = normalizeGamePreview(row, options)
-  const media = options.media || []
-  const coverMedia = media.find(item => item.type === 'cover' && item.isPrimary) ||
+  const media = options.media || row.media || []
+  const coverMedia = row.coverMedia || media.find(item => item.type === 'cover' && item.isPrimary) ||
     media.find(item => item.type === 'cover') ||
     null
+  const description = row.description ?? row.descricao ?? null
+  const sourceDescription = row.sourceDescription ?? row.source_description ?? description
+  const shortDescription = row.shortDescription ?? row.descricao_curta ?? null
+  const externalRating = row.externalRating ?? row.nota_media_externa
+  const externalRatingCount = row.externalRatingCount ?? row.nota_media_externa_count
+  const externalUpdatedAt = row.externalUpdatedAt ?? row.external_updated_at ?? null
+  const metadata = row.metadata ?? row.metadados
+  const descriptionLocale = row.descriptionLocale ?? row.description_locale ?? null
+  const descriptionFallback = row.descriptionFallback ?? row.description_fallback ?? false
+  const translationStatus = row.translationStatus ?? row.translation_status ?? null
 
   return {
     ...preview,
     slug: row.slug || null,
-    description: row.descricao || null,
-    descricao: row.descricao || null,
-    shortDescription: row.descricao_curta || null,
-    externalRating: normalizeNumber(row.nota_media_externa),
-    externalRatingCount: normalizeInteger(row.nota_media_externa_count),
-    externalUpdatedAt: row.external_updated_at || null,
-    metadata: normalizeMetadata(row.metadados),
+    description,
+    descricao: description,
+    sourceDescription,
+    shortDescription,
+    externalRating: normalizeNumber(externalRating),
+    externalRatingCount: normalizeInteger(externalRatingCount),
+    externalUpdatedAt,
+    metadata: normalizeMetadata(metadata),
     media,
-    screenshots: media.filter(item => item.type === 'screenshot'),
+    screenshots: row.screenshots || media.filter(item => item.type === 'screenshot'),
     coverMedia,
+    descriptionLocale,
+    descriptionFallback: Boolean(descriptionFallback),
+    translationStatus,
   }
 }

@@ -102,8 +102,12 @@ type RelationshipMap = {
     Fk<'denuncias_perfil_denunciante_id_fkey', ['denunciante_id'], 'usuarios', ['id']>,
     Fk<'denuncias_perfil_usuario_denunciado_id_fkey', ['usuario_denunciado_id'], 'usuarios', ['id']>,
   ]
+  game_catalog_cache: []
   game_external_ids: [
     Fk<'game_external_ids_jogo_id_fkey', ['jogo_id'], 'jogos', ['id']>,
+  ]
+  game_translations: [
+    Fk<'game_translations_jogo_id_fkey', ['jogo_id'], 'jogos', ['id']>,
   ]
   jogo_midias: [
     Fk<'jogo_midias_jogo_id_fkey', ['jogo_id'], 'jogos', ['id']>,
@@ -333,6 +337,16 @@ export type Database = {
         status: PublicEnums['status_denuncia_perfil']
         created_at: string
       }>
+      game_catalog_cache: Table<'game_catalog_cache', {
+        cache_key: string
+        provider: string
+        request: Json
+        game_ids: number[]
+        has_next_page: boolean
+        expires_at: string
+        created_at: string
+        updated_at: string
+      }>
       game_external_ids: Table<'game_external_ids', {
         id: number
         jogo_id: number
@@ -341,6 +355,20 @@ export type Database = {
         url: string | null
         metadata: Json
         last_synced_at: string | null
+        created_at: string
+        updated_at: string
+      }>
+      game_translations: Table<'game_translations', {
+        id: number
+        jogo_id: number
+        provider: string
+        field: string
+        source_locale: string
+        target_locale: string
+        source_hash: string
+        translated_text: string | null
+        status: string
+        error_message: string | null
         created_at: string
         updated_at: string
       }>

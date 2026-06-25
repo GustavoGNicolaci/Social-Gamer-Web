@@ -557,6 +557,7 @@ export const enUS: TranslationDictionary = {
   'game.details.statusUpdated': 'Game status updated on your profile.',
   'game.details.statusAdded': 'Game added to your profile.',
   'game.details.noDescription': 'Description not provided.',
+  'game.details.descriptionFallbackEnglish': 'Portuguese translation is not available right now. Showing the original English description.',
   'game.details.noRatingYet': 'No ratings yet',
   'game.details.community': 'Community',
   'game.details.aboutTitle': 'About the game',

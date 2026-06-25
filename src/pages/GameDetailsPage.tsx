@@ -1590,7 +1590,8 @@ function GameDetailsPage() {
   const desenvolvedoras = normalizeList(game.desenvolvedora)
   const plataformas = normalizeList(game.plataformas)
   const releaseDate = formatDate(game.data_lancamento, t('common.notProvided'))
-  const descricaoCompleta = game.descricao?.trim() || t('game.details.noDescription')
+  const descricaoCompleta = game.description?.trim() || t('game.details.noDescription')
+  const shouldShowDescriptionFallback = Boolean(game.descriptionFallback)
   const fallbackTotalAvaliacoes = reviews.length
   const fallbackMediaAvaliacoes =
     fallbackTotalAvaliacoes > 0
@@ -1812,6 +1813,11 @@ function GameDetailsPage() {
             <span className="game-details-panel-kicker">{t('game.details.description')}</span>
             <h2>{t('game.details.aboutTitle')}</h2>
             <p className="game-details-description-body">{descricaoCompleta}</p>
+            {shouldShowDescriptionFallback ? (
+              <p className="game-details-description-note">
+                {t('game.details.descriptionFallbackEnglish')}
+              </p>
+            ) : null}
           </article>
         </section>
 

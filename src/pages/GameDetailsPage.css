@@ -633,6 +633,13 @@
   line-height: 1.7;
 }
 
+.game-details-description-note {
+  margin: -0.1rem 0 0;
+  color: rgba(222, 232, 255, 0.62);
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
 .game-details-section-heading p {
   max-width: 60ch;
 }

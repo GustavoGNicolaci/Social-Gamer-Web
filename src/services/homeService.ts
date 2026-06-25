@@ -1,4 +1,5 @@
 import { supabase } from '../supabase-client'
+import { getCatalogGamesPage } from './gameCatalogService'
 
 export interface HomeError {
   code?: string
@@ -212,12 +213,6 @@ function truncateText(value: string | null | undefined, maxLength = 150) {
   if (trimmedValue.length <= maxLength) return trimmedValue
 
   return `${trimmedValue.slice(0, maxLength - 3).trim()}...`
-}
-
-function getLocalTodayIsoDate() {
-  const now = new Date()
-  const localDate = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
-  return localDate.toISOString().slice(0, 10)
 }
 
 function normalizeAuthor(row: {
@@ -554,13 +549,11 @@ export async function getHomeFeaturedRecentReviewedGames({
 
 export async function getHomeNewReleases(limit = 36): Promise<HomeResult<HomeGameSummary[]>> {
   try {
-    const { data, error } = await supabase
-      .from('jogos')
-      .select('id, titulo, capa_url, generos, data_lancamento')
-      .not('data_lancamento', 'is', null)
-      .lte('data_lancamento', getLocalTodayIsoDate())
-      .order('data_lancamento', { ascending: false })
-      .limit(limit)
+    const { data, error } = await getCatalogGamesPage({
+      page: 1,
+      pageSize: limit,
+      sort: 'release-desc',
+    })
 
     if (error) {
       return {
@@ -570,7 +563,13 @@ export async function getHomeNewReleases(limit = 36): Promise<HomeResult<HomeGam
     }
 
     return {
-      data: ((data || []) as ReleaseGameRow[]).map(normalizeReleaseGame),
+      data: data.items.map(game => ({
+        id: game.id,
+        title: game.title,
+        coverUrl: game.coverUrl,
+        genres: game.genres,
+        releaseDate: game.releaseDate,
+      })),
       error: null,
     }
   } catch (error) {
