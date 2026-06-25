@@ -46,6 +46,7 @@ interface IgdbExternalGame {
 
 interface IgdbGame {
   id: number
+  category?: number
   name?: string
   slug?: string
   summary?: string
@@ -240,6 +241,7 @@ function buildIgdbGameQuery(query: string, limit: number) {
     search "${escapeIgdbSearch(query)}";
     fields
       name,
+      category,
       slug,
       summary,
       storyline,

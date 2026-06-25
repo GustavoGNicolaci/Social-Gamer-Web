@@ -45,7 +45,10 @@ import {
   deleteWishlistEntry,
   getWishlistEntry,
 } from '../services/wishlistService'
-import { supabase } from '../supabase-client'
+import {
+  getCatalogGameDetailsById,
+  type CatalogGameDetails,
+} from '../services/gameCatalogService'
 import { formatLocalizedDate, formatLocalizedNumber, translate } from '../i18n'
 import { useI18n } from '../i18n/I18nContext'
 import { getOptionalPublicProfilePath } from '../utils/profileRoutes'
@@ -55,17 +58,6 @@ import {
   isSupabaseStructureError,
 } from '../utils/supabaseErrors'
 import './GameDetailsPage.css'
-
-interface Game {
-  id: number
-  titulo: string
-  capa_url: string | null
-  desenvolvedora: string[] | string | null
-  generos: string[] | string | null
-  data_lancamento: string | null
-  descricao: string | null
-  plataformas: string[] | string | null
-}
 
 type FeedbackTone = 'success' | 'error' | 'info'
 
@@ -87,8 +79,6 @@ const INITIAL_VISIBLE_REVIEW_COUNT = 3
 const VISIBLE_REVIEW_BATCH_SIZE = 4
 const INITIAL_VISIBLE_COMMENT_COUNT = 2
 const VISIBLE_COMMENT_BATCH_SIZE = 4
-const GAME_DETAIL_SELECT =
-  'id, titulo, capa_url, desenvolvedora, generos, data_lancamento, descricao, plataformas'
 const QUICK_PROFILE_STATUS_OPTIONS: Array<{
   value: QuickProfileStatusValue
   labelKey: string
@@ -374,7 +364,7 @@ function GameDetailsPage() {
   const { user } = useAuth()
   const { t, formatNumber } = useI18n()
 
-  const [game, setGame] = useState<Game | null>(null)
+  const [game, setGame] = useState<CatalogGameDetails | null>(null)
   const [reviews, setReviews] = useState<ReviewItem[]>([])
   const [ratingSummary, setRatingSummary] = useState<GameRatingSummary | null>(null)
   const [visibleReviewCount, setVisibleReviewCount] = useState(0)
@@ -598,19 +588,19 @@ function GameDetailsPage() {
 
       setLoading(true)
 
-      const [gameResponse, reviewsResult, ratingSummaryResult] = await Promise.all([
-        supabase.from('jogos').select(GAME_DETAIL_SELECT).eq('id', gameId).single(),
+      const [gameResult, reviewsResult, ratingSummaryResult] = await Promise.all([
+        getCatalogGameDetailsById(gameId),
         getReviewsByGameId(gameId, user?.id),
         getGameRatingSummaries([gameId]),
       ])
 
       if (!isMounted) return
 
-      if (gameResponse.error) {
-        console.error('Erro ao buscar jogo:', gameResponse.error)
+      if (gameResult.error) {
+        console.error('Erro ao buscar jogo:', gameResult.error)
         setGame(null)
       } else {
-        setGame((gameResponse.data as Game | null) || null)
+        setGame(gameResult.data)
       }
 
       setReviews(reviewsResult.data)

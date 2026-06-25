@@ -102,6 +102,12 @@ type RelationshipMap = {
     Fk<'denuncias_perfil_denunciante_id_fkey', ['denunciante_id'], 'usuarios', ['id']>,
     Fk<'denuncias_perfil_usuario_denunciado_id_fkey', ['usuario_denunciado_id'], 'usuarios', ['id']>,
   ]
+  game_external_ids: [
+    Fk<'game_external_ids_jogo_id_fkey', ['jogo_id'], 'jogos', ['id']>,
+  ]
+  jogo_midias: [
+    Fk<'jogo_midias_jogo_id_fkey', ['jogo_id'], 'jogos', ['id']>,
+  ]
   jogos: []
   lista_desejos: [
     Fk<'lista_desejos_jogo_id_fkey', ['jogo_id'], 'jogos', ['id']>,
@@ -326,6 +332,32 @@ export type Database = {
         descricao: string | null
         status: PublicEnums['status_denuncia_perfil']
         created_at: string
+      }>
+      game_external_ids: Table<'game_external_ids', {
+        id: number
+        jogo_id: number
+        provider: string
+        external_id: string
+        url: string | null
+        metadata: Json
+        last_synced_at: string | null
+        created_at: string
+        updated_at: string
+      }>
+      jogo_midias: Table<'jogo_midias', {
+        id: number
+        jogo_id: number
+        tipo: string
+        url: string
+        thumbnail_url: string | null
+        provider: string | null
+        external_media_id: string | null
+        width: number | null
+        height: number | null
+        ordem: number
+        is_primary: boolean
+        created_at: string
+        updated_at: string
       }>
       jogos: Table<'jogos', {
         id: number

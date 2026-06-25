@@ -1,4 +1,14 @@
 import { supabase } from '../supabase-client'
+import {
+  normalizeGameDetails,
+  normalizeGameMedia,
+  normalizeGamePreview,
+  type GameDetails,
+  type GameDetailsSourceRow,
+  type GameMediaSourceRow,
+  type GamePreview,
+  type GamePreviewSourceRow,
+} from './gameAdapter'
 
 export interface GameCatalogError {
   code?: string
@@ -7,17 +17,8 @@ export interface GameCatalogError {
   hint?: string | null
 }
 
-export interface CatalogGamePreview {
-  id: number
-  titulo: string
-  capa_url: string | null
-  desenvolvedora: string[] | string | null
-  generos: string[] | string | null
-  data_lancamento: string | null
-  plataformas: string[] | string | null
-  averageRating?: number | null
-  reviewCount?: number | null
-}
+export type CatalogGamePreview = GamePreview
+export type CatalogGameDetails = GameDetails
 
 interface CatalogResult<T> {
   data: T
@@ -68,6 +69,11 @@ interface CatalogGameRpcRow {
   total_count: number | string | null
 }
 
+interface GameExternalIdRow {
+  jogo_id: number | string | null
+  external_id: string | null
+}
+
 interface CatalogFacetRpcRow {
   category: 'genre' | 'platform' | 'developer' | string
   value: string | null
@@ -82,7 +88,9 @@ const DEFAULT_SEARCH_LIMIT = 8
 const DEFAULT_PAGE_SIZE = 20
 const MAX_PAGE_SIZE = 100
 const CATALOG_GAME_SELECT =
-  'id, titulo, capa_url, desenvolvedora, generos, data_lancamento, plataformas'
+  'id, titulo, capa_url, desenvolvedora, generos, data_lancamento, plataformas, source_primary, status_importacao'
+const CATALOG_GAME_DETAIL_SELECT =
+  'id, titulo, capa_url, desenvolvedora, generos, data_lancamento, descricao, plataformas, slug, descricao_curta, source_primary, status_importacao, nota_media_externa, nota_media_externa_count, external_updated_at, metadados'
 
 function normalizeCatalogError(error: unknown, fallbackMessage: string): GameCatalogError {
   if (error && typeof error === 'object') {
@@ -126,7 +134,7 @@ function normalizeCatalogGame(row: CatalogGameRpcRow | CatalogGamePreview): Cata
   if ('average_rating' in row || 'review_count' in row) {
     const rpcRow = row as CatalogGameRpcRow
 
-    return {
+    return normalizeGamePreview({
       id: rpcRow.id,
       titulo: rpcRow.titulo,
       capa_url: rpcRow.capa_url,
@@ -134,12 +142,53 @@ function normalizeCatalogGame(row: CatalogGameRpcRow | CatalogGamePreview): Cata
       generos: rpcRow.generos,
       data_lancamento: rpcRow.data_lancamento,
       plataformas: rpcRow.plataformas,
-      averageRating: normalizeNumber(rpcRow.average_rating),
-      reviewCount: normalizeInteger(rpcRow.review_count),
-    }
+      average_rating: normalizeNumber(rpcRow.average_rating),
+      review_count: normalizeInteger(rpcRow.review_count),
+    })
   }
 
-  return row
+  return normalizeGamePreview(row)
+}
+
+async function getIgdbIdsByGameId(gameIds: number[]) {
+  const normalizedIds = Array.from(
+    new Set(gameIds.filter(gameId => Number.isInteger(gameId) && gameId > 0))
+  )
+
+  if (normalizedIds.length === 0) {
+    return new Map<number, string>()
+  }
+
+  const { data, error } = await supabase
+    .from('game_external_ids')
+    .select('jogo_id, external_id')
+    .eq('provider', 'igdb')
+    .in('jogo_id', normalizedIds)
+
+  if (error) {
+    return new Map<number, string>()
+  }
+
+  const externalIdsByGameId = new Map<number, string>()
+
+  ;((data || []) as GameExternalIdRow[]).forEach(row => {
+    const gameId = normalizeInteger(row.jogo_id)
+    const externalId = row.external_id?.trim()
+    if (gameId > 0 && externalId) externalIdsByGameId.set(gameId, externalId)
+  })
+
+  return externalIdsByGameId
+}
+
+async function attachIgdbIdsToGames<T extends CatalogGamePreview>(games: T[]): Promise<T[]> {
+  if (games.length === 0) return games
+
+  const igdbIdsByGameId = await getIgdbIdsByGameId(games.map(game => game.id))
+
+  return games.map(game => ({
+    ...game,
+    igdbId: igdbIdsByGameId.get(game.id) || game.igdbId || null,
+  }))
 }
 
 async function invokeSearchImport(query: string, limit: number) {
@@ -185,8 +234,10 @@ async function fetchCatalogGamesByTitle(
     }
   }
 
+  const games = ((data || []) as CatalogGameRpcRow[]).map(normalizeCatalogGame)
+
   return {
-    data: ((data || []) as CatalogGameRpcRow[]).map(normalizeCatalogGame),
+    data: await attachIgdbIdsToGames(games),
     error: null,
   }
 }
@@ -216,15 +267,19 @@ export async function searchCatalogGamesByTitle(
     ) {
       const importedGames = await invokeSearchImport(normalizedQuery, limit)
 
-      if (importedGames && importedGames.length > localResult.data.length) {
-        return {
-          data: importedGames,
-          error: null,
-        }
-      }
-
       if (importedGames) {
-        return await fetchCatalogGamesByTitle(normalizedQuery, limit)
+        const refreshedResult = await fetchCatalogGamesByTitle(normalizedQuery, limit)
+
+        if (!refreshedResult.error && refreshedResult.data.length > 0) {
+          return refreshedResult
+        }
+
+        if (importedGames.length > localResult.data.length) {
+          return {
+            data: await attachIgdbIdsToGames(importedGames),
+            error: null,
+          }
+        }
       }
     }
 
@@ -270,7 +325,9 @@ export async function getCatalogGamesPage(
       }
     }
 
-    const rows = ((data || []) as CatalogGameRpcRow[]).map(normalizeCatalogGame)
+    const rows = await attachIgdbIdsToGames(
+      ((data || []) as CatalogGameRpcRow[]).map(normalizeCatalogGame)
+    )
     const totalCount = data && data.length > 0
       ? normalizeInteger((data[0] as CatalogGameRpcRow).total_count)
       : 0
@@ -399,14 +456,77 @@ export async function getCatalogGamesByIds(
       }
     }
 
+    const games = ((data || []) as GamePreviewSourceRow[]).map(row => normalizeGamePreview(row))
+
     return {
-      data: (data || []) as CatalogGamePreview[],
+      data: await attachIgdbIdsToGames(games),
       error: null,
     }
   } catch (error) {
     return {
       data: [],
       error: normalizeCatalogError(error, 'Erro inesperado ao carregar os jogos selecionados.'),
+    }
+  }
+}
+
+export async function getCatalogGameDetailsById(
+  gameId: number
+): Promise<CatalogResult<CatalogGameDetails | null>> {
+  if (!Number.isInteger(gameId) || gameId <= 0) {
+    return {
+      data: null,
+      error: { message: 'Nao foi possivel identificar o jogo.' },
+    }
+  }
+
+  try {
+    const [gameResponse, externalIdResponse, mediaResponse] = await Promise.all([
+      supabase
+        .from('jogos')
+        .select(CATALOG_GAME_DETAIL_SELECT)
+        .eq('id', gameId)
+        .single(),
+      supabase
+        .from('game_external_ids')
+        .select('jogo_id, external_id')
+        .eq('provider', 'igdb')
+        .eq('jogo_id', gameId)
+        .maybeSingle(),
+      supabase
+        .from('jogo_midias')
+        .select('id, tipo, url, thumbnail_url, provider, external_media_id, width, height, ordem, is_primary')
+        .eq('jogo_id', gameId)
+        .order('ordem', { ascending: true }),
+    ])
+
+    if (gameResponse.error) {
+      return {
+        data: null,
+        error: normalizeCatalogError(gameResponse.error, 'Nao foi possivel carregar este jogo.'),
+      }
+    }
+
+    const externalId = externalIdResponse.error
+      ? null
+      : ((externalIdResponse.data as GameExternalIdRow | null)?.external_id || null)
+    const media = mediaResponse.error
+      ? []
+      : ((mediaResponse.data || []) as GameMediaSourceRow[])
+        .map(normalizeGameMedia)
+        .filter((item): item is NonNullable<typeof item> => Boolean(item))
+
+    return {
+      data: normalizeGameDetails(gameResponse.data as GameDetailsSourceRow, {
+        igdbId: externalId,
+        media,
+      }),
+      error: null,
+    }
+  } catch (error) {
+    return {
+      data: null,
+      error: normalizeCatalogError(error, 'Erro inesperado ao carregar este jogo.'),
     }
   }
 }

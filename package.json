@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "igdb:match:dry-run": "node scripts/igdb-match-dry-run.mjs",
+    "igdb:hydrate:pending": "node scripts/igdb-hydrate-pending.mjs",
     "lint": "eslint .",
     "preview": "vite preview"
   },

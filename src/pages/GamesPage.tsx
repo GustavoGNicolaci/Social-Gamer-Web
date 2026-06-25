@@ -636,7 +636,13 @@ function GamesPage() {
 
   useEffect(() => {
     if (totalPages > 0 && currentPage > totalPages) {
-      setCurrentPage(totalPages)
+      const timeoutId = window.setTimeout(() => {
+        setCurrentPage(totalPages)
+      }, 0)
+
+      return () => {
+        window.clearTimeout(timeoutId)
+      }
     }
   }, [currentPage, totalPages])
 
