@@ -356,6 +356,7 @@ async function getFallbackFeaturedGames(limit: number): Promise<HomeResult<HomeF
     const { data, error } = await supabase
       .from('jogos')
       .select('id, titulo, capa_url, generos, data_lancamento')
+      .neq('status_importacao', 'stale')
       .order('id', { ascending: false })
       .limit(limit)
 
@@ -419,7 +420,10 @@ export async function getHomeActiveCommunities({
 export async function getHomeSiteStats(): Promise<HomeResult<HomeSiteStats>> {
   try {
     const [gameCountResponse, reviewCountResponse] = await Promise.all([
-      supabase.from('jogos').select('id', { count: 'exact', head: true }),
+      supabase
+        .from('jogos')
+        .select('id', { count: 'exact', head: true })
+        .neq('status_importacao', 'stale'),
       supabase.from('avaliacoes').select('id', { count: 'exact', head: true }),
     ])
 

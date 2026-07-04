@@ -152,6 +152,10 @@ const igdbBaseUrl = 'https://api.igdb.com/v4'
 const twitchTokenUrl = 'https://id.twitch.tv/oauth2/token'
 const catalogCacheTtlSeconds = 60 * 60 * 6
 const searchCacheTtlSeconds = 60 * 60
+const allowedIgdbGameCategories = [0, 1, 2, 4, 8, 9] as const
+const allowedIgdbGameCategorySet = new Set<number>(allowedIgdbGameCategories)
+const allowedIgdbCategoryClause = `category = (${allowedIgdbGameCategories.join(',')})`
+const igdbCategoryPolicyVersion = 'igdb-category-policy-v1'
 
 let cachedIgdbToken: { token: string; expiresAt: number } | null = null
 
@@ -363,6 +367,14 @@ function escapeIgdbSearch(value: string) {
   return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
 }
 
+function isAllowedIgdbGame(game: IgdbGame) {
+  return typeof game.category === 'number' && allowedIgdbGameCategorySet.has(game.category)
+}
+
+function filterAllowedIgdbGames(games: IgdbGame[]) {
+  return games.filter(isAllowedIgdbGame)
+}
+
 const igdbGameFields = `
   id,
   category,
@@ -405,7 +417,8 @@ function buildIgdbSearchQuery(query: string, limit: number, offset: number) {
   return `
     search "${escapeIgdbSearch(query)}";
     fields ${igdbGameFields};
-    where version_parent = null;
+    where version_parent = null
+      & ${allowedIgdbCategoryClause};
     limit ${limit};
     offset ${offset};
   `
@@ -425,6 +438,7 @@ function buildIgdbCatalogQuery(sort: CatalogSortOption, limit: number, offset: n
   return `
     fields ${igdbGameFields};
     where version_parent = null
+      & ${allowedIgdbCategoryClause}
       & cover != null
       & first_release_date != null
       & first_release_date <= ${nowUnix}${ratingFilter};
@@ -437,7 +451,8 @@ function buildIgdbCatalogQuery(sort: CatalogSortOption, limit: number, offset: n
 function buildIgdbByIdsQuery(igdbIds: number[]) {
   return `
     fields ${igdbGameFields};
-    where id = (${igdbIds.join(',')});
+    where id = (${igdbIds.join(',')})
+      & ${allowedIgdbCategoryClause};
     limit ${igdbIds.length};
   `
 }
@@ -493,7 +508,8 @@ async function fetchIgdbGames(body: string) {
     throw new Error(`IGDB request failed with status ${response.status}: ${responseText.slice(0, 300)}`)
   }
 
-  return await response.json() as IgdbGame[]
+  const games = await response.json() as IgdbGame[]
+  return filterAllowedIgdbGames(games)
 }
 
 async function getExistingIgdbGameIds(adminClient: SupabaseClient, igdbIds: string[]) {
@@ -805,13 +821,14 @@ async function upsertGame(
 }
 
 async function upsertIgdbGames(adminClient: SupabaseClient, igdbGames: IgdbGame[]) {
+  const allowedGames = filterAllowedIgdbGames(igdbGames)
   const existingGameIds = await getExistingIgdbGameIds(
     adminClient,
-    igdbGames.map(game => String(game.id))
+    allowedGames.map(game => String(game.id))
   )
   const gameIds: number[] = []
 
-  for (const game of igdbGames) {
+  for (const game of allowedGames) {
     const gameId = await upsertGame(adminClient, game, existingGameIds.get(String(game.id)))
     if (gameId) gameIds.push(gameId)
   }
@@ -948,6 +965,7 @@ async function fetchLocalGamePreviews(adminClient: SupabaseClient, gameIds: numb
     .from('jogos')
     .select('id, titulo, capa_url, desenvolvedora, generos, data_lancamento, plataformas, source_primary, status_importacao')
     .in('id', normalizedIds)
+    .neq('status_importacao', 'stale')
 
   if (error) throw error
 
@@ -983,7 +1001,17 @@ async function handleCatalog(adminClient: SupabaseClient, body: CatalogBody) {
   const sort = normalizeSort(body.sort)
   const filters = normalizeFilters(body)
   const offset = (page - 1) * pageSize
-  const request = { page, pageSize, query, sort, filters }
+  const request = {
+    page,
+    pageSize,
+    query,
+    sort,
+    filters,
+    categoryPolicy: {
+      version: igdbCategoryPolicyVersion,
+      allowed: allowedIgdbGameCategories,
+    },
+  }
   const cacheKey = buildCacheKey(query ? 'search' : 'catalog', request)
   const cached = await getCachedGameIds(adminClient, cacheKey)
 
@@ -1044,6 +1072,7 @@ async function handleFacets(adminClient: SupabaseClient, body: CatalogBody) {
     .from('jogos')
     .select('titulo, generos, plataformas, desenvolvedora')
     .eq('source_primary', provider)
+    .neq('status_importacao', 'stale')
     .limit(1000)
 
   if (error) throw error

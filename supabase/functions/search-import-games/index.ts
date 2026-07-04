@@ -96,6 +96,9 @@ const maxLimit = 20
 const defaultLimit = 10
 const igdbBaseUrl = 'https://api.igdb.com/v4'
 const twitchTokenUrl = 'https://id.twitch.tv/oauth2/token'
+const allowedIgdbGameCategories = [0, 1, 2, 4, 8, 9] as const
+const allowedIgdbGameCategorySet = new Set<number>(allowedIgdbGameCategories)
+const allowedIgdbCategoryClause = `category = (${allowedIgdbGameCategories.join(',')})`
 
 let cachedIgdbToken: { token: string; expiresAt: number } | null = null
 
@@ -236,6 +239,14 @@ function escapeIgdbSearch(value: string) {
   return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
 }
 
+function isAllowedIgdbGame(game: IgdbGame) {
+  return typeof game.category === 'number' && allowedIgdbGameCategorySet.has(game.category)
+}
+
+function filterAllowedIgdbGames(games: IgdbGame[]) {
+  return games.filter(isAllowedIgdbGame)
+}
+
 function buildIgdbGameQuery(query: string, limit: number) {
   return `
     search "${escapeIgdbSearch(query)}";
@@ -274,7 +285,8 @@ function buildIgdbGameQuery(query: string, limit: number) {
       external_games.uid,
       external_games.url,
       updated_at;
-    where version_parent = null;
+    where version_parent = null
+      & ${allowedIgdbCategoryClause};
     limit ${limit};
   `
 }
@@ -330,7 +342,8 @@ async function searchIgdbGames(query: string, limit: number) {
     throw new Error(`IGDB search failed with status ${response.status}: ${responseText.slice(0, 300)}`)
   }
 
-  return await response.json() as IgdbGame[]
+  const games = await response.json() as IgdbGame[]
+  return filterAllowedIgdbGames(games)
 }
 
 async function getAuthenticatedUser(
@@ -528,9 +541,24 @@ async function replaceMedia(adminClient: SupabaseClient, gameId: number, game: I
     })
   })
 
-  if (mediaRows.length === 0) return
+  const uniqueMediaRowsByKey = new Map<string, JsonRecord>()
 
-  const { error: insertError } = await adminClient.from('jogo_midias').insert(mediaRows)
+  mediaRows.forEach((row, index) => {
+    const externalMediaId = typeof row.external_media_id === 'string' ? row.external_media_id.trim() : ''
+    const mediaKey = externalMediaId
+      ? `${row.provider || provider}:${externalMediaId}`
+      : `${row.tipo || 'media'}:${row.url || index}`
+
+    if (!uniqueMediaRowsByKey.has(mediaKey)) {
+      uniqueMediaRowsByKey.set(mediaKey, row)
+    }
+  })
+
+  const uniqueMediaRows = Array.from(uniqueMediaRowsByKey.values())
+
+  if (uniqueMediaRows.length === 0) return
+
+  const { error: insertError } = await adminClient.from('jogo_midias').insert(uniqueMediaRows)
   if (insertError) throw insertError
 }
 
@@ -570,6 +598,7 @@ function buildGamePayload(game: IgdbGame, slug: string) {
       igdb: {
         id: game.id,
         slug: game.slug || null,
+        category: game.category ?? null,
         rating: game.rating ?? null,
         rating_count: game.rating_count ?? null,
         aggregated_rating: game.aggregated_rating ?? null,
