@@ -665,9 +665,24 @@ async function replaceMedia(adminClient: SupabaseClient, gameId: number, game: I
     })
   })
 
-  if (mediaRows.length === 0) return
+  const uniqueMediaRowsByKey = new Map<string, JsonRecord>()
 
-  const { error: insertError } = await adminClient.from('jogo_midias').insert(mediaRows)
+  mediaRows.forEach((row, index) => {
+    const externalMediaId = typeof row.external_media_id === 'string' ? row.external_media_id.trim() : ''
+    const mediaKey = externalMediaId
+      ? `${row.provider || provider}:${externalMediaId}`
+      : `${row.tipo || 'media'}:${row.url || index}`
+
+    if (!uniqueMediaRowsByKey.has(mediaKey)) {
+      uniqueMediaRowsByKey.set(mediaKey, row)
+    }
+  })
+
+  const uniqueMediaRows = Array.from(uniqueMediaRowsByKey.values())
+
+  if (uniqueMediaRows.length === 0) return
+
+  const { error: insertError } = await adminClient.from('jogo_midias').insert(uniqueMediaRows)
   if (insertError) throw insertError
 }
 
