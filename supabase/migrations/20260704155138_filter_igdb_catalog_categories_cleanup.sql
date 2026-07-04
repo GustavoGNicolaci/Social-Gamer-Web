@@ -4,11 +4,20 @@ where provider = 'igdb';
 with disallowed_igdb_games as (
   select
     j.id,
-    (j.metadados->'igdb'->>'category')::integer as igdb_category
+    coalesce(
+      j.metadados->'igdb'->>'game_type',
+      j.metadados->'igdb'->>'category'
+    )::integer as igdb_category
   from public.jogos j
   where j.source_primary = 'igdb'
-    and j.metadados->'igdb'->>'category' ~ '^[0-9]+$'
-    and (j.metadados->'igdb'->>'category')::integer not in (0, 1, 2, 4, 8, 9)
+    and coalesce(
+      j.metadados->'igdb'->>'game_type',
+      j.metadados->'igdb'->>'category'
+    ) ~ '^[0-9]+$'
+    and coalesce(
+      j.metadados->'igdb'->>'game_type',
+      j.metadados->'igdb'->>'category'
+    )::integer not in (0, 1, 2, 4, 8, 9)
 ),
 games_with_usage as (
   select d.id, d.igdb_category
@@ -43,8 +52,14 @@ with disallowed_igdb_games as (
   select j.id
   from public.jogos j
   where j.source_primary = 'igdb'
-    and j.metadados->'igdb'->>'category' ~ '^[0-9]+$'
-    and (j.metadados->'igdb'->>'category')::integer not in (0, 1, 2, 4, 8, 9)
+    and coalesce(
+      j.metadados->'igdb'->>'game_type',
+      j.metadados->'igdb'->>'category'
+    ) ~ '^[0-9]+$'
+    and coalesce(
+      j.metadados->'igdb'->>'game_type',
+      j.metadados->'igdb'->>'category'
+    )::integer not in (0, 1, 2, 4, 8, 9)
 ),
 games_without_usage as (
   select d.id

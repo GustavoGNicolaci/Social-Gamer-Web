@@ -61,6 +61,7 @@ interface IgdbExternalGame {
 interface IgdbGame {
   id: number
   category?: number
+  game_type?: number
   name?: string
   slug?: string
   summary?: string
@@ -154,8 +155,8 @@ const catalogCacheTtlSeconds = 60 * 60 * 6
 const searchCacheTtlSeconds = 60 * 60
 const allowedIgdbGameCategories = [0, 1, 2, 4, 8, 9] as const
 const allowedIgdbGameCategorySet = new Set<number>(allowedIgdbGameCategories)
-const allowedIgdbCategoryClause = `category = (${allowedIgdbGameCategories.join(',')})`
-const igdbCategoryPolicyVersion = 'igdb-category-policy-v1'
+const allowedIgdbGameTypeClause = `game_type = (${allowedIgdbGameCategories.join(',')})`
+const igdbCategoryPolicyVersion = 'igdb-game-type-policy-v2'
 
 let cachedIgdbToken: { token: string; expiresAt: number } | null = null
 
@@ -367,8 +368,15 @@ function escapeIgdbSearch(value: string) {
   return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
 }
 
+function getIgdbGameType(game: IgdbGame) {
+  if (typeof game.game_type === 'number') return game.game_type
+  if (typeof game.category === 'number') return game.category
+  return null
+}
+
 function isAllowedIgdbGame(game: IgdbGame) {
-  return typeof game.category === 'number' && allowedIgdbGameCategorySet.has(game.category)
+  const gameType = getIgdbGameType(game)
+  return typeof gameType === 'number' && allowedIgdbGameCategorySet.has(gameType)
 }
 
 function filterAllowedIgdbGames(games: IgdbGame[]) {
@@ -378,6 +386,7 @@ function filterAllowedIgdbGames(games: IgdbGame[]) {
 const igdbGameFields = `
   id,
   category,
+  game_type,
   name,
   slug,
   summary,
@@ -418,7 +427,7 @@ function buildIgdbSearchQuery(query: string, limit: number, offset: number) {
     search "${escapeIgdbSearch(query)}";
     fields ${igdbGameFields};
     where version_parent = null
-      & ${allowedIgdbCategoryClause};
+      & ${allowedIgdbGameTypeClause};
     limit ${limit};
     offset ${offset};
   `
@@ -438,7 +447,7 @@ function buildIgdbCatalogQuery(sort: CatalogSortOption, limit: number, offset: n
   return `
     fields ${igdbGameFields};
     where version_parent = null
-      & ${allowedIgdbCategoryClause}
+      & ${allowedIgdbGameTypeClause}
       & cover != null
       & first_release_date != null
       & first_release_date <= ${nowUnix}${ratingFilter};
@@ -452,7 +461,7 @@ function buildIgdbByIdsQuery(igdbIds: number[]) {
   return `
     fields ${igdbGameFields};
     where id = (${igdbIds.join(',')})
-      & ${allowedIgdbCategoryClause};
+      & ${allowedIgdbGameTypeClause};
     limit ${igdbIds.length};
   `
 }
@@ -739,7 +748,8 @@ function buildGamePayload(game: IgdbGame, slug: string) {
       igdb: {
         id: game.id,
         slug: game.slug || null,
-        category: game.category ?? null,
+        category: getIgdbGameType(game),
+        game_type: game.game_type ?? null,
         rating: game.rating ?? null,
         rating_count: game.rating_count ?? null,
         aggregated_rating: game.aggregated_rating ?? null,

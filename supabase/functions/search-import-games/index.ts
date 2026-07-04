@@ -47,6 +47,7 @@ interface IgdbExternalGame {
 interface IgdbGame {
   id: number
   category?: number
+  game_type?: number
   name?: string
   slug?: string
   summary?: string
@@ -98,7 +99,7 @@ const igdbBaseUrl = 'https://api.igdb.com/v4'
 const twitchTokenUrl = 'https://id.twitch.tv/oauth2/token'
 const allowedIgdbGameCategories = [0, 1, 2, 4, 8, 9] as const
 const allowedIgdbGameCategorySet = new Set<number>(allowedIgdbGameCategories)
-const allowedIgdbCategoryClause = `category = (${allowedIgdbGameCategories.join(',')})`
+const allowedIgdbGameTypeClause = `game_type = (${allowedIgdbGameCategories.join(',')})`
 
 let cachedIgdbToken: { token: string; expiresAt: number } | null = null
 
@@ -239,8 +240,15 @@ function escapeIgdbSearch(value: string) {
   return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
 }
 
+function getIgdbGameType(game: IgdbGame) {
+  if (typeof game.game_type === 'number') return game.game_type
+  if (typeof game.category === 'number') return game.category
+  return null
+}
+
 function isAllowedIgdbGame(game: IgdbGame) {
-  return typeof game.category === 'number' && allowedIgdbGameCategorySet.has(game.category)
+  const gameType = getIgdbGameType(game)
+  return typeof gameType === 'number' && allowedIgdbGameCategorySet.has(gameType)
 }
 
 function filterAllowedIgdbGames(games: IgdbGame[]) {
@@ -253,6 +261,7 @@ function buildIgdbGameQuery(query: string, limit: number) {
     fields
       name,
       category,
+      game_type,
       slug,
       summary,
       storyline,
@@ -286,7 +295,7 @@ function buildIgdbGameQuery(query: string, limit: number) {
       external_games.url,
       updated_at;
     where version_parent = null
-      & ${allowedIgdbCategoryClause};
+      & ${allowedIgdbGameTypeClause};
     limit ${limit};
   `
 }
@@ -598,7 +607,8 @@ function buildGamePayload(game: IgdbGame, slug: string) {
       igdb: {
         id: game.id,
         slug: game.slug || null,
-        category: game.category ?? null,
+        category: getIgdbGameType(game),
+        game_type: game.game_type ?? null,
         rating: game.rating ?? null,
         rating_count: game.rating_count ?? null,
         aggregated_rating: game.aggregated_rating ?? null,
