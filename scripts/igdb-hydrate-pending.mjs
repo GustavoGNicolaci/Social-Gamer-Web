@@ -5,6 +5,8 @@ const IGDB_API_BASE = 'https://api.igdb.com/v4'
 const TWITCH_TOKEN_URL = 'https://id.twitch.tv/oauth2/token'
 const PROVIDER = 'igdb'
 const DEFAULT_LIMIT = 50
+const ALLOWED_GAME_TYPES = new Set([0, 1, 2, 4, 8, 9])
+const BLOCKED_THEME_IDS = new Set([42])
 
 function readEnv(names) {
   for (const name of names) {
@@ -93,6 +95,31 @@ function unixDateToIso(value) {
   return new Date(value * 1000).toISOString()
 }
 
+function getIgdbGameType(game) {
+  return typeof game.game_type === 'number' ? game.game_type : game.category
+}
+
+function isAllowedIgdbGame(game) {
+  const gameType = getIgdbGameType(game)
+
+  return (
+    ALLOWED_GAME_TYPES.has(gameType) &&
+    !(game.themes || []).some(theme => BLOCKED_THEME_IDS.has(theme.id))
+  )
+}
+
+function getBlockedReason(game) {
+  if ((game.themes || []).some(theme => BLOCKED_THEME_IDS.has(theme.id))) {
+    return 'igdb_theme_blocked'
+  }
+
+  if (!ALLOWED_GAME_TYPES.has(getIgdbGameType(game))) {
+    return 'igdb_game_type_not_allowed'
+  }
+
+  return null
+}
+
 function getIgdbImageUrl(imageId, size) {
   return imageId ? `https://images.igdb.com/igdb/image/upload/t_${size}/${imageId}.jpg` : null
 }
@@ -144,6 +171,7 @@ function buildIgdbByIdsQuery(igdbIds) {
     fields
       id,
       category,
+      game_type,
       name,
       slug,
       summary,
@@ -159,6 +187,9 @@ function buildIgdbByIdsQuery(igdbIds) {
       platforms.name,
       genres.id,
       genres.name,
+      themes.id,
+      themes.name,
+      themes.slug,
       game_modes.id,
       game_modes.name,
       involved_companies.developer,
@@ -225,7 +256,7 @@ async function loadPendingTargets(supabase, options) {
 
   const { data: games, error: gamesError } = await supabase
     .from('jogos')
-    .select('id, titulo, status_importacao, source_primary')
+    .select('id, titulo, status_importacao, source_primary, metadados')
     .in('id', gameIds)
     .eq('status_importacao', 'pending')
     .order('id', { ascending: true })
@@ -238,6 +269,7 @@ async function loadPendingTargets(supabase, options) {
     igdbId: externalIdsByGameId.get(Number(game.id)),
     status: game.status_importacao,
     source: game.source_primary,
+    metadata: game.metadados,
   }))
 }
 
@@ -400,7 +432,9 @@ function buildGamePayload(game, slug) {
       igdb: {
         id: game.id,
         slug: game.slug || null,
-        category: game.category ?? null,
+        category: game.game_type ?? game.category ?? null,
+        game_type: game.game_type ?? game.category ?? null,
+        themes: game.themes || [],
         rating: game.rating ?? null,
         rating_count: game.rating_count ?? null,
         aggregated_rating: game.aggregated_rating ?? null,
@@ -457,6 +491,32 @@ async function hydrateGame(supabase, target, game) {
   if (externalIdError) throw externalIdError
 }
 
+async function markGameStale(supabase, target, game, reason) {
+  const metadata = target.metadata && typeof target.metadata === 'object'
+    ? target.metadata
+    : {}
+
+  const { error } = await supabase
+    .from('jogos')
+    .update({
+      status_importacao: 'stale',
+      updated_at: new Date().toISOString(),
+      metadados: {
+        ...metadata,
+        igdb_catalog_cleanup: {
+          reason,
+          igdb_id: game.id,
+          game_type: getIgdbGameType(game) ?? null,
+          themes: game.themes || [],
+          marked_stale_at: new Date().toISOString(),
+        },
+      },
+    })
+    .eq('id', target.gameId)
+
+  if (error) throw error
+}
+
 async function main() {
   const options = parseArgs()
   const supabaseUrl = readEnv(['SUPABASE_URL', 'VITE_SUPABASE_URL'])
@@ -484,20 +544,42 @@ async function main() {
 
   console.table(targets)
 
-  if (!options.apply) {
-    console.log('Dry-run only. Re-run with --apply to hydrate these games.')
-    return
-  }
-
   const token = await getIgdbToken(clientId, clientSecret)
   const games = await fetchIgdbGamesByIds(clientId, token, targets.map(target => Number(target.igdbId)))
   const gamesById = new Map(games.map(game => [String(game.id), game]))
+  const classifications = targets.map(target => {
+    const game = gamesById.get(String(target.igdbId))
+
+    return {
+      gameId: target.gameId,
+      title: target.title,
+      igdbId: target.igdbId,
+      result: !game ? 'missing_from_igdb' : getBlockedReason(game) || 'hydrate',
+    }
+  })
+
+  console.table(classifications)
+
+  if (!options.apply) {
+    console.log('Dry-run only. Re-run with --apply to hydrate allowed games and mark blocked games as stale.')
+    return
+  }
+
   let hydratedCount = 0
+  let staleCount = 0
 
   for (const target of targets) {
     const game = gamesById.get(String(target.igdbId))
     if (!game) {
       console.warn(`IGDB game ${target.igdbId} was not returned for local game ${target.gameId}.`)
+      continue
+    }
+
+    const blockedReason = getBlockedReason(game)
+    if (blockedReason || !isAllowedIgdbGame(game)) {
+      await markGameStale(supabase, target, game, blockedReason || 'igdb_game_not_allowed')
+      staleCount += 1
+      console.log(`Marked ${target.gameId} as stale: ${blockedReason || 'igdb_game_not_allowed'}`)
       continue
     }
 
@@ -507,6 +589,7 @@ async function main() {
   }
 
   console.log(`Hydrated ${hydratedCount}/${targets.length} pending games.`)
+  console.log(`Marked ${staleCount}/${targets.length} blocked games as stale.`)
 }
 
 main().catch(error => {

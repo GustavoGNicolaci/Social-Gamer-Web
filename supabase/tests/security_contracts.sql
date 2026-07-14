@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(43);
+select plan(47);
 
 select ok(
   not has_schema_privilege('anon', 'public', 'create'),
@@ -235,6 +235,38 @@ select ok(
 select ok(
   not has_function_privilege('anon', 'public.normalize_avaliacao_write()', 'execute'),
   'trigger-only review normalization cannot be called as an anonymous RPC'
+);
+select ok(
+  has_function_privilege(
+    'service_role',
+    'public.admin_cleanup_unused_catalog_games(integer[])',
+    'execute'
+  ),
+  'the backend service role can execute the guarded catalog cleanup'
+);
+select ok(
+  not has_function_privilege(
+    'anon',
+    'public.admin_cleanup_unused_catalog_games(integer[])',
+    'execute'
+  ),
+  'anonymous users cannot execute catalog cleanup'
+);
+select ok(
+  not has_function_privilege(
+    'authenticated',
+    'public.admin_cleanup_unused_catalog_games(integer[])',
+    'execute'
+  ),
+  'authenticated users cannot execute catalog cleanup'
+);
+select ok(
+  not (
+    select procedure.prosecdef
+    from pg_catalog.pg_proc as procedure
+    where procedure.oid = 'public.admin_cleanup_unused_catalog_games(integer[])'::regprocedure
+  ),
+  'catalog cleanup runs with the service role privileges instead of SECURITY DEFINER'
 );
 
 select * from finish();

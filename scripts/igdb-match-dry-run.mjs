@@ -3,6 +3,8 @@ import { createClient } from '@supabase/supabase-js'
 
 const IGDB_API_BASE = 'https://api.igdb.com/v4'
 const TWITCH_TOKEN_URL = 'https://id.twitch.tv/oauth2/token'
+const ALLOWED_GAME_TYPES = new Set([0, 1, 2, 4, 8, 9])
+const BLOCKED_THEME_IDS = new Set([42])
 
 function readEnv(names) {
   for (const name of names) {
@@ -51,6 +53,19 @@ function unixDateToYear(value) {
   return new Date(value * 1000).getUTCFullYear()
 }
 
+function getIgdbGameType(game) {
+  return typeof game.game_type === 'number' ? game.game_type : game.category
+}
+
+function isAllowedIgdbGame(game) {
+  const gameType = getIgdbGameType(game)
+
+  return (
+    ALLOWED_GAME_TYPES.has(gameType) &&
+    !(game.themes || []).some(theme => BLOCKED_THEME_IDS.has(theme.id))
+  )
+}
+
 function getReleaseYear(value) {
   if (!value) return null
   const parsedDate = new Date(value)
@@ -74,11 +89,15 @@ function buildIgdbQuery(query, limit) {
     fields
       id,
       category,
+      game_type,
       name,
       slug,
       first_release_date,
       cover.image_id,
       genres.name,
+      themes.id,
+      themes.name,
+      themes.slug,
       platforms.name,
       involved_companies.developer,
       involved_companies.publisher,
@@ -86,7 +105,9 @@ function buildIgdbQuery(query, limit) {
       total_rating,
       total_rating_count,
       updated_at;
-    where version_parent = null;
+    where version_parent = null
+      & game_type = (0,1,2,4,8,9)
+      & themes != (42);
     limit ${limit};
   `
 }
@@ -133,7 +154,8 @@ async function searchIgdbGame(clientId, token, title) {
     throw new Error(`IGDB search failed with status ${response.status}: ${responseText.slice(0, 200)}`)
   }
 
-  return await response.json()
+  const games = await response.json()
+  return games.filter(isAllowedIgdbGame)
 }
 
 function getSearchQueries(title) {
@@ -331,6 +353,8 @@ async function main() {
       suggestedIgdbId: bestCandidate?.candidate.id || null,
       suggestedTitle: bestCandidate?.candidate.name || null,
       suggestedSlug: bestCandidate?.candidate.slug || null,
+      suggestedGameType: bestCandidate ? getIgdbGameType(bestCandidate.candidate) : null,
+      suggestedThemes: bestCandidate?.candidate.themes || [],
       localYear: bestCandidate?.match.localYear || getReleaseYear(game.data_lancamento),
       suggestedYear: bestCandidate?.match.candidateYear || null,
       score: bestCandidate?.match.score || 0,

@@ -41,6 +41,7 @@ export interface IgdbGame {
   first_release_date?: number
   platforms?: IgdbNamedEntity[]
   genres?: IgdbNamedEntity[]
+  themes?: IgdbNamedEntity[]
   game_modes?: IgdbNamedEntity[]
   involved_companies?: IgdbCompanyLink[]
   rating?: number
@@ -64,8 +65,11 @@ export const provider = 'igdb'
 export const igdbBaseUrl = 'https://api.igdb.com/v4'
 export const twitchTokenUrl = 'https://id.twitch.tv/oauth2/token'
 export const allowedIgdbGameCategories = [0, 1, 2, 4, 8, 9] as const
+export const blockedIgdbThemeIds = [42] as const
 const allowedIgdbGameCategorySet = new Set<number>(allowedIgdbGameCategories)
+const blockedIgdbThemeIdSet = new Set<number>(blockedIgdbThemeIds)
 export const allowedIgdbGameTypeClause = `game_type = (${allowedIgdbGameCategories.join(',')})`
+export const excludedIgdbThemeClause = `themes != (${blockedIgdbThemeIds.join(',')})`
 
 export function normalizeText(value: unknown) {
   return typeof value === 'string' ? value.trim() : ''
@@ -129,9 +133,17 @@ export function getIgdbGameType(game: IgdbGame) {
   return null
 }
 
+export function hasBlockedIgdbTheme(game: IgdbGame) {
+  return (game.themes || []).some(theme =>
+    typeof theme.id === 'number' && blockedIgdbThemeIdSet.has(theme.id)
+  )
+}
+
 function isAllowedIgdbGame(game: IgdbGame) {
   const gameType = getIgdbGameType(game)
-  return typeof gameType === 'number' && allowedIgdbGameCategorySet.has(gameType)
+  return typeof gameType === 'number' &&
+    allowedIgdbGameCategorySet.has(gameType) &&
+    !hasBlockedIgdbTheme(game)
 }
 
 export function filterAllowedIgdbGames(games: IgdbGame[]) {

@@ -2,6 +2,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import {
   allowedIgdbGameTypeClause,
   escapeIgdbSearch,
+  excludedIgdbThemeClause,
   filterAllowedIgdbGames,
   getIgdbGameType,
   getIgdbImageUrl,
@@ -183,7 +184,7 @@ async function sha256Hex(value: string) {
 }
 
 function getDurableCacheKey(queryHash: string) {
-  return `search-import:v2:${queryHash}`
+  return `search-import:v3:${queryHash}`
 }
 
 async function getDurableCachedImport(
@@ -357,6 +358,9 @@ function buildIgdbGameQuery(query: string, limit: number) {
       platforms.name,
       genres.id,
       genres.name,
+      themes.id,
+      themes.name,
+      themes.slug,
       game_modes.id,
       game_modes.name,
       involved_companies.developer,
@@ -376,7 +380,8 @@ function buildIgdbGameQuery(query: string, limit: number) {
       external_games.url,
       updated_at;
     where version_parent = null
-      & ${allowedIgdbGameTypeClause};
+      & ${allowedIgdbGameTypeClause}
+      & ${excludedIgdbThemeClause};
     limit ${limit};
   `
 }
@@ -498,6 +503,15 @@ function isUniqueSlugViolation(error: unknown) {
     errorRecord.message.includes('jogos_slug_unique_idx')
 }
 
+function isUniqueIgdbIdViolation(error: unknown) {
+  if (!error || typeof error !== 'object') return false
+
+  const errorRecord = error as Record<string, unknown>
+  return errorRecord.code === '23505' &&
+    typeof errorRecord.message === 'string' &&
+    errorRecord.message.includes('jogos_igdb_id_unique_idx')
+}
+
 function getMetadataIgdbId(metadata: unknown) {
   if (!metadata || typeof metadata !== 'object') return null
   const igdbMetadata = (metadata as JsonRecord).igdb
@@ -522,6 +536,18 @@ async function findExistingIgdbGameIdBySlug(adminClient: SupabaseClient, slug: s
   if (row.source_primary !== provider && metadataIgdbId !== String(igdbId)) return null
 
   return Number(row.id)
+}
+
+async function findExistingIgdbGameIdByMetadata(adminClient: SupabaseClient, igdbId: number) {
+  const { data, error } = await adminClient
+    .from('jogos')
+    .select('id')
+    .eq('metadados->igdb->>id', String(igdbId))
+    .limit(1)
+    .maybeSingle()
+
+  if (error) throw error
+  return data ? Number(data.id) : null
 }
 
 function getCompaniesByRole(game: IgdbGame, role: 'developer' | 'publisher') {
@@ -725,6 +751,7 @@ function buildGamePayload(game: IgdbGame, slug: string) {
         slug: game.slug || null,
         category: getIgdbGameType(game),
         game_type: game.game_type ?? null,
+        themes: game.themes || [],
         rating: game.rating ?? null,
         rating_count: game.rating_count ?? null,
         aggregated_rating: game.aggregated_rating ?? null,
@@ -751,6 +778,7 @@ async function upsertGame(
   const baseSlug = slugify(game.slug || title)
   const providerSlug = `${baseSlug}-${provider}-${game.id}`
   const resolvedGameId = existingGameId ||
+    await findExistingIgdbGameIdByMetadata(adminClient, game.id) ||
     await findExistingIgdbGameIdBySlug(adminClient, providerSlug, game.id) ||
     undefined
   const slug = await ensureUniqueSlug(adminClient, resolvedGameId ? baseSlug : providerSlug, resolvedGameId)
@@ -769,8 +797,12 @@ async function upsertGame(
       .select('id, titulo, capa_url, desenvolvedora, generos, data_lancamento, plataformas')
       .single()
 
-  if (response.error && !resolvedGameId && isUniqueSlugViolation(response.error)) {
-    const fallbackGameId = await findExistingIgdbGameIdBySlug(adminClient, providerSlug, game.id)
+  if (response.error && !resolvedGameId && (
+    isUniqueSlugViolation(response.error) ||
+    isUniqueIgdbIdViolation(response.error)
+  )) {
+    const fallbackGameId = await findExistingIgdbGameIdByMetadata(adminClient, game.id) ||
+      await findExistingIgdbGameIdBySlug(adminClient, providerSlug, game.id)
 
     if (fallbackGameId) {
       const fallbackSlug = await ensureUniqueSlug(adminClient, baseSlug, fallbackGameId)
