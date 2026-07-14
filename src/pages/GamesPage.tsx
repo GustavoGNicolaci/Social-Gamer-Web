@@ -18,6 +18,7 @@ import {
   type CatalogGamePreview,
   type CatalogSortOption,
 } from '../services/gameCatalogService'
+import { getCatalogPaginationPages } from '../features/catalog/domain/catalogPagination'
 import { formatLocalizedDate, formatLocalizedNumber, getRuntimeLocale } from '../i18n'
 import { useI18n } from '../i18n/I18nContext'
 import './GamesPage.css'
@@ -235,6 +236,7 @@ const GameCard = memo(function GameCard({ game, ratingSummary, onShowGenres }: G
 
 function PaginationControls({ currentPage, totalPages, onChangePage }: PaginationProps) {
   const { t } = useI18n()
+  const visiblePages = getCatalogPaginationPages(currentPage, totalPages)
 
   if (totalPages <= 1) return null
 
@@ -248,7 +250,7 @@ function PaginationControls({ currentPage, totalPages, onChangePage }: Paginatio
         {t('catalog.previous')}
       </button>
 
-      {Array.from({ length: totalPages }, (_, index) => index + 1).map(page => (
+      {visiblePages.map(page => (
         <button
           key={page}
           type="button"
