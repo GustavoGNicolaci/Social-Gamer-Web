@@ -1,4 +1,23 @@
-import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import {
+  allowedIgdbGameTypeClause,
+  escapeIgdbSearch,
+  filterAllowedIgdbGames,
+  getIgdbGameType,
+  getIgdbImageUrl,
+  igdbBaseUrl,
+  normalizeNamedEntities,
+  normalizeText,
+  provider,
+  slugify,
+  twitchTokenUrl,
+  uniqueValues,
+  unixDateToIso,
+  unixDateToIsoDate,
+  type IgdbGame,
+  type NamedEntityInput,
+} from '../_shared/igdb.ts'
+import { resolveCors } from '../_shared/cors.ts'
 
 declare const Deno: {
   env: {
@@ -14,62 +33,6 @@ interface SearchImportBody {
   limit?: unknown
 }
 
-interface IgdbNamedEntity {
-  id?: number
-  name?: string
-  slug?: string
-}
-
-interface IgdbImage {
-  id?: number
-  image_id?: string
-  width?: number
-  height?: number
-}
-
-interface IgdbCompanyLink {
-  developer?: boolean
-  publisher?: boolean
-  company?: IgdbNamedEntity
-}
-
-interface IgdbWebsite {
-  category?: number
-  url?: string
-}
-
-interface IgdbExternalGame {
-  category?: number
-  uid?: string
-  url?: string
-}
-
-interface IgdbGame {
-  id: number
-  category?: number
-  game_type?: number
-  name?: string
-  slug?: string
-  summary?: string
-  storyline?: string
-  cover?: IgdbImage
-  screenshots?: IgdbImage[]
-  first_release_date?: number
-  platforms?: IgdbNamedEntity[]
-  genres?: IgdbNamedEntity[]
-  game_modes?: IgdbNamedEntity[]
-  involved_companies?: IgdbCompanyLink[]
-  rating?: number
-  rating_count?: number
-  aggregated_rating?: number
-  aggregated_rating_count?: number
-  total_rating?: number
-  total_rating_count?: number
-  websites?: IgdbWebsite[]
-  external_games?: IgdbExternalGame[]
-  updated_at?: number
-}
-
 interface CatalogGamePreview {
   id: number
   titulo: string
@@ -80,34 +43,51 @@ interface CatalogGamePreview {
   plataformas: string[] | null
 }
 
-interface NamedEntityInput {
-  name: string
+interface ImportPayload {
   provider: string
-  externalId?: string | null
+  importedCount: number
+  games: CatalogGamePreview[]
 }
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+interface ImportCacheEntry {
+  expiresAt: number
+  payload: ImportPayload
 }
 
-const provider = 'igdb'
-const maxLimit = 20
+interface DurableImportCacheRow {
+  game_ids: number[] | null
+  expires_at: string
+}
+
+interface RateLimitReservationRow {
+  allowed: boolean
+  remaining: number
+  reset_at: string
+  already_reserved: boolean
+}
+
+const maxLimit = 10
 const defaultLimit = 10
-const igdbBaseUrl = 'https://api.igdb.com/v4'
-const twitchTokenUrl = 'https://id.twitch.tv/oauth2/token'
-const allowedIgdbGameCategories = [0, 1, 2, 4, 8, 9] as const
-const allowedIgdbGameCategorySet = new Set<number>(allowedIgdbGameCategories)
-const allowedIgdbGameTypeClause = `game_type = (${allowedIgdbGameCategories.join(',')})`
+const maxQueryLength = 200
+const externalAttemptLimit = 10
+const importCacheTtlMs = 60 * 60 * 1000
+const maxCachedQueries = 250
 
 let cachedIgdbToken: { token: string; expiresAt: number } | null = null
+const importCache = new Map<string, ImportCacheEntry>()
+const inFlightImports = new Map<string, Promise<ImportPayload>>()
 
-function jsonResponse(status: number, body: Record<string, unknown>) {
+function jsonResponse(
+  status: number,
+  body: Record<string, unknown>,
+  corsHeaders: Record<string, string>,
+  extraHeaders: Record<string, string> = {}
+) {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
       ...corsHeaders,
+      ...extraHeaders,
       'Content-Type': 'application/json',
     },
   })
@@ -137,20 +117,188 @@ function getJsonSecret(name: string, keyName = 'default') {
 }
 
 function getSupabaseAnonKey() {
-  return Deno.env.get('SUPABASE_ANON_KEY')?.trim() || getJsonSecret('SUPABASE_PUBLISHABLE_KEYS')
+  return Deno.env.get('SUPABASE_PUBLISHABLE_KEY')?.trim() ||
+    Deno.env.get('SUPABASE_ANON_KEY')?.trim() ||
+    getJsonSecret('SUPABASE_PUBLISHABLE_KEYS')
 }
 
 function getSupabaseServiceRoleKey() {
-  return Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')?.trim() || getJsonSecret('SUPABASE_SECRET_KEYS')
-}
-
-function normalizeText(value: unknown) {
-  return typeof value === 'string' ? value.trim() : ''
+  return Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')?.trim() ||
+    Deno.env.get('SUPABASE_SECRET_KEY')?.trim() ||
+    getJsonSecret('SUPABASE_SECRET_KEYS')
 }
 
 function normalizeLimit(value: unknown) {
   if (typeof value !== 'number' || !Number.isFinite(value)) return defaultLimit
   return Math.max(1, Math.min(Math.trunc(value), maxLimit))
+}
+
+function normalizeQuery(value: unknown) {
+  return normalizeText(value)
+    .normalize('NFKC')
+    .replace(/\s+/g, ' ')
+}
+
+function getNormalizedQueryKey(query: string) {
+  return query.toLocaleLowerCase('en-US')
+}
+
+function trimMapToSize<TKey, TValue>(map: Map<TKey, TValue>, maxSize: number) {
+  while (map.size > maxSize) {
+    const oldestKey = map.keys().next().value as TKey | undefined
+    if (oldestKey === undefined) return
+    map.delete(oldestKey)
+  }
+}
+
+function cleanupBestEffortState(now: number) {
+  importCache.forEach((entry, key) => {
+    if (entry.expiresAt <= now) importCache.delete(key)
+  })
+
+  trimMapToSize(importCache, maxCachedQueries)
+}
+
+function getCachedImport(queryKey: string, now: number, limit: number) {
+  const entry = importCache.get(queryKey)
+  if (!entry || entry.expiresAt <= now) {
+    if (entry) importCache.delete(queryKey)
+    return null
+  }
+
+  const games = entry.payload.games.slice(0, limit)
+  return {
+    ...entry.payload,
+    importedCount: games.length,
+    games,
+  }
+}
+
+async function sha256Hex(value: string) {
+  const encodedValue = new TextEncoder().encode(value)
+  const digest = await crypto.subtle.digest('SHA-256', encodedValue)
+  return Array.from(new Uint8Array(digest))
+    .map(byte => byte.toString(16).padStart(2, '0'))
+    .join('')
+}
+
+function getDurableCacheKey(queryHash: string) {
+  return `search-import:v2:${queryHash}`
+}
+
+async function getDurableCachedImport(
+  adminClient: SupabaseClient,
+  cacheKey: string,
+  now: number,
+  limit: number
+): Promise<ImportPayload | null> {
+  const { data, error } = await adminClient
+    .from('game_catalog_cache')
+    .select('game_ids, expires_at')
+    .eq('cache_key', cacheKey)
+    .maybeSingle()
+
+  if (error || !data) return null
+
+  const cacheRow = data as DurableImportCacheRow
+  if (Date.parse(cacheRow.expires_at) <= now) return null
+
+  const gameIds = Array.from(new Set(
+    (cacheRow.game_ids || [])
+      .map(gameId => Number(gameId))
+      .filter(gameId => Number.isInteger(gameId) && gameId > 0)
+  ))
+
+  if (gameIds.length === 0) {
+    return { provider, importedCount: 0, games: [] }
+  }
+
+  const { data: gameRows, error: gamesError } = await adminClient
+    .from('jogos')
+    .select('id, titulo, capa_url, desenvolvedora, generos, data_lancamento, plataformas')
+    .in('id', gameIds)
+    .or('status_importacao.is.null,status_importacao.neq.stale')
+
+  if (gamesError) return null
+
+  const gamesById = new Map(
+    ((gameRows || []) as CatalogGamePreview[]).map(game => [Number(game.id), game])
+  )
+  const games = gameIds
+    .flatMap(gameId => {
+      const game = gamesById.get(gameId)
+      return game ? [game] : []
+    })
+    .slice(0, limit)
+
+  return {
+    provider,
+    importedCount: games.length,
+    games,
+  }
+}
+
+async function saveDurableImportCache(
+  adminClient: SupabaseClient,
+  cacheKey: string,
+  queryKey: string,
+  now: number,
+  payload: ImportPayload
+) {
+  try {
+    const { error } = await adminClient
+      .from('game_catalog_cache')
+      .upsert({
+        cache_key: cacheKey,
+        provider,
+        request: {
+          kind: 'search_import',
+          normalized_query: queryKey,
+        },
+        game_ids: payload.games.map(game => game.id),
+        has_next_page: false,
+        expires_at: new Date(now + importCacheTtlMs).toISOString(),
+      }, { onConflict: 'cache_key' })
+
+    if (error) {
+      logEdgeError('Could not persist search import cache', error, { cacheKey })
+    }
+  } catch (error) {
+    logEdgeError('Could not persist search import cache', error, { cacheKey })
+  }
+}
+
+async function reserveDurableExternalAttempt(
+  adminClient: SupabaseClient,
+  userId: string,
+  queryHash: string
+) {
+  const { data, error } = await adminClient.rpc('reserve_game_import_attempt', {
+    p_user_id: userId,
+    p_query_hash: queryHash,
+    p_limit: externalAttemptLimit,
+    p_window_seconds: 60 * 60,
+  })
+
+  if (error) throw error
+
+  const reservation = (Array.isArray(data) ? data[0] : data) as
+    | RateLimitReservationRow
+    | null
+
+  if (!reservation) throw new Error('Rate limit reservation returned no result')
+
+  return reservation
+}
+
+function getRateLimitPayload(reservation?: RateLimitReservationRow | null) {
+  return {
+    limit: externalAttemptLimit,
+    remaining: reservation?.remaining ?? null,
+    resetAt: reservation?.reset_at || null,
+    scope: 'database',
+    cached: !reservation,
+  }
 }
 
 async function readBody(request: Request): Promise<SearchImportBody> {
@@ -186,80 +334,6 @@ function logEdgeError(message: string, error: unknown, context: Record<string, u
     ...context,
     error: normalizeErrorForLog(error),
   })
-}
-
-function slugify(value: string) {
-  const normalized = value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-
-  return normalized || 'game'
-}
-
-function uniqueValues(values: string[]) {
-  const seen = new Set<string>()
-  return values.filter(value => {
-    const key = value.toLowerCase()
-    if (seen.has(key)) return false
-    seen.add(key)
-    return true
-  })
-}
-
-function normalizeNamedEntities(entities: IgdbNamedEntity[] | undefined): NamedEntityInput[] {
-  return uniqueValues((entities || []).map(entity => normalizeText(entity.name)).filter(Boolean))
-    .map(name => {
-      const match = (entities || []).find(entity => normalizeText(entity.name) === name)
-
-      return {
-        name,
-        provider,
-        externalId: typeof match?.id === 'number' ? String(match.id) : null,
-      }
-    })
-}
-
-function unixDateToIsoDate(value: number | undefined) {
-  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return null
-  return new Date(value * 1000).toISOString().slice(0, 10)
-}
-
-function unixDateToIso(value: number | undefined) {
-  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return null
-  return new Date(value * 1000).toISOString()
-}
-
-function getIgdbImageUrl(imageId: string | undefined, size: 'cover_big' | 'screenshot_big') {
-  return imageId ? `https://images.igdb.com/igdb/image/upload/t_${size}/${imageId}.jpg` : null
-}
-
-function escapeIgdbSearch(value: string) {
-  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
-}
-
-function getIgdbGameType(game: IgdbGame) {
-  if (typeof game.game_type === 'number') return game.game_type
-  if (typeof game.category === 'number') return game.category
-  return null
-}
-
-function isAllowedIgdbGame(game: IgdbGame) {
-  const gameType = getIgdbGameType(game)
-  return typeof gameType === 'number' && allowedIgdbGameCategorySet.has(gameType)
-}
-
-function filterAllowedIgdbGames(games: IgdbGame[]) {
-  const gamesById = new Map<number, IgdbGame>()
-
-  games.forEach(game => {
-    if (!isAllowedIgdbGame(game) || gamesById.has(game.id)) return
-    gamesById.set(game.id, game)
-  })
-
-  return Array.from(gamesById.values())
 }
 
 function buildIgdbGameQuery(query: string, limit: number) {
@@ -747,13 +821,51 @@ async function upsertGame(
   return savedGame
 }
 
+async function importGames(
+  adminClient: SupabaseClient,
+  query: string,
+  limit: number
+): Promise<ImportPayload> {
+  const igdbGames = await searchIgdbGames(query, limit)
+  const existingGameIds = await getExistingIgdbGameIds(
+    adminClient,
+    igdbGames.map(game => String(game.id))
+  )
+  const savedGames: CatalogGamePreview[] = []
+
+  for (const game of igdbGames) {
+    const savedGame = await upsertGame(adminClient, game, existingGameIds.get(String(game.id)))
+    if (savedGame) {
+      existingGameIds.set(String(game.id), savedGame.id)
+      savedGames.push(savedGame)
+    }
+  }
+
+  return {
+    provider,
+    importedCount: savedGames.length,
+    games: savedGames,
+  }
+}
+
 Deno.serve(async request => {
+  const cors = resolveCors(request, name => Deno.env.get(name))
+  const respond = (
+    status: number,
+    body: Record<string, unknown>,
+    extraHeaders: Record<string, string> = {}
+  ) => jsonResponse(status, body, cors.headers, extraHeaders)
+
+  if (!cors.allowed) {
+    return respond(403, { error: 'origin_not_allowed' })
+  }
+
   if (request.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return new Response(null, { status: 204, headers: cors.headers })
   }
 
   if (request.method !== 'POST') {
-    return jsonResponse(405, { error: 'method_not_allowed' })
+    return respond(405, { error: 'method_not_allowed' })
   }
 
   let supabaseUrl = ''
@@ -770,20 +882,39 @@ Deno.serve(async request => {
     }
   } catch (error) {
     logEdgeError('search-import-games server misconfigured', error)
-    return jsonResponse(500, { error: 'server_misconfigured' })
+    return respond(500, { error: 'server_misconfigured' })
   }
 
   const user = await getAuthenticatedUser(supabaseUrl, anonKey, request.headers.get('Authorization'))
   if (!user) {
-    return jsonResponse(401, { error: 'not_authenticated' })
+    return respond(401, { error: 'not_authenticated' })
   }
 
   const body = await readBody(request)
-  const query = normalizeText(body.query)
+  const query = normalizeQuery(body.query)
   const limit = normalizeLimit(body.limit)
 
   if (query.length < 2) {
-    return jsonResponse(400, { error: 'query_too_short' })
+    return respond(400, { error: 'query_too_short' })
+  }
+
+  if (query.length > maxQueryLength) {
+    return respond(400, { error: 'query_too_long' })
+  }
+
+  const now = Date.now()
+  const queryKey = getNormalizedQueryKey(query)
+  const queryHash = await sha256Hex(queryKey)
+  const durableCacheKey = getDurableCacheKey(queryHash)
+  cleanupBestEffortState(now)
+
+  const cachedPayload = getCachedImport(queryKey, now, limit)
+  if (cachedPayload) {
+    return respond(200, {
+      ...cachedPayload,
+      cache: { hit: true, scope: 'edge_instance' },
+      rateLimit: getRateLimitPayload(),
+    })
   }
 
   const adminClient = createClient(supabaseUrl, serviceRoleKey, {
@@ -794,27 +925,93 @@ Deno.serve(async request => {
     },
   })
 
+  let durableCachedPayload: ImportPayload | null = null
+
   try {
-    const igdbGames = await searchIgdbGames(query, limit)
-    const existingGameIds = await getExistingIgdbGameIds(
+    durableCachedPayload = await getDurableCachedImport(
       adminClient,
-      igdbGames.map(game => String(game.id))
+      durableCacheKey,
+      now,
+      maxLimit
     )
+  } catch (error) {
+    logEdgeError('Could not read durable search import cache', error)
+  }
 
-    const savedGames: CatalogGamePreview[] = []
+  if (durableCachedPayload) {
+    importCache.set(queryKey, {
+      expiresAt: now + importCacheTtlMs,
+      payload: durableCachedPayload,
+    })
+    trimMapToSize(importCache, maxCachedQueries)
 
-    for (const game of igdbGames) {
-      const savedGame = await upsertGame(adminClient, game, existingGameIds.get(String(game.id)))
-      if (savedGame) {
-        existingGameIds.set(String(game.id), savedGame.id)
-        savedGames.push(savedGame)
-      }
+    const games = durableCachedPayload.games.slice(0, limit)
+    return respond(200, {
+      ...durableCachedPayload,
+      importedCount: games.length,
+      games,
+      cache: { hit: true, scope: 'database' },
+      rateLimit: getRateLimitPayload(),
+    })
+  }
+
+  let importPromise = inFlightImports.get(queryKey)
+  let ownsImportPromise = false
+  let rateLimitReservation: RateLimitReservationRow | null = null
+
+  if (!importPromise) {
+    let reservation: RateLimitReservationRow
+
+    try {
+      reservation = await reserveDurableExternalAttempt(adminClient, user.id, queryHash)
+    } catch (error) {
+      logEdgeError('Could not reserve durable search import quota', error, {
+        userId: user.id,
+      })
+      return respond(503, { error: 'rate_limit_unavailable' })
     }
 
-    return jsonResponse(200, {
-      provider,
-      importedCount: savedGames.length,
-      games: savedGames,
+    rateLimitReservation = reservation
+
+    if (!reservation.allowed) {
+      const resetAtMs = Date.parse(reservation.reset_at)
+      const retryAfterSeconds = Math.max(
+        1,
+        Math.ceil(((Number.isFinite(resetAtMs) ? resetAtMs : now + 60_000) - now) / 1000)
+      )
+      return respond(429, {
+        error: 'rate_limit_exceeded',
+        rateLimit: getRateLimitPayload(reservation),
+      }, { 'Retry-After': String(retryAfterSeconds) })
+    }
+
+    importPromise = importGames(adminClient, query, maxLimit)
+    inFlightImports.set(queryKey, importPromise)
+    ownsImportPromise = true
+  }
+
+  try {
+    const payload = await importPromise
+
+    if (ownsImportPromise) {
+      importCache.set(queryKey, {
+        expiresAt: now + importCacheTtlMs,
+        payload,
+      })
+      trimMapToSize(importCache, maxCachedQueries)
+      await saveDurableImportCache(adminClient, durableCacheKey, queryKey, now, payload)
+    }
+
+    const games = payload.games.slice(0, limit)
+    return respond(200, {
+      ...payload,
+      importedCount: games.length,
+      games,
+      cache: {
+        hit: !ownsImportPromise,
+        scope: ownsImportPromise ? 'database' : 'edge_instance',
+      },
+      rateLimit: getRateLimitPayload(rateLimitReservation),
     })
   } catch (error) {
     const missingIgdbConfig =
@@ -827,8 +1024,12 @@ Deno.serve(async request => {
       userId: user.id,
     })
 
-    return jsonResponse(missingIgdbConfig ? 503 : 500, {
+    return respond(missingIgdbConfig ? 503 : 500, {
       error: missingIgdbConfig ? 'igdb_not_configured' : 'import_failed',
     })
+  } finally {
+    if (ownsImportPromise && inFlightImports.get(queryKey) === importPromise) {
+      inFlightImports.delete(queryKey)
+    }
   }
 })

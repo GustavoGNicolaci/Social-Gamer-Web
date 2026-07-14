@@ -1,3 +1,5 @@
+import { translate } from '../i18n'
+
 export type GameListField = string[] | string | null
 export type GameSourceProvider = 'manual' | 'igdb' | 'rawg' | 'steam' | 'mobygames' | string
 
@@ -174,7 +176,7 @@ export function normalizeGamePreview(
   row: GamePreviewSourceRow,
   options: { igdbId?: string | number | null } = {}
 ): GamePreview {
-  const title = row.title?.trim() || row.titulo?.trim() || 'Jogo desconhecido'
+  const title = row.title?.trim() || row.titulo?.trim() || translate('common.unknownGame')
   const coverUrl = row.coverUrl ?? row.capa_url ?? null
   const developer = normalizeGameListField(row.developer ?? row.desenvolvedora)
   const genres = normalizeGameListField(row.genres ?? row.generos)

@@ -11,6 +11,8 @@ const DEFAULT_IMAGE_FOLDER = 'images'
 const MAX_AVATAR_SIZE_MB = 5
 const COMMUNITY_POST_MEDIA_REFERENCE_PREFIX = `${COMMUNITY_POST_MEDIA_BUCKET}/`
 const SIGNED_URL_EXPIRES_IN_SECONDS = 60 * 60
+const STORAGE_LIST_PAGE_SIZE = 100
+const SIGNED_URL_BATCH_SIZE = 100
 const ALLOWED_IMAGE_MIME_TYPES = new Set([
   'image/jpeg',
   'image/png',
@@ -248,28 +250,41 @@ async function listAllFilePathsByPrefix(prefix: string) {
       continue
     }
 
-    const { data, error } = await supabase.storage.from(PUBLIC_UPLOADS_BUCKET).list(currentPrefix, {
-      limit: 100,
-      offset: 0,
-    })
+    let offset = 0
 
-    if (error) {
-      logClientError('storage.listAllFilePathsByPrefix', error)
-      return {
-        data: discoveredPaths,
-        error,
-      }
-    }
+    while (true) {
+      const { data, error } = await supabase.storage.from(PUBLIC_UPLOADS_BUCKET).list(currentPrefix, {
+        limit: STORAGE_LIST_PAGE_SIZE,
+        offset,
+        sortBy: { column: 'name', order: 'asc' },
+      })
 
-    for (const item of (data || []) as StorageListEntry[]) {
-      const nestedPath = `${currentPrefix}/${item.name}`
-
-      if (item.id) {
-        discoveredPaths.push(nestedPath)
-        continue
+      if (error) {
+        logClientError('storage.listAllFilePathsByPrefix', error)
+        return {
+          data: discoveredPaths,
+          error,
+        }
       }
 
-      pendingPrefixes.push(nestedPath)
+      const entries = (data || []) as StorageListEntry[]
+
+      for (const item of entries) {
+        const nestedPath = `${currentPrefix}/${item.name}`
+
+        if (item.id) {
+          discoveredPaths.push(nestedPath)
+          continue
+        }
+
+        pendingPrefixes.push(nestedPath)
+      }
+
+      if (entries.length < STORAGE_LIST_PAGE_SIZE) {
+        break
+      }
+
+      offset += STORAGE_LIST_PAGE_SIZE
     }
   }
 
@@ -390,18 +405,34 @@ export async function listUserFiles(
   folder = DEFAULT_IMAGE_FOLDER
 ): Promise<string[] | null> {
   try {
-    const { data, error } = await supabase.storage.from(PUBLIC_UPLOADS_BUCKET).list(`${userId}/${folder}`, {
-      limit: 100,
-      offset: 0,
-      sortBy: { column: 'created_at', order: 'desc' },
-    })
+    const fileNames: string[] = []
+    let offset = 0
 
-    if (error) {
-      logClientError('storage.listUserFiles', error)
-      return null
+    while (true) {
+      const { data, error } = await supabase.storage
+        .from(PUBLIC_UPLOADS_BUCKET)
+        .list(`${userId}/${folder}`, {
+          limit: STORAGE_LIST_PAGE_SIZE,
+          offset,
+          sortBy: { column: 'created_at', order: 'desc' },
+        })
+
+      if (error) {
+        logClientError('storage.listUserFiles', error)
+        return null
+      }
+
+      const entries = data || []
+      fileNames.push(...entries.map(file => file.name))
+
+      if (entries.length < STORAGE_LIST_PAGE_SIZE) {
+        break
+      }
+
+      offset += STORAGE_LIST_PAGE_SIZE
     }
 
-    return data.map(file => file.name)
+    return fileNames
   } catch (error) {
     logClientError('storage.listUserFiles.exception', error)
     return null
@@ -554,13 +585,82 @@ export async function resolveCommunityPostImageUrls(
   const uniquePaths = Array.from(
     new Set(filePaths.filter((path): path is string => Boolean(normalizeStoragePath(path))))
   )
+  const privateObjectPathByReference = new Map<string, string>()
+  const resolvedUrlsByPath = new Map<string, string>()
 
-  await Promise.all(
-    uniquePaths.map(async filePath => {
-      const imageUrl = await resolveCommunityPostImageUrl(filePath)
-      if (imageUrl) imageUrlsByPath.set(filePath, imageUrl)
-    })
-  )
+  uniquePaths.forEach(filePath => {
+    const privateObjectPath = getCommunityPostMediaObjectPath(filePath)
+
+    if (privateObjectPath) {
+      privateObjectPathByReference.set(filePath, privateObjectPath)
+      return
+    }
+
+    const legacyPublicPath = getLegacyCommunityPostPublicPath(filePath)
+    if (legacyPublicPath) {
+      resolvedUrlsByPath.set(filePath, getPublicUrl(legacyPublicPath))
+    }
+  })
+
+  const privateEntries = Array.from(privateObjectPathByReference.entries())
+
+  for (let startIndex = 0; startIndex < privateEntries.length; startIndex += SIGNED_URL_BATCH_SIZE) {
+    const currentEntries = privateEntries.slice(startIndex, startIndex + SIGNED_URL_BATCH_SIZE)
+    const currentObjectPaths = currentEntries.map(([, objectPath]) => objectPath)
+
+    try {
+      const { data, error } = await supabase.storage
+        .from(COMMUNITY_POST_MEDIA_BUCKET)
+        .createSignedUrls(currentObjectPaths, SIGNED_URL_EXPIRES_IN_SECONDS)
+
+      if (error) {
+        if (!isSupabasePermissionError(error)) {
+          logClientError('storage.resolveCommunityPostImageUrls', error, {
+            paths: currentObjectPaths.join(','),
+          })
+        }
+        continue
+      }
+
+      const referencePathsByObjectPath = new Map<string, string[]>()
+
+      currentEntries.forEach(([referencePath, objectPath]) => {
+        const referencePaths = referencePathsByObjectPath.get(objectPath) || []
+        referencePathsByObjectPath.set(objectPath, [...referencePaths, referencePath])
+      })
+
+      data.forEach((result, resultIndex) => {
+        const objectPath = result.path || currentObjectPaths[resultIndex]
+        const referencePaths = referencePathsByObjectPath.get(objectPath) || []
+
+        if (result.error) {
+          const itemError = { message: result.error }
+          if (!isSupabasePermissionError(itemError)) {
+            logClientError('storage.resolveCommunityPostImageUrls.item', itemError, {
+              path: referencePaths[0] || objectPath,
+            })
+          }
+          return
+        }
+
+        const signedUrl = result.signedUrl
+        if (signedUrl) {
+          referencePaths.forEach(referencePath => {
+            resolvedUrlsByPath.set(referencePath, signedUrl)
+          })
+        }
+      })
+    } catch (error) {
+      logClientError('storage.resolveCommunityPostImageUrls.exception', error, {
+        paths: currentObjectPaths.join(','),
+      })
+    }
+  }
+
+  uniquePaths.forEach(filePath => {
+    const imageUrl = resolvedUrlsByPath.get(filePath)
+    if (imageUrl) imageUrlsByPath.set(filePath, imageUrl)
+  })
 
   return imageUrlsByPath
 }

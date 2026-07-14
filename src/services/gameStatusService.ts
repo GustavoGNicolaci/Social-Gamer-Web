@@ -333,7 +333,10 @@ async function getGameStatusesPageWithFallback(
     statusQuery = statusQuery.order('created_at', { ascending: false, nullsFirst: false })
   }
 
-  const { data: statusRows, error: statusError, count } = await statusQuery.range(options.from, options.to)
+  const statusResponse = options.sort === 'title'
+    ? await statusQuery
+    : await statusQuery.range(options.from, options.to)
+  const { data: statusRows, error: statusError, count } = statusResponse
   timings.requestCount += 1
   timings.queryMs += getPerformanceNow() - fallbackStartedAt
 
@@ -381,13 +384,16 @@ async function getGameStatusesPageWithFallback(
     gamesById.set(game.id, game)
   })
 
-  const items = sortStatusItemsByDisplayOrder(
+  const sortedItems = sortStatusItemsByDisplayOrder(
     normalizedStatusRows.map(item => ({
       ...item,
       jogo: gamesById.get(item.jogo_id) || null,
     })),
     options.sort
   )
+  const items = options.sort === 'title'
+    ? sortedItems.slice(options.from, options.to + 1)
+    : sortedItems
   timings.normalizeMs += getPerformanceNow() - normalizeStartedAt
   timings.totalMs = timings.queryMs + timings.normalizeMs
 
@@ -433,7 +439,13 @@ export async function getGameStatusesPageByUserId(
     }
 
     const queryStartedAt = getPerformanceNow()
-    const { data, error, count } = await query.range(options.from, options.to)
+    // PostgREST cannot order parent rows globally by a nested game title. For the
+    // title option, load the authorized status set first, sort it, and only then
+    // slice the requested page. Other sort modes remain paginated in Postgres.
+    const response = options.sort === 'title'
+      ? await query
+      : await query.range(options.from, options.to)
+    const { data, error, count } = response
     timings.requestCount += 1
     timings.queryMs += getPerformanceNow() - queryStartedAt
 
@@ -458,12 +470,15 @@ export async function getGameStatusesPageByUserId(
     }
 
     const normalizeStartedAt = getPerformanceNow()
-    const items = sortStatusItemsByDisplayOrder(
+    const sortedItems = sortStatusItemsByDisplayOrder(
       ((data || []) as GameStatusRelationRow[])
         .filter(isCompleteStatusRow)
         .map(normalizeStatusRelationRow),
       options.sort
     )
+    const items = options.sort === 'title'
+      ? sortedItems.slice(options.from, options.to + 1)
+      : sortedItems
     timings.normalizeMs += getPerformanceNow() - normalizeStartedAt
     timings.totalMs = getPerformanceNow() - startedAt
 
@@ -650,7 +665,6 @@ export async function saveGameStatus({
         jogo_id: gameId,
         status,
         favorito,
-        created_at: new Date().toISOString(),
       })
       .select('id, usuario_id, jogo_id, status, created_at, favorito')
       .single()

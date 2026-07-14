@@ -1,5 +1,14 @@
-import { getRuntimeLocale } from '../i18n'
+import {
+  MAX_CATALOG_IMPORT_RESULTS,
+  isImportableCatalogQuery,
+  normalizeCatalogFacets,
+  normalizeCatalogFilters,
+  normalizeCatalogQuery,
+  type CatalogFacetValues,
+} from '../features/catalog/domain/catalogLocal'
+import { getRuntimeLocale, translate } from '../i18n'
 import { supabase } from '../supabase-client'
+import type { Database } from '../types/supabase'
 import {
   normalizeGameDetails,
   normalizeGamePreview,
@@ -48,41 +57,18 @@ export interface CatalogGamesPage {
   pageSize: number
 }
 
-export interface CatalogFacetOptions {
-  genres: string[]
-  platforms: string[]
-  developers: string[]
-}
+export type CatalogFacetOptions = CatalogFacetValues
 
 interface GameCatalogFunctionBody {
-  action: 'catalog' | 'search' | 'details' | 'facets'
+  action: 'details'
   locale?: string
-  page?: number
-  pageSize?: number
-  query?: string
-  sort?: CatalogSortOption
-  filters?: {
-    genres: string[]
-    platforms: string[]
-    developers: string[]
-  }
   gameId?: number
   igdbId?: number
 }
 
-interface GameCatalogFunctionListResponse {
-  items?: GamePreviewSourceRow[]
-  page?: number | string
-  pageSize?: number | string
-  hasNextPage?: boolean
-  totalCount?: number | string | null
-  error?: string
-}
-
-interface GameCatalogFunctionFacetsResponse {
-  genres?: string[]
-  platforms?: string[]
-  developers?: string[]
+interface SearchImportGamesResponse {
+  games?: GamePreviewSourceRow[]
+  importedCount?: number
   error?: string
 }
 
@@ -96,17 +82,29 @@ interface GameExternalIdRow {
   external_id: string | null
 }
 
+type CatalogSearchRow =
+  Database['public']['Functions']['search_catalog_games']['Returns'][number]
+type CatalogFacetRow = Database['public']['Functions']['get_catalog_facets']['Returns'][number]
+
 const DEFAULT_SEARCH_LIMIT = 8
 const DEFAULT_PAGE_SIZE = 20
 const MAX_PAGE_SIZE = 100
+const CATALOG_QUERY_ERROR_CODE = 'catalog_query_failed'
+const CATALOG_FACETS_ERROR_CODE = 'catalog_facets_failed'
+const CATALOG_IMPORT_ERROR_CODE = 'catalog_import_failed'
 const CATALOG_GAME_SELECT =
   'id, titulo, capa_url, desenvolvedora, generos, data_lancamento, plataformas, source_primary, status_importacao'
 
-function normalizeCatalogError(error: unknown, fallbackMessage: string): GameCatalogError {
+function normalizeCatalogError(
+  error: unknown,
+  fallbackMessage: string,
+  fallbackCode?: string
+): GameCatalogError {
   if (error && typeof error === 'object') {
     const message =
       'message' in error && typeof error.message === 'string' ? error.message : fallbackMessage
-    const code = 'code' in error && typeof error.code === 'string' ? error.code : undefined
+    const code =
+      'code' in error && typeof error.code === 'string' ? error.code : fallbackCode
     const details =
       'details' in error && typeof error.details === 'string' ? error.details : null
     const hint = 'hint' in error && typeof error.hint === 'string' ? error.hint : null
@@ -114,7 +112,7 @@ function normalizeCatalogError(error: unknown, fallbackMessage: string): GameCat
     return { code, message, details, hint }
   }
 
-  return { message: fallbackMessage }
+  return { code: fallbackCode, message: fallbackMessage }
 }
 
 function normalizeNumber(value: unknown) {
@@ -132,18 +130,9 @@ function normalizeInteger(value: unknown) {
   return normalizedValue === null ? 0 : Math.max(0, Math.trunc(normalizedValue))
 }
 
-function normalizeNullableInteger(value: unknown) {
-  const normalizedValue = normalizeNumber(value)
-  return normalizedValue === null ? null : Math.max(0, Math.trunc(normalizedValue))
-}
-
 function normalizePositiveInteger(value: unknown, fallback: number, max = Number.MAX_SAFE_INTEGER) {
   if (typeof value !== 'number' || !Number.isFinite(value)) return fallback
   return Math.max(1, Math.min(Math.trunc(value), max))
-}
-
-function normalizeStringFilters(values: string[] | undefined) {
-  return Array.from(new Set((values || []).map(value => value.trim()).filter(Boolean)))
 }
 
 function mapFunctionErrorCode(code: string | undefined) {
@@ -153,6 +142,10 @@ function mapFunctionErrorCode(code: string | undefined) {
 
   if (code === 'game_not_identified') {
     return 'Nao foi possivel identificar o jogo.'
+  }
+
+  if (code === 'not_authenticated' || code === 'query_too_short') {
+    return translate('error.genericSearchGames')
   }
 
   return null
@@ -199,39 +192,107 @@ async function invokeGameCatalog<T>(
   }
 }
 
-function getEstimatedCatalogTotals({
-  page,
-  pageSize,
-  itemCount,
-  hasNextPage,
-  totalCount,
+async function searchLocalCatalogGames({
+  query,
+  genres = [],
+  platforms = [],
+  developers = [],
+  sort = 'release-desc',
+  limit,
+  offset = 0,
 }: {
-  page: number
-  pageSize: number
-  itemCount: number
-  hasNextPage: boolean
-  totalCount: number | null
-}) {
-  if (totalCount !== null) {
+  query?: string
+  genres?: string[]
+  platforms?: string[]
+  developers?: string[]
+  sort?: CatalogSortOption
+  limit: number
+  offset?: number
+}): Promise<CatalogResult<CatalogSearchRow[]>> {
+  const fallbackMessage = translate('error.genericSearchGames')
+
+  try {
+    const { data, error } = await supabase.rpc('search_catalog_games', {
+      p_query: query || null,
+      p_genres: genres,
+      p_platforms: platforms,
+      p_developers: developers,
+      p_sort: sort,
+      p_limit: limit,
+      p_offset: offset,
+    })
+
+    if (error) {
+      return {
+        data: [],
+        error: normalizeCatalogError(error, fallbackMessage, CATALOG_QUERY_ERROR_CODE),
+      }
+    }
+
     return {
-      totalCount,
-      totalPages: totalCount === 0 ? 0 : Math.ceil(totalCount / pageSize),
+      data: data || [],
+      error: null,
+    }
+  } catch (error) {
+    return {
+      data: [],
+      error: normalizeCatalogError(error, fallbackMessage, CATALOG_QUERY_ERROR_CODE),
     }
   }
+}
 
-  if (itemCount === 0) {
-    return {
-      totalCount: 0,
-      totalPages: 0,
-    }
+async function hasAuthenticatedCatalogUser() {
+  try {
+    const { data, error } = await supabase.auth.getSession()
+    return !error && Boolean(data.session?.user)
+  } catch {
+    return false
   }
+}
 
-  const knownCount = (page - 1) * pageSize + itemCount
-  const estimatedCount = hasNextPage ? knownCount + pageSize : knownCount
+async function importCatalogGames(
+  query: string,
+  limit: number
+): Promise<CatalogResult<GamePreviewSourceRow[]>> {
+  const fallbackMessage = translate('error.genericSearchGames')
 
-  return {
-    totalCount: estimatedCount,
-    totalPages: hasNextPage ? page + 1 : page,
+  try {
+    const { data, error } = await supabase.functions.invoke<SearchImportGamesResponse>(
+      'search-import-games',
+      {
+        body: {
+          query,
+          limit: Math.min(limit, MAX_CATALOG_IMPORT_RESULTS),
+        },
+      }
+    )
+
+    if (error) {
+      return {
+        data: [],
+        error: normalizeCatalogError(error, fallbackMessage, CATALOG_IMPORT_ERROR_CODE),
+      }
+    }
+
+    if (data?.error) {
+      return {
+        data: [],
+        error: {
+          code: data.error,
+          message: mapFunctionErrorCode(data.error) || fallbackMessage,
+        },
+      }
+    }
+
+    return {
+      data: data?.games || [],
+      error: null,
+    }
+  } catch (error) {
+    return {
+      data: [],
+      error: normalizeCatalogError(error, fallbackMessage, CATALOG_IMPORT_ERROR_CODE),
+    }
   }
 }
 
@@ -276,13 +337,17 @@ async function attachIgdbIdsToGames<T extends CatalogGamePreview>(games: T[]): P
   }))
 }
 
+async function normalizeCatalogPreviews(rows: GamePreviewSourceRow[]) {
+  return attachIgdbIdsToGames(rows.map(row => normalizeGamePreview(row)))
+}
+
 export async function searchCatalogGamesByTitle(
   query: string,
   options: SearchCatalogGamesOptions = {}
 ): Promise<CatalogResult<CatalogGamePreview[]>> {
-  const normalizedQuery = query.trim()
+  const normalizedQuery = normalizeCatalogQuery(query)
 
-  if (!normalizedQuery || normalizedQuery.length < 2) {
+  if (!isImportableCatalogQuery(normalizedQuery)) {
     return {
       data: [],
       error: null,
@@ -290,25 +355,54 @@ export async function searchCatalogGamesByTitle(
   }
 
   const limit = normalizePositiveInteger(options.limit, DEFAULT_SEARCH_LIMIT, MAX_PAGE_SIZE)
-  const result = await invokeGameCatalog<GameCatalogFunctionListResponse>(
-    {
-      action: 'search',
-      query: normalizedQuery,
-      page: 1,
-      pageSize: limit,
-    },
-    'Nao foi possivel buscar jogos no catalogo externo.'
-  )
+  const localResult = await searchLocalCatalogGames({
+    query: normalizedQuery,
+    limit,
+  })
 
-  if (result.error || !result.data) {
+  if (localResult.error) {
     return {
       data: [],
-      error: result.error,
+      error: localResult.error,
+    }
+  }
+
+  const localGames = await normalizeCatalogPreviews(localResult.data)
+  if (localGames.length > 0 || options.importIfMissing === false) {
+    return {
+      data: localGames,
+      error: null,
+    }
+  }
+
+  if (!(await hasAuthenticatedCatalogUser())) {
+    return {
+      data: [],
+      error: null,
+    }
+  }
+
+  const importResult = await importCatalogGames(normalizedQuery, limit)
+  if (importResult.error) {
+    return {
+      data: [],
+      error: importResult.error,
+    }
+  }
+
+  const refreshedResult = await searchLocalCatalogGames({
+    query: normalizedQuery,
+    limit,
+  })
+  if (!refreshedResult.error && refreshedResult.data.length > 0) {
+    return {
+      data: await normalizeCatalogPreviews(refreshedResult.data),
+      error: null,
     }
   }
 
   return {
-    data: (result.data.items || []).map(row => normalizeGamePreview(row)),
+    data: await normalizeCatalogPreviews(importResult.data),
     error: null,
   }
 }
@@ -318,25 +412,19 @@ export async function getCatalogGamesPage(
 ): Promise<CatalogResult<CatalogGamesPage>> {
   const page = normalizePositiveInteger(pageOptions.page, 1)
   const pageSize = normalizePositiveInteger(pageOptions.pageSize, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE)
-  const query = pageOptions.query?.trim() || ''
-  const action = query.length >= 2 ? 'search' : 'catalog'
-  const result = await invokeGameCatalog<GameCatalogFunctionListResponse>(
-    {
-      action,
-      page,
-      pageSize,
-      query: action === 'search' ? query : undefined,
-      sort: pageOptions.sort || 'release-desc',
-      filters: {
-        genres: normalizeStringFilters(pageOptions.genres),
-        platforms: normalizeStringFilters(pageOptions.platforms),
-        developers: normalizeStringFilters(pageOptions.developers),
-      },
-    },
-    'Nao foi possivel carregar o catalogo de jogos externo.'
-  )
+  const normalizedQuery = normalizeCatalogQuery(pageOptions.query)
+  const query = isImportableCatalogQuery(normalizedQuery) ? normalizedQuery : undefined
+  const result = await searchLocalCatalogGames({
+    query,
+    genres: normalizeCatalogFilters(pageOptions.genres),
+    platforms: normalizeCatalogFilters(pageOptions.platforms),
+    developers: normalizeCatalogFilters(pageOptions.developers),
+    sort: pageOptions.sort || 'release-desc',
+    limit: pageSize,
+    offset: (page - 1) * pageSize,
+  })
 
-  if (result.error || !result.data) {
+  if (result.error) {
     return {
       data: {
         items: [],
@@ -349,20 +437,15 @@ export async function getCatalogGamesPage(
     }
   }
 
-  const items = (result.data.items || []).map(row => normalizeGamePreview(row))
-  const hasNextPage = Boolean(result.data.hasNextPage)
-  const totals = getEstimatedCatalogTotals({
-    page,
-    pageSize,
-    itemCount: items.length,
-    hasNextPage,
-    totalCount: normalizeNullableInteger(result.data.totalCount),
-  })
+  const items = await normalizeCatalogPreviews(result.data)
+  const totalCount = normalizeInteger(result.data[0]?.total_count)
+  const totalPages = totalCount === 0 ? 0 : Math.ceil(totalCount / pageSize)
 
   return {
     data: {
       items,
-      ...totals,
+      totalCount,
+      totalPages,
       page,
       pageSize,
     },
@@ -373,32 +456,30 @@ export async function getCatalogGamesPage(
 export async function getCatalogFacetOptions(
   query?: string
 ): Promise<CatalogResult<CatalogFacetOptions>> {
-  const result = await invokeGameCatalog<GameCatalogFunctionFacetsResponse>(
-    {
-      action: 'facets',
-      query: query?.trim() || undefined,
-    },
-    'Nao foi possivel carregar os filtros do catalogo externo.'
-  )
+  const normalizedQuery = normalizeCatalogQuery(query)
+  const fallbackMessage = translate('error.genericSearchGames')
 
-  if (result.error || !result.data) {
-    return {
-      data: {
-        genres: [],
-        platforms: [],
-        developers: [],
-      },
-      error: result.error,
+  try {
+    const { data, error } = await supabase.rpc('get_catalog_facets', {
+      p_query: normalizedQuery || null,
+    })
+
+    if (error) {
+      return {
+        data: normalizeCatalogFacets([]),
+        error: normalizeCatalogError(error, fallbackMessage, CATALOG_FACETS_ERROR_CODE),
+      }
     }
-  }
 
-  return {
-    data: {
-      genres: result.data.genres || [],
-      platforms: result.data.platforms || [],
-      developers: result.data.developers || [],
-    },
-    error: null,
+    return {
+      data: normalizeCatalogFacets((data || []) as CatalogFacetRow[]),
+      error: null,
+    }
+  } catch (error) {
+    return {
+      data: normalizeCatalogFacets([]),
+      error: normalizeCatalogError(error, fallbackMessage, CATALOG_FACETS_ERROR_CODE),
+    }
   }
 }
 

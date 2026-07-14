@@ -735,7 +735,7 @@ export const ProfileGameStatusSection = memo(function ProfileGameStatusSection({
 
                     <div className="profile-status-sort-section">
                       <div className="profile-status-sort-section-head">
-                        <span className="profile-status-sort-section-label">Status</span>
+                        <span className="profile-status-sort-section-label">{t('common.status')}</span>
 
                         {hasActiveStatusFilters ? (
                           <button

@@ -1,4 +1,5 @@
-import { createClient, type SupabaseClient, type User } from 'https://esm.sh/@supabase/supabase-js@2'
+import { createClient, type SupabaseClient, type User } from '@supabase/supabase-js'
+import { resolveCors } from '../_shared/cors.ts'
 
 declare const Deno: {
   env: {
@@ -36,19 +37,17 @@ interface StoragePreserveEntry {
   path: string
 }
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-}
-
 const publicUploadsBucket = 'user-uploads'
 const communityPostMediaBucket = 'community-post-media'
 const storageBuckets = [publicUploadsBucket, communityPostMediaBucket]
 const storagePageSize = 100
 const removalChunkSize = 100
 
-function jsonResponse(status: number, body: Record<string, unknown>) {
+function jsonResponse(
+  status: number,
+  body: Record<string, unknown>,
+  corsHeaders: Record<string, string>
+) {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
@@ -428,12 +427,20 @@ async function deleteAccountData(adminClient: SupabaseClient, userId: string) {
 }
 
 Deno.serve(async request => {
+  const cors = resolveCors(request, name => Deno.env.get(name))
+  const respond = (status: number, body: Record<string, unknown>) =>
+    jsonResponse(status, body, cors.headers)
+
+  if (!cors.allowed) {
+    return respond(403, { error: 'origin_not_allowed' })
+  }
+
   if (request.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return new Response(null, { status: 204, headers: cors.headers })
   }
 
   if (request.method !== 'POST') {
-    return jsonResponse(405, { error: 'method_not_allowed' })
+    return respond(405, { error: 'method_not_allowed' })
   }
 
   let supabaseUrl = ''
@@ -445,7 +452,7 @@ Deno.serve(async request => {
     anonKey = getRequiredEnv('SUPABASE_ANON_KEY')
     serviceRoleKey = getRequiredEnv('SUPABASE_SERVICE_ROLE_KEY')
   } catch {
-    return jsonResponse(500, { error: 'server_misconfigured' })
+    return respond(500, { error: 'server_misconfigured' })
   }
 
   const { user, error: authError } = await getAuthenticatedUser(
@@ -455,7 +462,7 @@ Deno.serve(async request => {
   )
 
   if (authError || !user) {
-    return jsonResponse(401, { error: 'not_authenticated' })
+    return respond(401, { error: 'not_authenticated' })
   }
 
   const body = await readDeleteAccountBody(request)
@@ -463,7 +470,7 @@ Deno.serve(async request => {
   const currentPassword = normalizeText(body.currentPassword)
 
   if (!username || !currentPassword) {
-    return jsonResponse(400, { error: 'missing_confirmation' })
+    return respond(400, { error: 'missing_confirmation' })
   }
 
   const adminClient = createClient(supabaseUrl, serviceRoleKey, {
@@ -477,20 +484,20 @@ Deno.serve(async request => {
   const usernameMatches = await assertUsernameMatches(adminClient, user.id, username)
 
   if (!usernameMatches) {
-    return jsonResponse(400, { error: 'username_mismatch' })
+    return respond(400, { error: 'username_mismatch' })
   }
 
   const passwordIsValid = await validateCurrentPassword(supabaseUrl, anonKey, user, currentPassword)
 
   if (!passwordIsValid) {
-    return jsonResponse(400, { error: 'invalid_password' })
+    return respond(400, { error: 'invalid_password' })
   }
 
   const deletionPreparationResult = await getAccountDeletionPreparation(adminClient, user.id)
 
   if (!deletionPreparationResult.ok) {
     if (deletionPreparationResult.missingAdminCommunities.length > 0) {
-      return jsonResponse(409, {
+      return respond(409, {
         error: 'community_leadership_transfer_required',
         communities: deletionPreparationResult.missingAdminCommunities,
       })
@@ -500,7 +507,7 @@ Deno.serve(async request => {
       step: 'prepare_community_transfer',
       userId: user.id,
     })
-    return jsonResponse(500, { error: 'data_cleanup_failed' })
+    return respond(500, { error: 'data_cleanup_failed' })
   }
 
   const storageCleanupResult = await removeUserStorageFilesExcept(
@@ -514,7 +521,7 @@ Deno.serve(async request => {
       step: 'storage_cleanup',
       userId: user.id,
     })
-    return jsonResponse(500, { error: 'storage_cleanup_failed' })
+    return respond(500, { error: 'storage_cleanup_failed' })
   }
 
   const dataCleanupResult = await deleteAccountData(adminClient, user.id)
@@ -526,10 +533,10 @@ Deno.serve(async request => {
     })
 
     if (isCommunityLeadershipTransferRequiredError(dataCleanupResult.error)) {
-      return jsonResponse(409, { error: 'community_leadership_transfer_required' })
+      return respond(409, { error: 'community_leadership_transfer_required' })
     }
 
-    return jsonResponse(500, { error: 'data_cleanup_failed' })
+    return respond(500, { error: 'data_cleanup_failed' })
   }
 
   const { error: deleteUserError } = await adminClient.auth.admin.deleteUser(user.id)
@@ -539,8 +546,8 @@ Deno.serve(async request => {
       step: 'auth_delete',
       userId: user.id,
     })
-    return jsonResponse(500, { error: 'auth_delete_failed' })
+    return respond(500, { error: 'auth_delete_failed' })
   }
 
-  return jsonResponse(200, { ok: true })
+  return respond(200, { ok: true })
 })

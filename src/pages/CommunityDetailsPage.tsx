@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { CommunityAboutCard } from '../components/communities/CommunityAboutCard'
 import { CommunityConfirmModal } from '../components/communities/CommunityConfirmModal'
@@ -159,11 +159,13 @@ function CommunityDetailsPage() {
   const [postText, setPostText] = useState('')
   const [postImageFile, setPostImageFile] = useState<File | null>(null)
   const [postImagePreviewUrl, setPostImagePreviewUrl] = useState<string | null>(null)
+  const postImagePreviewUrlRef = useRef<string | null>(null)
   const [postSubmitting, setPostSubmitting] = useState(false)
   const [settingsDraft, setSettingsDraft] = useState<SettingsDraft>(() => createSettingsDraft(null))
   const [settingsSaving, setSettingsSaving] = useState(false)
   const [bannerFile, setBannerFile] = useState<File | null>(null)
   const [bannerPreviewUrl, setBannerPreviewUrl] = useState<string | null>(null)
+  const bannerPreviewUrlRef = useRef<string | null>(null)
   const [postingPermissionDraft, setPostingPermissionDraft] =
     useState<CommunityPostingPermission>('todos_membros')
   const [confirmState, setConfirmState] = useState<ConfirmState | null>(null)
@@ -178,8 +180,9 @@ function CommunityDetailsPage() {
   const [reportSubmitting, setReportSubmitting] = useState(false)
   const [lightbox, setLightbox] = useState<LightboxState | null>(null)
 
-  const isLeader = community?.currentUserRole === 'lider'
-  const isModerator = community?.currentUserRole === 'lider' || community?.currentUserRole === 'admin'
+  const currentUserRole = community?.currentUserRole ?? null
+  const isLeader = currentUserRole === 'lider'
+  const isModerator = currentUserRole === 'lider' || currentUserRole === 'admin'
   const canPost = Boolean(user && community?.canPost)
   const bannerUrl = getCommunityBanner(community)
   const canViewContent = Boolean(community?.canViewContent)
@@ -207,32 +210,41 @@ function CommunityDetailsPage() {
     })
   }, [members])
 
+  const handleBannerFileChange = useCallback((file: File | null) => {
+    if (bannerPreviewUrlRef.current) {
+      URL.revokeObjectURL(bannerPreviewUrlRef.current)
+    }
+
+    const nextPreviewUrl = file ? URL.createObjectURL(file) : null
+    bannerPreviewUrlRef.current = nextPreviewUrl
+    setBannerFile(file)
+    setBannerPreviewUrl(nextPreviewUrl)
+  }, [])
+
+  const handlePostImageFileChange = useCallback((file: File | null) => {
+    if (postImagePreviewUrlRef.current) {
+      URL.revokeObjectURL(postImagePreviewUrlRef.current)
+    }
+
+    const nextPreviewUrl = file ? URL.createObjectURL(file) : null
+    postImagePreviewUrlRef.current = nextPreviewUrl
+    setPostImageFile(file)
+    setPostImagePreviewUrl(nextPreviewUrl)
+  }, [])
+
   useEffect(() => {
     const timeoutId = window.setTimeout(() => setDebouncedMemberSearch(memberSearch), 220)
     return () => window.clearTimeout(timeoutId)
   }, [memberSearch])
 
-  useEffect(() => {
-    if (!bannerFile) {
-      setBannerPreviewUrl(null)
-      return
+  useEffect(() => () => {
+    if (bannerPreviewUrlRef.current) {
+      URL.revokeObjectURL(bannerPreviewUrlRef.current)
     }
-
-    const previewUrl = URL.createObjectURL(bannerFile)
-    setBannerPreviewUrl(previewUrl)
-    return () => URL.revokeObjectURL(previewUrl)
-  }, [bannerFile])
-
-  useEffect(() => {
-    if (!postImageFile) {
-      setPostImagePreviewUrl(null)
-      return
+    if (postImagePreviewUrlRef.current) {
+      URL.revokeObjectURL(postImagePreviewUrlRef.current)
     }
-
-    const previewUrl = URL.createObjectURL(postImageFile)
-    setPostImagePreviewUrl(previewUrl)
-    return () => URL.revokeObjectURL(previewUrl)
-  }, [postImageFile])
+  }, [])
 
   useEffect(() => {
     if (!lightbox) return
@@ -244,10 +256,13 @@ function CommunityDetailsPage() {
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [lightbox])
 
+  const visibleActiveTab = visibleTabs.includes(activeTab) ? activeTab : visibleTabs[0]
+
   useEffect(() => {
-    if (visibleTabs.length > 0 && !visibleTabs.includes(activeTab)) {
-      setActiveTab(visibleTabs[0])
-    }
+    if (visibleTabs.includes(activeTab)) return
+
+    const timeoutId = window.setTimeout(() => setActiveTab(visibleTabs[0]), 0)
+    return () => window.clearTimeout(timeoutId)
   }, [activeTab, visibleTabs])
 
   const getRoleLabel = useCallback(
@@ -394,14 +409,14 @@ function CommunityDetailsPage() {
   }, [community?.canViewContent, communityId, debouncedMemberSearch])
 
   const loadPosts = useCallback(async () => {
-    if (!communityId || !community?.canViewContent) {
+    if (!communityId || !canViewContent) {
       setPosts([])
       setPostsTotalCount(null)
       return
     }
 
     setPostsLoading(true)
-    const result = await getCommunityPosts(communityId, user?.id, community.currentUserRole, {
+    const result = await getCommunityPosts(communityId, user?.id, currentUserRole, {
       page: postsPage,
       pageSize: POST_PAGE_SIZE,
     })
@@ -409,7 +424,7 @@ function CommunityDetailsPage() {
     setPostsTotalCount(result.totalCount)
     if (result.error) setFeedback({ tone: 'error', message: result.error.message })
     setPostsLoading(false)
-  }, [community?.canViewContent, community?.currentUserRole, communityId, postsPage, user?.id])
+  }, [canViewContent, communityId, currentUserRole, postsPage, user?.id])
 
   const loadModeration = useCallback(async () => {
     if (!communityId || !isModerator) {
@@ -435,19 +450,31 @@ function CommunityDetailsPage() {
   }, [communityId, isModerator, reportFilter, requestFilter, t])
 
   useEffect(() => {
-    void loadCommunityData()
+    const timeoutId = window.setTimeout(() => {
+      void loadCommunityData()
+    }, 0)
+    return () => window.clearTimeout(timeoutId)
   }, [loadCommunityData])
 
   useEffect(() => {
-    void loadMembers()
+    const timeoutId = window.setTimeout(() => {
+      void loadMembers()
+    }, 0)
+    return () => window.clearTimeout(timeoutId)
   }, [loadMembers])
 
   useEffect(() => {
-    void loadPosts()
+    const timeoutId = window.setTimeout(() => {
+      void loadPosts()
+    }, 0)
+    return () => window.clearTimeout(timeoutId)
   }, [loadPosts])
 
   useEffect(() => {
-    void loadModeration()
+    const timeoutId = window.setTimeout(() => {
+      void loadModeration()
+    }, 0)
+    return () => window.clearTimeout(timeoutId)
   }, [loadModeration])
 
   const reloadAll = async () => {
@@ -506,7 +533,7 @@ function CommunityDetailsPage() {
       }
 
       setPostText('')
-      setPostImageFile(null)
+      handlePostImageFileChange(null)
       setPostsPage(1)
       setFeedback({ tone: 'success', message: t('communities.post.published') })
       await reloadAll()
@@ -587,7 +614,7 @@ function CommunityDetailsPage() {
 
   const handleSaveSettings = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (!community || !isModerator || settingsSaving) return
+    if (!community || !user || !isModerator || settingsSaving) return
 
     setSettingsSaving(true)
     setFeedback(null)
@@ -619,6 +646,7 @@ function CommunityDetailsPage() {
           })
         : await updateCommunityModeratedDetails({
             comunidadeId: community.id,
+            currentUserId: user.id,
             descricao: settingsDraft.descricao,
             regras: settingsDraft.regras,
             bannerPath,
@@ -627,7 +655,7 @@ function CommunityDetailsPage() {
       if (result.error) {
         setFeedback({ tone: 'error', message: result.error.message })
       } else {
-        setBannerFile(null)
+        handleBannerFileChange(null)
         if (bannerPath && previousBannerPath && bannerPath !== previousBannerPath) {
           void deleteFile(previousBannerPath)
         }
@@ -999,7 +1027,7 @@ function CommunityDetailsPage() {
               previewUrl={postImagePreviewUrl}
               disabled={postSubmitting}
               isUploading={postSubmitting && Boolean(postImageFile)}
-              onChange={setPostImageFile}
+              onChange={handlePostImageFileChange}
             />
             <button type="submit" disabled={postSubmitting}>
               {postSubmitting ? t('communities.post.publishing') : t('communities.post.publish')}
@@ -1312,7 +1340,7 @@ function CommunityDetailsPage() {
             previewUrl={bannerPreviewUrl}
             disabled={settingsSaving}
             isUploading={settingsSaving && Boolean(bannerFile)}
-            onChange={setBannerFile}
+            onChange={handleBannerFileChange}
           />
           <button type="submit" className="community-settings-button" disabled={settingsSaving}>
             {settingsSaving ? t('common.saving') : t('communities.settings.saveInfo')}
@@ -1447,7 +1475,7 @@ function CommunityDetailsPage() {
                   <button
                     key={tab}
                     type="button"
-                    className={activeTab === tab ? 'is-active' : ''}
+                    className={visibleActiveTab === tab ? 'is-active' : ''}
                     onClick={() => setActiveTab(tab)}
                   >
                     {t(`communities.tabs.${tab}`)}
@@ -1456,12 +1484,12 @@ function CommunityDetailsPage() {
               </nav>
 
               <section className="community-tab-panel">
-                {activeTab === 'posts' ? renderPostsTab() : null}
-                {activeTab === 'members' ? renderMembersTab() : null}
-                {activeTab === 'about' ? renderAboutTab() : null}
-                {activeTab === 'moderation' && isModerator ? renderModerationTab() : null}
-                {activeTab === 'settings' && isModerator ? renderSettingsTab() : null}
-                {activeTab === 'memberSettings' && !isModerator ? renderMemberSettingsTab() : null}
+                {visibleActiveTab === 'posts' ? renderPostsTab() : null}
+                {visibleActiveTab === 'members' ? renderMembersTab() : null}
+                {visibleActiveTab === 'about' ? renderAboutTab() : null}
+                {visibleActiveTab === 'moderation' && isModerator ? renderModerationTab() : null}
+                {visibleActiveTab === 'settings' && isModerator ? renderSettingsTab() : null}
+                {visibleActiveTab === 'memberSettings' && !isModerator ? renderMemberSettingsTab() : null}
               </section>
             </>
           )}

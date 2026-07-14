@@ -1,4 +1,4 @@
-import { useEffect, useId, useState, type FormEvent } from 'react'
+import { useId, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import AuthShell from '../components/auth/AuthShell'
 import AuthStatusBanner from '../components/auth/AuthStatusBanner'
@@ -35,12 +35,6 @@ function ResetPasswordPage() {
   const [isPasswordFocused, setIsPasswordFocused] = useState(false)
   const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false)
 
-  useEffect(() => {
-    if (submitError && user) {
-      setSubmitError(null)
-    }
-  }, [submitError, user])
-
   const shouldShowPasswordPanel =
     Boolean(password) || isPasswordFocused || hasAttemptedSubmit || isSubmitting
   const shouldValidatePassword = Boolean(password) || hasAttemptedSubmit
@@ -73,7 +67,7 @@ function ResetPasswordPage() {
   }
 
   const validateForm = () => {
-    const nextPasswordError = getPasswordValidationError(password)
+    const nextPasswordError = getPasswordValidationError(password, t)
     const nextConfirmPasswordError = !confirmPassword
       ? t('auth.confirmNewPasswordRequired')
       : password !== confirmPassword

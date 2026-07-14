@@ -1,8 +1,6 @@
 import { supabase } from '../supabase-client'
-import { getTopFiveEntriesFromPrivacySettings, type TopFiveStoredEntry } from '../utils/profileTopFive'
+import { normalizeTopFiveEntries, type TopFiveStoredEntry } from '../utils/profileTopFive'
 import {
-  canViewRestrictedProfile,
-  getProfilePrivacyMode,
   getRestrictedProfileMessage,
   type ProfilePrivacyMode,
 } from '../utils/profilePrivacy'
@@ -64,14 +62,19 @@ interface SearchUsersOptions {
   viewerId?: string | null
 }
 
-interface PublicUserRow {
+interface PublicProfileRpcRow {
   id: string
   username: string
   nome_completo: string | null
   avatar_path: string | null
   bio: string | null
   data_cadastro: string
-  configuracoes_privacidade: Record<string, unknown> | null
+  top_five_entries: unknown
+  followers_count: number
+  following_count: number
+  is_private: boolean
+  privacy_mode: string
+  can_view_restricted_content: boolean
 }
 
 interface UserSearchRow {
@@ -81,10 +84,21 @@ interface UserSearchRow {
   avatar_path: string | null
 }
 
-interface FollowRelationshipRow {
-  seguidor_id: string | null
-  seguido_id: string | null
-  data_inicio: string | null
+interface FollowRelationshipMapRow {
+  user_id: string
+  is_following: boolean
+  is_mutual_friend: boolean
+}
+
+interface ProfileConnectionRpcRow extends UserSearchRow {
+  is_following: boolean
+  relationship_started_at: string
+}
+
+interface FollowStateRpcRow {
+  is_following: boolean
+  followers_count: number
+  following_count: number
 }
 
 const DEFAULT_USER_SEARCH_LIMIT = 5
@@ -158,33 +172,25 @@ function compareUsersAlphabetically(leftUser: UserSearchRow, rightUser: UserSear
 }
 
 function buildPublicProfileResult(
-  publicProfileRow: PublicUserRow,
-  followersCount: number,
-  followingCount: number,
-  viewerId?: string | null,
-  isMutualFriend = false
+  publicProfileRow: PublicProfileRpcRow
 ): PublicUserProfile {
-  const privacyMode = getProfilePrivacyMode(publicProfileRow.configuracoes_privacidade)
-  const canViewRestrictedContent = canViewRestrictedProfile({
-    ownerId: publicProfileRow.id,
-    viewerId,
-    privacyMode,
-    isMutualFriend,
-  })
+  const privacyMode: ProfilePrivacyMode =
+    publicProfileRow.privacy_mode === 'friends' || publicProfileRow.privacy_mode === 'private'
+      ? publicProfileRow.privacy_mode
+      : 'public'
+  const canViewRestrictedContent = publicProfileRow.can_view_restricted_content
 
   return {
     id: publicProfileRow.id,
     username: publicProfileRow.username,
     nome_completo: publicProfileRow.nome_completo,
     avatar_path: publicProfileRow.avatar_path,
-    bio: canViewRestrictedContent ? publicProfileRow.bio : null,
+    bio: publicProfileRow.bio,
     data_cadastro: publicProfileRow.data_cadastro,
-    topFiveEntries: canViewRestrictedContent
-      ? getTopFiveEntriesFromPrivacySettings(publicProfileRow.configuracoes_privacidade)
-      : [],
-    followersCount,
-    followingCount,
-    isPrivate: privacyMode === 'private',
+    topFiveEntries: normalizeTopFiveEntries(publicProfileRow.top_five_entries),
+    followersCount: Number(publicProfileRow.followers_count) || 0,
+    followingCount: Number(publicProfileRow.following_count) || 0,
+    isPrivate: publicProfileRow.is_private,
     privacyMode,
     canViewRestrictedContent,
     restrictedContentMessage: canViewRestrictedContent
@@ -193,74 +199,80 @@ function buildPublicProfileResult(
   }
 }
 
-export async function getMutualFriendMap(
+async function getFollowRelationshipMaps(
   viewerId: string | null | undefined,
   userIds: string[]
-): Promise<ServiceResult<Map<string, boolean>>> {
+): Promise<ServiceResult<{
+  following: Map<string, boolean>
+  mutualFriends: Map<string, boolean>
+}>> {
   const uniqueUserIds = Array.from(
     new Set(userIds.filter(userId => userId && userId !== viewerId))
   )
+  const followingMap = new Map<string, boolean>()
   const mutualFriendMap = new Map<string, boolean>()
 
   uniqueUserIds.forEach(userId => {
+    followingMap.set(userId, false)
     mutualFriendMap.set(userId, false)
   })
 
+  const emptyMaps = {
+    following: followingMap,
+    mutualFriends: mutualFriendMap,
+  }
+
   if (!viewerId || uniqueUserIds.length === 0) {
     return {
-      data: mutualFriendMap,
+      data: emptyMaps,
       error: null,
     }
   }
 
   try {
-    const [viewerFollowingResponse, followingViewerResponse] = await Promise.all([
-      supabase
-        .from('seguidores')
-        .select('seguido_id')
-        .eq('seguidor_id', viewerId)
-        .in('seguido_id', uniqueUserIds),
-      supabase
-        .from('seguidores')
-        .select('seguidor_id')
-        .eq('seguido_id', viewerId)
-        .in('seguidor_id', uniqueUserIds),
-    ])
+    const { data, error } = await supabase.rpc('get_follow_relationship_map', {
+      p_user_ids: uniqueUserIds,
+    })
 
-    if (viewerFollowingResponse.error || followingViewerResponse.error) {
+    if (error) {
       return {
-        data: mutualFriendMap,
+        data: emptyMaps,
         error: normalizeUserServiceError(
-          viewerFollowingResponse.error || followingViewerResponse.error,
-          'Nao foi possivel verificar amizade mutua.'
+          error,
+          'Nao foi possivel carregar as relacoes entre estes usuarios.'
         ),
       }
     }
 
-    const viewerFollows = new Set(
-      ((viewerFollowingResponse.data || []) as Array<{ seguido_id: string }>).map(
-        row => row.seguido_id
-      )
-    )
-    const followsViewer = new Set(
-      ((followingViewerResponse.data || []) as Array<{ seguidor_id: string }>).map(
-        row => row.seguidor_id
-      )
-    )
-
-    uniqueUserIds.forEach(userId => {
-      mutualFriendMap.set(userId, viewerFollows.has(userId) && followsViewer.has(userId))
+    ;((data || []) as FollowRelationshipMapRow[]).forEach(row => {
+      followingMap.set(row.user_id, row.is_following)
+      mutualFriendMap.set(row.user_id, row.is_mutual_friend)
     })
 
     return {
-      data: mutualFriendMap,
+      data: emptyMaps,
       error: null,
     }
   } catch (error) {
     return {
-      data: mutualFriendMap,
-      error: normalizeUserServiceError(error, 'Erro inesperado ao verificar amizade mutua.'),
+      data: emptyMaps,
+      error: normalizeUserServiceError(
+        error,
+        'Erro inesperado ao carregar as relacoes entre estes usuarios.'
+      ),
     }
+  }
+}
+
+export async function getMutualFriendMap(
+  viewerId: string | null | undefined,
+  userIds: string[]
+): Promise<ServiceResult<Map<string, boolean>>> {
+  const result = await getFollowRelationshipMaps(viewerId, userIds)
+
+  return {
+    data: result.data.mutualFriends,
+    error: result.error,
   }
 }
 
@@ -268,52 +280,11 @@ async function getFollowingMap(
   viewerId: string | null | undefined,
   userIds: string[]
 ): Promise<ServiceResult<Map<string, boolean>>> {
-  const followingMap = new Map<string, boolean>()
+  const result = await getFollowRelationshipMaps(viewerId, userIds)
 
-  userIds.forEach(userId => {
-    followingMap.set(userId, false)
-  })
-
-  if (!viewerId || userIds.length === 0) {
-    return {
-      data: followingMap,
-      error: null,
-    }
-  }
-
-  try {
-    const { data, error } = await supabase
-      .from('seguidores')
-      .select('seguido_id')
-      .eq('seguidor_id', viewerId)
-      .in('seguido_id', userIds.filter(userId => userId !== viewerId))
-
-    if (error) {
-      return {
-        data: followingMap,
-        error: normalizeUserServiceError(
-          error,
-          'Nao foi possivel carregar o estado de follow destes usuarios.'
-        ),
-      }
-    }
-
-    ;((data || []) as Array<{ seguido_id: string }>).forEach(row => {
-      followingMap.set(row.seguido_id, true)
-    })
-
-    return {
-      data: followingMap,
-      error: null,
-    }
-  } catch (error) {
-    return {
-      data: followingMap,
-      error: normalizeUserServiceError(
-        error,
-        'Erro inesperado ao carregar o estado de follow destes usuarios.'
-      ),
-    }
+  return {
+    data: result.data.following,
+    error: result.error,
   }
 }
 
@@ -328,72 +299,6 @@ function buildSearchUsersResult(
   }))
 }
 
-async function getFollowCounts(profileId: string): Promise<ServiceResult<{
-  followersCount: number
-  followingCount: number
-}>> {
-  try {
-    const [followersResponse, followingResponse] = await Promise.all([
-      supabase.from('seguidores').select('id', { count: 'exact', head: true }).eq('seguido_id', profileId),
-      supabase.from('seguidores').select('id', { count: 'exact', head: true }).eq('seguidor_id', profileId),
-    ])
-
-    if (followersResponse.error) {
-      return {
-        data: {
-          followersCount: 0,
-          followingCount: 0,
-        },
-        error: normalizeUserServiceError(
-          followersResponse.error,
-          'Nao foi possivel carregar a contagem de seguidores.'
-        ),
-      }
-    }
-
-    if (followingResponse.error) {
-      return {
-        data: {
-          followersCount: 0,
-          followingCount: 0,
-        },
-        error: normalizeUserServiceError(
-          followingResponse.error,
-          'Nao foi possivel carregar a contagem de perfis seguidos.'
-        ),
-      }
-    }
-
-    return {
-      data: {
-        followersCount: followersResponse.count || 0,
-        followingCount: followingResponse.count || 0,
-      },
-      error: null,
-    }
-  } catch (error) {
-    return {
-      data: {
-        followersCount: 0,
-        followingCount: 0,
-      },
-      error: normalizeUserServiceError(error, 'Erro inesperado ao carregar as contagens deste perfil.'),
-    }
-  }
-}
-
-function getFollowRelationshipConfig(kind: FollowListKind) {
-  return kind === 'followers'
-    ? {
-        filterColumn: 'seguido_id' as const,
-        relatedUserColumn: 'seguidor_id' as const,
-      }
-    : {
-        filterColumn: 'seguidor_id' as const,
-        relatedUserColumn: 'seguido_id' as const,
-      }
-}
-
 export async function getProfileFollowList(
   profileId: string,
   kind: FollowListKind,
@@ -406,86 +311,50 @@ export async function getProfileFollowList(
     }
   }
 
-  const { filterColumn, relatedUserColumn } = getFollowRelationshipConfig(kind)
-
   try {
-    const { data: relationshipData, error: relationshipError } = await supabase
-      .from('seguidores')
-      .select(`${relatedUserColumn}, data_inicio`)
-      .eq(filterColumn, profileId)
-      .order('data_inicio', { ascending: false })
+    const pageSize = 100
+    const connectionRows: ProfileConnectionRpcRow[] = []
+    let offset = 0
 
-    if (relationshipError) {
-      return {
-        data: [],
-        error: normalizeUserServiceError(
-          relationshipError,
-          kind === 'followers'
-            ? 'Nao foi possivel carregar a lista de seguidores deste perfil.'
-            : 'Nao foi possivel carregar a lista de perfis seguidos deste perfil.'
-        ),
+    while (true) {
+      const { data, error } = await supabase.rpc('get_profile_connections', {
+        p_profile_id: profileId,
+        p_kind: kind,
+        p_limit: pageSize,
+        p_offset: offset,
+      })
+
+      if (error) {
+        return {
+          data: [],
+          error: normalizeUserServiceError(
+            error,
+            kind === 'followers'
+              ? 'Nao foi possivel carregar a lista de seguidores deste perfil.'
+              : 'Nao foi possivel carregar a lista de perfis seguidos deste perfil.'
+          ),
+        }
       }
+
+      const page = (data || []) as ProfileConnectionRpcRow[]
+      connectionRows.push(...page)
+
+      if (page.length < pageSize) {
+        break
+      }
+
+      offset += pageSize
     }
-
-    const relationshipRows = (relationshipData || []) as FollowRelationshipRow[]
-    const relatedUserIds = relationshipRows
-      .map(row => row[relatedUserColumn])
-      .filter((userId): userId is string => typeof userId === 'string' && userId.trim().length > 0)
-
-    if (relatedUserIds.length === 0) {
-      return {
-        data: [],
-        error: null,
-      }
-    }
-
-    const { data: usersData, error: usersError } = await supabase
-      .from('usuarios')
-      .select('id, username, nome_completo, avatar_path')
-      .in('id', relatedUserIds)
-
-    if (usersError) {
-      return {
-        data: [],
-        error: normalizeUserServiceError(
-          usersError,
-          kind === 'followers'
-            ? 'Nao foi possivel carregar os perfis dos seguidores.'
-            : 'Nao foi possivel carregar os perfis seguidos por este usuario.'
-        ),
-      }
-    }
-
-    const users = dedupeUsersById((usersData || []) as UserSearchRow[])
-    const relationshipOrder = new Map<string, number>()
-
-    relationshipRows.forEach((row, index) => {
-      const relatedUserId = row[relatedUserColumn]
-
-      if (typeof relatedUserId === 'string' && !relationshipOrder.has(relatedUserId)) {
-        relationshipOrder.set(relatedUserId, index)
-      }
-    })
-
-    const orderedUsers = [...users].sort((leftUser, rightUser) => {
-      const leftOrder = relationshipOrder.get(leftUser.id) ?? Number.MAX_SAFE_INTEGER
-      const rightOrder = relationshipOrder.get(rightUser.id) ?? Number.MAX_SAFE_INTEGER
-
-      if (leftOrder !== rightOrder) {
-        return leftOrder - rightOrder
-      }
-
-      return compareUsersAlphabetically(leftUser, rightUser)
-    })
-
-    const followMapResult = await getFollowingMap(
-      viewerId,
-      orderedUsers.map(user => user.id)
-    )
 
     return {
-      data: buildSearchUsersResult(orderedUsers, viewerId, followMapResult.data),
-      error: followMapResult.error,
+      data: connectionRows.map(row => ({
+        id: row.id,
+        username: row.username,
+        nome_completo: row.nome_completo,
+        avatar_path: row.avatar_path,
+        isFollowing: Boolean(viewerId && viewerId !== row.id && row.is_following),
+      })),
+      error: null,
     }
   } catch (error) {
     return {
@@ -577,10 +446,11 @@ export async function getPublicProfileByUsername(
   }
 
   try {
+    // Authorization is derived from auth.uid() by the RPC. The argument is kept
+    // in this service contract for existing callers and local UI state.
+    void viewerId
     const { data, error } = await supabase
-      .from('usuarios')
-      .select('id, username, nome_completo, avatar_path, bio, data_cadastro, configuracoes_privacidade')
-      .eq('username', normalizedUsername)
+      .rpc('get_public_profile_by_username', { p_username: normalizedUsername })
       .maybeSingle()
 
     if (error) {
@@ -597,28 +467,8 @@ export async function getPublicProfileByUsername(
       }
     }
 
-    const publicProfileRow = data as PublicUserRow
-    const [followCountsResult, mutualFriendResult] = await Promise.all([
-      getFollowCounts(publicProfileRow.id),
-      getMutualFriendMap(viewerId, [publicProfileRow.id]),
-    ])
-
-    if (followCountsResult.error) {
-      console.error('Erro ao carregar contagens do perfil publico:', followCountsResult.error)
-    }
-
-    if (mutualFriendResult.error) {
-      console.error('Erro ao verificar amizade mutua do perfil publico:', mutualFriendResult.error)
-    }
-
     return {
-      data: buildPublicProfileResult(
-        publicProfileRow,
-        followCountsResult.data.followersCount,
-        followCountsResult.data.followingCount,
-        viewerId,
-        Boolean(mutualFriendResult.data.get(publicProfileRow.id))
-      ),
+      data: buildPublicProfileResult(data as PublicProfileRpcRow),
       error: null,
     }
   } catch (error) {
@@ -645,48 +495,31 @@ export async function getFollowState(
   }
 
   try {
-    const [followCountsResult, viewerRelationshipResponse] = await Promise.all([
-      getFollowCounts(profileId),
-      viewerId && viewerId !== profileId
-        ? supabase
-            .from('seguidores')
-            .select('id')
-            .eq('seguidor_id', viewerId)
-            .eq('seguido_id', profileId)
-            .maybeSingle()
-        : Promise.resolve({ data: null, error: null }),
-    ])
+    const { data, error } = await supabase
+      .rpc('get_profile_follow_state', { p_profile_id: profileId })
+      .single()
 
-    if (followCountsResult.error) {
+    if (error) {
       return {
         data: {
           isFollowing: false,
-          followersCount: followCountsResult.data.followersCount,
-          followingCount: followCountsResult.data.followingCount,
-        },
-        error: followCountsResult.error,
-      }
-    }
-
-    if (viewerRelationshipResponse.error) {
-      return {
-        data: {
-          isFollowing: false,
-          followersCount: followCountsResult.data.followersCount,
-          followingCount: followCountsResult.data.followingCount,
+          followersCount: 0,
+          followingCount: 0,
         },
         error: normalizeUserServiceError(
-          viewerRelationshipResponse.error,
+          error,
           'Nao foi possivel carregar a relacao entre os usuarios.'
         ),
       }
     }
 
+    const followState = data as FollowStateRpcRow
+
     return {
       data: {
-        isFollowing: Boolean(viewerId && viewerId !== profileId && viewerRelationshipResponse.data),
-        followersCount: followCountsResult.data.followersCount,
-        followingCount: followCountsResult.data.followingCount,
+        isFollowing: Boolean(viewerId && viewerId !== profileId && followState.is_following),
+        followersCount: Number(followState.followers_count) || 0,
+        followingCount: Number(followState.following_count) || 0,
       },
       error: null,
     }
@@ -723,7 +556,6 @@ export async function followUser(
     const { error } = await supabase.from('seguidores').insert({
       seguidor_id: viewerId,
       seguido_id: profileId,
-      data_inicio: new Date().toISOString(),
     })
 
     if (error && error.code !== '23505') {

@@ -34,12 +34,29 @@ interface I18nContextValue {
   formatNumber: (value: number, options?: FormatNumberOptions) => string
 }
 
+interface LocaleOverride {
+  userId: string
+  profileLocale: SupportedLocale | null
+  locale: SupportedLocale
+}
+
 const I18nContext = createContext<I18nContextValue | undefined>(undefined)
 
 export function I18nProvider({ children }: { children: ReactNode }) {
   const { user, profile, updateOwnProfile } = useAuth()
-  const [locale, setLocaleState] = useState<SupportedLocale>(() => getInitialLocale())
+  const [localLocale, setLocalLocale] = useState<SupportedLocale>(() => getInitialLocale())
+  const [localeOverride, setLocaleOverride] = useState<LocaleOverride | null>(null)
   const profileSyncInFlightRef = useRef(false)
+  const profileLocale = profile
+    ? getLocaleFromPrivacySettings(profile.configuracoes_privacidade)
+    : null
+  const currentLocaleOverride =
+    user &&
+    localeOverride?.userId === user.id &&
+    localeOverride.profileLocale === profileLocale
+      ? localeOverride.locale
+      : null
+  const locale = currentLocaleOverride || profileLocale || getStoredLocale() || localLocale
 
   useEffect(() => {
     setRuntimeLocale(locale)
@@ -48,10 +65,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user || !profile || profileSyncInFlightRef.current) return
 
-    const profileLocale = getLocaleFromPrivacySettings(profile.configuracoes_privacidade)
-
     if (profileLocale) {
-      setLocaleState(profileLocale)
       persistStoredLocale(profileLocale)
       return
     }
@@ -60,7 +74,6 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     if (!storedLocale) return
 
     profileSyncInFlightRef.current = true
-    setLocaleState(storedLocale)
 
     void updateOwnProfile({
       configuracoes_privacidade: mergeLocaleIntoPrivacySettings(
@@ -70,17 +83,29 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     }).finally(() => {
       profileSyncInFlightRef.current = false
     })
-  }, [profile, updateOwnProfile, user])
+  }, [profile, profileLocale, updateOwnProfile, user])
 
   const setLocale = useCallback(
     async (nextLocale: SupportedLocale) => {
-      setLocaleState(nextLocale)
+      setLocalLocale(nextLocale)
       persistStoredLocale(nextLocale)
 
-      if (!user || !profile) return
+      if (!user || !profile) {
+        setLocaleOverride(null)
+        return
+      }
 
       const currentProfileLocale = getLocaleFromPrivacySettings(profile.configuracoes_privacidade)
-      if (currentProfileLocale === nextLocale) return
+      if (currentProfileLocale === nextLocale) {
+        setLocaleOverride(null)
+        return
+      }
+
+      setLocaleOverride({
+        userId: user.id,
+        profileLocale: currentProfileLocale,
+        locale: nextLocale,
+      })
 
       profileSyncInFlightRef.current = true
 

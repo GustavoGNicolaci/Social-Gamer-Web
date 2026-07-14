@@ -9,10 +9,14 @@ lerna-debug.log*
 
 supabase/*
 !supabase/
+!supabase/config.toml
 !supabase/migrations/
 !supabase/migrations/*.sql
 !supabase/functions/
 !supabase/functions/**
+!supabase/tests/
+!supabase/tests/**
+!supabase/seed.sql
 node_modules
 dist
 dist-ssr

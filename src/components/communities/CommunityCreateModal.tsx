@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { Plus, Users, X } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
@@ -75,21 +75,34 @@ export function CommunityCreateModal({
   const [draft, setDraft] = useState<CommunityDraft>(initialDraft)
   const [bannerFile, setBannerFile] = useState<File | null>(null)
   const [bannerPreviewUrl, setBannerPreviewUrl] = useState<string | null>(null)
+  const bannerPreviewUrlRef = useRef<string | null>(null)
   const [selectedGame, setSelectedGame] = useState<CatalogGamePreview | null>(null)
   const [gameSearch, setGameSearch] = useState('')
-  const [gameResults, setGameResults] = useState<CatalogGamePreview[]>([])
-  const [gameSearchLoading, setGameSearchLoading] = useState(false)
+  const [gameSearchResult, setGameSearchResult] = useState<{
+    query: string
+    data: CatalogGamePreview[]
+  }>({ query: '', data: [] })
   const [feedback, setFeedback] = useState<FeedbackState | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
+  const handleBannerChange = useCallback((file: File | null) => {
+    if (bannerPreviewUrlRef.current) {
+      URL.revokeObjectURL(bannerPreviewUrlRef.current)
+    }
+
+    const nextPreviewUrl = file ? URL.createObjectURL(file) : null
+    bannerPreviewUrlRef.current = nextPreviewUrl
+    setBannerFile(file)
+    setBannerPreviewUrl(nextPreviewUrl)
+  }, [])
+
   const resetForm = useCallback(() => {
     setDraft(initialDraft)
-    setBannerFile(null)
+    handleBannerChange(null)
     setSelectedGame(null)
     setGameSearch('')
-    setGameResults([])
-    setGameSearchLoading(false)
-  }, [])
+    setGameSearchResult({ query: '', data: [] })
+  }, [handleBannerChange])
 
   const handleClose = useCallback(() => {
     if (submitting) return
@@ -117,40 +130,40 @@ export function CommunityCreateModal({
     }
   }, [handleClose])
 
-  useEffect(() => {
-    if (!bannerFile) {
-      setBannerPreviewUrl(null)
-      return
-    }
+  useEffect(
+    () => () => {
+      if (bannerPreviewUrlRef.current) {
+        URL.revokeObjectURL(bannerPreviewUrlRef.current)
+      }
+    },
+    []
+  )
 
-    const previewUrl = URL.createObjectURL(bannerFile)
-    setBannerPreviewUrl(previewUrl)
-    return () => URL.revokeObjectURL(previewUrl)
-  }, [bannerFile])
+  const normalizedGameSearch = gameSearch.trim()
+  const shouldSearchGames = !selectedGame && normalizedGameSearch.length >= 2
+  const gameResults =
+    shouldSearchGames && gameSearchResult.query === normalizedGameSearch
+      ? gameSearchResult.data
+      : []
+  const gameSearchLoading =
+    shouldSearchGames && gameSearchResult.query !== normalizedGameSearch
 
   useEffect(() => {
-    const query = gameSearch.trim()
-    if (selectedGame || query.length < 2) {
-      setGameResults([])
-      setGameSearchLoading(false)
-      return
-    }
+    if (!shouldSearchGames) return
 
     let isActive = true
-    setGameSearchLoading(true)
 
     const timeoutId = window.setTimeout(async () => {
-      const result = await searchCatalogGamesByTitle(query, { limit: 5 })
+      const result = await searchCatalogGamesByTitle(normalizedGameSearch, { limit: 5 })
       if (!isActive) return
-      setGameResults(result.data)
-      setGameSearchLoading(false)
+      setGameSearchResult({ query: normalizedGameSearch, data: result.data })
     }, 240)
 
     return () => {
       isActive = false
       window.clearTimeout(timeoutId)
     }
-  }, [gameSearch, selectedGame])
+  }, [normalizedGameSearch, shouldSearchGames])
 
   const updateDraft = <K extends keyof CommunityDraft>(field: K, value: CommunityDraft[K]) => {
     setDraft(currentDraft => ({
@@ -369,7 +382,7 @@ export function CommunityCreateModal({
                     onClick={() => {
                       setSelectedGame(game)
                       setGameSearch(game.titulo)
-                      setGameResults([])
+                      setGameSearchResult({ query: '', data: [] })
                     }}
                     disabled={submitting}
                   >
@@ -448,7 +461,7 @@ export function CommunityCreateModal({
               previewUrl={bannerPreviewUrl}
               disabled={submitting}
               isUploading={submitting && Boolean(bannerFile)}
-              onChange={setBannerFile}
+              onChange={handleBannerChange}
             />
 
             <div className="communities-create-modal-actions">

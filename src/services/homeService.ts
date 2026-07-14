@@ -1,4 +1,5 @@
 import { supabase } from '../supabase-client'
+import { translate } from '../i18n'
 import { getCatalogGamesPage } from './gameCatalogService'
 
 export interface HomeError {
@@ -240,7 +241,7 @@ function normalizeGame(row: {
 }): HomeGameSummary {
   return {
     id: normalizeInteger(row.game_id),
-    title: normalizeString(row.game_title, 'Jogo desconhecido'),
+    title: normalizeString(row.game_title, translate('common.unknownGame')),
     coverUrl: row.game_cover_url || null,
     genres: normalizeList(row.game_genres),
     releaseDate: row.release_date || null,
@@ -320,7 +321,7 @@ function normalizeFeaturedGame(row: FeaturedGameRow): HomeFeaturedGame {
 function normalizeReleaseGame(row: ReleaseGameRow): HomeGameSummary {
   return {
     id: row.id,
-    title: normalizeString(row.titulo, 'Jogo desconhecido'),
+    title: normalizeString(row.titulo, translate('common.unknownGame')),
     coverUrl: row.capa_url || null,
     genres: normalizeList(row.generos),
     releaseDate: row.data_lancamento || null,
@@ -344,7 +345,7 @@ function normalizeActiveCommunity(row: ActiveCommunityRow): HomeActiveCommunity 
     game: gameId > 0
       ? {
           id: gameId,
-          title: normalizeString(row.jogo_title, 'Jogo desconhecido'),
+          title: normalizeString(row.jogo_title, translate('common.unknownGame')),
           coverUrl: row.jogo_cover_url || null,
         }
       : null,

@@ -1,30 +1,20 @@
 import { supabase } from '../supabase-client'
+import { translate } from '../i18n'
+import {
+  normalizeReviewError,
+  type ReviewError,
+} from '../features/reviews/domain/reviewError'
 import { getPerformanceNow, logPerformanceTiming } from '../utils/performanceDiagnostics'
-import {
-  canViewRestrictedProfile,
-  getProfilePrivacyMode,
-} from '../utils/profilePrivacy'
 import type { CatalogGamePreview } from './gameCatalogService'
-import { getMutualFriendMap } from './userService'
 import {
-  getCommentLikeStates,
-  getCommentDislikeStates,
   getCurrentUserContentReports,
-  getReviewDislikeStates,
-  getReviewLikeStates,
-  getSingleReviewReactionState,
-  rollbackInsertedLike,
-  syncReviewLikeWithDislikeRemoval,
+  getReactionSummaryStates,
+  toggleContentReaction,
   type CurrentUserReportSummary,
   type ReviewReactionState,
 } from './reviewInteractionsService'
 
-export interface ReviewError {
-  code?: string
-  message: string
-  details?: string | null
-  hint?: string | null
-}
+export type { ReviewError } from '../features/reviews/domain/reviewError'
 
 export interface ReviewAuthor {
   id?: string
@@ -157,7 +147,6 @@ interface ReviewAuthorRow {
   id?: string
   username: string
   avatar_path: string | null
-  configuracoes_privacidade?: Record<string, unknown> | null
 }
 
 type ReviewAuthorRelation = ReviewAuthorRow | ReviewAuthorRow[] | null
@@ -247,7 +236,7 @@ const PROFILE_REVIEW_SELECT = `
   curtidas,
   data_publicacao,
   editado_em,
-  usuario:usuarios(id, username, avatar_path, configuracoes_privacidade),
+  usuario:usuarios(id, username, avatar_path),
   jogo:jogos(id, titulo, capa_url)
 `
 
@@ -256,7 +245,7 @@ const RECENT_REVIEW_ACTIVITY_SELECT = `
   nota,
   data_publicacao,
   jogos!inner(titulo),
-  usuarios!inner(id, username, avatar_path, configuracoes_privacidade)
+  usuarios!inner(id, username, avatar_path)
 `
 
 const GAME_RATING_SUMMARY_SELECT = `
@@ -267,58 +256,9 @@ const GAME_RATING_SUMMARY_SELECT = `
 
 const DEFAULT_PROFILE_REVIEWS_PAGE_SIZE = 6
 
-function normalizeReviewError(error: unknown, fallbackMessage: string): ReviewError {
-  if (error && typeof error === 'object') {
-    const message =
-      'message' in error && typeof error.message === 'string' ? error.message : fallbackMessage
-    const code = 'code' in error && typeof error.code === 'string' ? error.code : undefined
-    const details =
-      'details' in error && typeof error.details === 'string' ? error.details : null
-    const hint = 'hint' in error && typeof error.hint === 'string' ? error.hint : null
-
-    return { code, message, details, hint }
-  }
-
-  return { message: fallbackMessage }
-}
-
 function resolveSingleRelation<T>(value: T | T[] | null | undefined) {
   if (Array.isArray(value)) return value[0] || null
   return value || null
-}
-
-function canViewReviewAuthor(
-  author: ReviewAuthorRow | null,
-  currentUserId: string | null | undefined,
-  mutualFriendMap: Map<string, boolean>
-) {
-  const privacyMode = getProfilePrivacyMode(author?.configuracoes_privacidade)
-
-  return canViewRestrictedProfile({
-    ownerId: author?.id,
-    viewerId: currentUserId,
-    privacyMode,
-    isMutualFriend: Boolean(author?.id && mutualFriendMap.get(author.id)),
-  })
-}
-
-async function filterReviewRowsByPrivacy<T extends { usuario?: ReviewAuthorRelation; usuarios?: ReviewAuthorRelation }>(
-  rows: T[],
-  currentUserId?: string | null
-) {
-  const authorIds = rows
-    .map(row => resolveSingleRelation(row.usuario || row.usuarios)?.id)
-    .filter((authorId): authorId is string => Boolean(authorId))
-  const mutualFriendMapResult = await getMutualFriendMap(currentUserId, authorIds)
-
-  if (mutualFriendMapResult.error) {
-    console.error('Erro ao verificar amizade mutua para reviews:', mutualFriendMapResult.error)
-  }
-
-  return rows.filter(row => {
-    const author = resolveSingleRelation(row.usuario || row.usuarios)
-    return canViewReviewAuthor(author, currentUserId, mutualFriendMapResult.data)
-  })
 }
 
 function normalizeOptionalText(value: string | null | undefined) {
@@ -512,7 +452,7 @@ function normalizeRecentReviewActivity(row: RecentReviewActivityRow): RecentRevi
     id: row.id,
     authorName: reviewUser?.username || 'Usuario',
     authorAvatar: reviewUser?.avatar_path || null,
-    gameTitle: reviewGame?.titulo || 'Jogo desconhecido',
+    gameTitle: reviewGame?.titulo || translate('common.unknownGame'),
     summary: 'Publicou uma review na comunidade.',
     score: row.nota ?? null,
     publishedAt: row.data_publicacao,
@@ -551,56 +491,48 @@ export async function getReviewsByGameId(
     const reviewIds = gameReviews.map(review => review.id)
     const commentIds = gameReviews.flatMap(review => review.comentarios.map(comment => comment.id))
 
-    const [
-      likeStatesResult,
-      dislikeStatesResult,
-      commentLikeStatesResult,
-      commentDislikeStatesResult,
-      reportsResult,
-    ] =
-      await Promise.all([
-        getReviewLikeStates(reviewIds, currentUserId),
-        getReviewDislikeStates(reviewIds, currentUserId),
-        getCommentLikeStates(commentIds, currentUserId),
-        getCommentDislikeStates(commentIds, currentUserId),
-        getCurrentUserContentReports(reviewIds, commentIds, currentUserId),
-      ])
+    const [reactionStatesResult, reportsResult] = await Promise.all([
+      getReactionSummaryStates(reviewIds, commentIds),
+      getCurrentUserContentReports(reviewIds, commentIds, currentUserId),
+    ])
 
     const reviewsWithInteractionState = sortReviewsByRelevance(gameReviews.map(review => {
-      const likeState = likeStatesResult.data.get(review.id)
-      const dislikeState = dislikeStatesResult.data.get(review.id)
+      const reactionState = reactionStatesResult.data.reviews.get(review.id)
 
       return {
         ...review,
-        curtidas: likeStatesResult.error ? review.curtidas : likeState?.curtidas ?? review.curtidas,
-        likedByCurrentUser: likeStatesResult.error
+        curtidas: reactionStatesResult.error
+          ? review.curtidas
+          : reactionState?.curtidas ?? review.curtidas,
+        likedByCurrentUser: reactionStatesResult.error
           ? review.likedByCurrentUser
-          : likeState?.likedByCurrentUser ?? review.likedByCurrentUser,
-        dislikes: dislikeStatesResult.error ? review.dislikes : dislikeState?.dislikes ?? review.dislikes,
-        dislikedByCurrentUser: dislikeStatesResult.error
+          : reactionState?.likedByCurrentUser ?? review.likedByCurrentUser,
+        dislikes: reactionStatesResult.error
+          ? review.dislikes
+          : reactionState?.dislikes ?? review.dislikes,
+        dislikedByCurrentUser: reactionStatesResult.error
           ? review.dislikedByCurrentUser
-          : dislikeState?.dislikedByCurrentUser ?? review.dislikedByCurrentUser,
+          : reactionState?.dislikedByCurrentUser ?? review.dislikedByCurrentUser,
         currentUserReport: reportsResult.error
           ? review.currentUserReport
           : reportsResult.data.reportsByReviewId.get(review.id) || review.currentUserReport,
         comentarios: sortCommentsByRelevance(review.comentarios.map(comment => {
-          const commentLikeState = commentLikeStatesResult.data.get(comment.id)
-          const commentDislikeState = commentDislikeStatesResult.data.get(comment.id)
+          const commentReactionState = reactionStatesResult.data.comments.get(comment.id)
 
           return {
             ...comment,
-            curtidas: commentLikeStatesResult.error
+            curtidas: reactionStatesResult.error
               ? comment.curtidas
-              : commentLikeState?.curtidas ?? comment.curtidas,
-            likedByCurrentUser: commentLikeStatesResult.error
+              : commentReactionState?.curtidas ?? comment.curtidas,
+            likedByCurrentUser: reactionStatesResult.error
               ? comment.likedByCurrentUser
-              : commentLikeState?.likedByCurrentUser ?? comment.likedByCurrentUser,
-            dislikes: commentDislikeStatesResult.error
+              : commentReactionState?.likedByCurrentUser ?? comment.likedByCurrentUser,
+            dislikes: reactionStatesResult.error
               ? comment.dislikes
-              : commentDislikeState?.dislikes ?? comment.dislikes,
-            dislikedByCurrentUser: commentDislikeStatesResult.error
+              : commentReactionState?.dislikes ?? comment.dislikes,
+            dislikedByCurrentUser: reactionStatesResult.error
               ? comment.dislikedByCurrentUser
-              : commentDislikeState?.dislikedByCurrentUser ?? comment.dislikedByCurrentUser,
+              : commentReactionState?.dislikedByCurrentUser ?? comment.dislikedByCurrentUser,
             currentUserReport: reportsResult.error
               ? comment.currentUserReport
               : reportsResult.data.reportsByCommentId.get(comment.id) || comment.currentUserReport,
@@ -612,10 +544,7 @@ export async function getReviewsByGameId(
     return {
       data: reviewsWithInteractionState,
       error:
-        likeStatesResult.error ||
-        dislikeStatesResult.error ||
-        commentLikeStatesResult.error ||
-        commentDislikeStatesResult.error ||
+        reactionStatesResult.error ||
         reportsResult.error,
     }
   } catch (error) {
@@ -630,6 +559,8 @@ export async function getReviewsByUserId(
   userId: string,
   options: GetProfileReviewsOptions = {}
 ): Promise<ServiceResult<ProfileReviewItem[]>> {
+  void options
+
   try {
     const { data, error } = await supabase
       .from('avaliacoes')
@@ -644,9 +575,7 @@ export async function getReviewsByUserId(
       }
     }
 
-    const reviewRows = options.includeRestrictedAuthorReviews
-      ? ((data || []) as ReviewRow[])
-      : await filterReviewRowsByPrivacy((data || []) as ReviewRow[], options.currentUserId)
+    const reviewRows = (data || []) as ReviewRow[]
 
     return {
       data: reviewRows.filter(isCompleteReviewRow).map(normalizeProfileReviewItem),
@@ -706,11 +635,9 @@ export async function getReviewsPageByUserId(
       }
     }
 
-    const privacyStartedAt = getPerformanceNow()
-    const reviewRows = options.includeRestrictedAuthorReviews
-      ? ((data || []) as ReviewRow[])
-      : await filterReviewRowsByPrivacy((data || []) as ReviewRow[], options.currentUserId)
-    timings.privacyFilterMs += getPerformanceNow() - privacyStartedAt
+    // Profile visibility is decided before this query from the safe public
+    // profile projection. Reviews themselves remain public contributions.
+    const reviewRows = (data || []) as ReviewRow[]
 
     const normalizeStartedAt = getPerformanceNow()
     const items = reviewRows.filter(isCompleteReviewRow).map(normalizeProfileReviewItem)
@@ -759,6 +686,8 @@ export async function getRecentPublicReviewActivities(
   limit = 6,
   currentUserId?: string | null
 ): Promise<ServiceResult<RecentReviewActivity[]>> {
+  void currentUserId
+
   try {
     const { data, error } = await supabase
       .from('avaliacoes')
@@ -773,11 +702,7 @@ export async function getRecentPublicReviewActivities(
       }
     }
 
-    const visibleRows = await filterReviewRowsByPrivacy(
-      (data || []) as RecentReviewActivityRow[],
-      currentUserId
-    )
-    const visibleActivities = visibleRows
+    const visibleActivities = ((data || []) as RecentReviewActivityRow[])
       .map(normalizeRecentReviewActivity)
       .slice(0, limit)
 
@@ -921,8 +846,6 @@ export async function saveReview({
       jogo_id: gameId,
       nota,
       texto_review: normalizedText,
-      curtidas: 0,
-      data_publicacao: new Date().toISOString(),
     })
 
     if (error) {
@@ -948,10 +871,6 @@ export async function toggleReviewLike({
   reviewId,
   userId,
   reviewAuthorId,
-  likedByCurrentUser,
-  dislikedByCurrentUser,
-  currentLikeCount,
-  currentDislikeCount,
 }: ToggleReviewLikeParams): Promise<ToggleReviewLikeResult> {
   if (userId === reviewAuthorId) {
     return {
@@ -963,119 +882,20 @@ export async function toggleReviewLike({
     }
   }
 
-  try {
-    if (likedByCurrentUser) {
-      const { error } = await supabase
-        .from('avaliacao_curtidas')
-        .delete()
-        .eq('avaliacao_id', reviewId)
-        .eq('usuario_id', userId)
+  const result = await toggleContentReaction('review', reviewId, 'like')
 
-      if (error) {
-        return {
-          status: 'error',
-          data: null,
-          error: normalizeReviewError(error, 'Nao foi possivel remover a curtida desta review.'),
-        }
-      }
-
-      const reactionStateResult = await getSingleReviewReactionState(reviewId, userId)
-
-      return {
-        status: 'unliked',
-        data: reactionStateResult.data || {
-          curtidas: Math.max(currentLikeCount - 1, 0),
-          likedByCurrentUser: false,
-          dislikes: currentDislikeCount,
-          dislikedByCurrentUser,
-        },
-        error: null,
-      }
-    }
-
-    const { data: existingLikes, error: existingLikesError } = await supabase
-      .from('avaliacao_curtidas')
-      .select('avaliacao_id')
-      .eq('avaliacao_id', reviewId)
-      .eq('usuario_id', userId)
-      .limit(1)
-
-    if (existingLikesError) {
-      return {
-        status: 'error',
-        data: null,
-        error: normalizeReviewError(
-          existingLikesError,
-          'Nao foi possivel verificar a curtida atual desta review.'
-        ),
-      }
-    }
-
-    if ((existingLikes || []).length > 0) {
-      const reactionStateResult = await getSingleReviewReactionState(reviewId, userId)
-
-      return {
-        status: 'liked',
-        data: reactionStateResult.data || {
-          curtidas: Math.max(currentLikeCount, 1),
-          likedByCurrentUser: true,
-          dislikes: currentDislikeCount,
-          dislikedByCurrentUser,
-        },
-        error: null,
-      }
-    }
-
-    const { error } = await supabase.from('avaliacao_curtidas').insert({
-      avaliacao_id: reviewId,
-      usuario_id: userId,
-    })
-
-    if (error && error.code !== '23505') {
-      return {
-        status: 'error',
-        data: null,
-        error: normalizeReviewError(error, 'Nao foi possivel curtir esta review.'),
-      }
-    }
-
-    if (dislikedByCurrentUser) {
-      const syncResult = await syncReviewLikeWithDislikeRemoval(reviewId, userId)
-
-      if (syncResult.error) {
-        if (!error) {
-          await rollbackInsertedLike(reviewId, userId)
-        }
-
-        return {
-          status: 'error',
-          data: null,
-          error: normalizeReviewError(
-            syncResult.error,
-            'Nao foi possivel sincronizar curtida e dislike desta review.'
-          ),
-        }
-      }
-    }
-
-    const reactionStateResult = await getSingleReviewReactionState(reviewId, userId)
-
-    return {
-      status: 'liked',
-      data: reactionStateResult.data || {
-        curtidas: currentLikeCount + 1,
-        likedByCurrentUser: true,
-        dislikes: Math.max(currentDislikeCount - (dislikedByCurrentUser ? 1 : 0), 0),
-        dislikedByCurrentUser: false,
-      },
-      error: null,
-    }
-  } catch (error) {
+  if (result.status !== 'liked' && result.status !== 'unliked') {
     return {
       status: 'error',
-      data: null,
-      error: normalizeReviewError(error, 'Erro inesperado ao atualizar a curtida desta review.'),
+      data: result.data,
+      error: result.error || { message: 'A review retornou um estado de reacao inesperado.' },
     }
+  }
+
+  return {
+    status: result.status,
+    data: result.data,
+    error: result.error,
   }
 }
 
@@ -1100,7 +920,6 @@ export async function createReviewComment({
       usuario_id: userId,
       review_id: reviewId,
       texto: normalizedText,
-      data_comentario: new Date().toISOString(),
     })
 
     if (error) {

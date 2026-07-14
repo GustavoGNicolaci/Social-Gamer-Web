@@ -1,0 +1,3 @@
+-- Intentionally empty.
+-- Add deterministic local-only fixtures here when database integration tests
+-- are introduced. Never place production credentials or user data in seeds.

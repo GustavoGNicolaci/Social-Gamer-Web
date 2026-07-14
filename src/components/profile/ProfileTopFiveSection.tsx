@@ -33,6 +33,17 @@ interface TopFiveSearchResultItem {
   isCurrentSlot: boolean
 }
 
+interface StoredEntriesOverride {
+  sourceSignature: string
+  entriesSignature: string
+  entries: TopFiveStoredEntry[]
+}
+
+interface SelectedGamesLoadResult {
+  requestKey: string
+  error: string | null
+}
+
 interface ProfileTopFiveSectionProps {
   isOwnerView: boolean
   entries: TopFiveStoredEntry[]
@@ -97,11 +108,17 @@ export function ProfileTopFiveSection({
 }: ProfileTopFiveSectionProps) {
   const { t } = useI18n()
   const normalizedEntriesFromProps = useMemo(() => normalizeTopFiveEntries(entries), [entries])
+  const normalizedEntriesSignature = useMemo(
+    () => JSON.stringify(normalizedEntriesFromProps),
+    [normalizedEntriesFromProps]
+  )
 
-  const [storedEntries, setStoredEntries] = useState<TopFiveStoredEntry[]>(normalizedEntriesFromProps)
+  const [storedEntriesOverride, setStoredEntriesOverride] = useState<StoredEntriesOverride | null>(
+    null
+  )
   const [gamesById, setGamesById] = useState<Record<number, CatalogGamePreview>>({})
-  const [selectedGamesLoading, setSelectedGamesLoading] = useState(false)
-  const [selectedGamesError, setSelectedGamesError] = useState<string | null>(null)
+  const [selectedGamesLoadResult, setSelectedGamesLoadResult] =
+    useState<SelectedGamesLoadResult>({ requestKey: '', error: null })
   const [activeSlotPosition, setActiveSlotPosition] = useState<TopFivePosition | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<CatalogGamePreview[]>([])
@@ -114,6 +131,37 @@ export function ProfileTopFiveSection({
   const searchTimeoutRef = useRef<number | null>(null)
   const searchRequestIdRef = useRef(0)
   const selectedGamesRequestIdRef = useRef(0)
+
+  const storedEntries =
+    storedEntriesOverride?.sourceSignature === normalizedEntriesSignature
+      ? storedEntriesOverride.entries
+      : normalizedEntriesFromProps
+
+  useEffect(() => {
+    if (storedEntriesOverride?.entriesSignature !== normalizedEntriesSignature) return
+
+    const timeoutId = window.setTimeout(() => {
+      setStoredEntriesOverride(currentOverride =>
+        currentOverride?.entriesSignature === normalizedEntriesSignature
+          ? null
+          : currentOverride
+      )
+    }, 0)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [normalizedEntriesSignature, storedEntriesOverride?.entriesSignature])
+
+  const selectedGameIds = useMemo(
+    () => storedEntries.map(entry => entry.jogo_id),
+    [storedEntries]
+  )
+  const selectedGamesRequestKey = selectedGameIds.join(',')
+  const selectedGamesLoading =
+    selectedGameIds.length > 0 && selectedGamesLoadResult.requestKey !== selectedGamesRequestKey
+  const selectedGamesError =
+    selectedGamesLoadResult.requestKey === selectedGamesRequestKey
+      ? selectedGamesLoadResult.error
+      : null
 
   const entriesByPosition = useMemo(
     () => new Map(storedEntries.map(entry => [entry.posicao, entry])),
@@ -172,31 +220,21 @@ export function ProfileTopFiveSection({
   )
 
   useEffect(() => {
-    setStoredEntries(normalizedEntriesFromProps)
-  }, [normalizedEntriesFromProps])
-
-  useEffect(() => {
-    const nextGameIds = storedEntries.map(entry => entry.jogo_id)
     const requestId = selectedGamesRequestIdRef.current + 1
     selectedGamesRequestIdRef.current = requestId
 
-    if (nextGameIds.length === 0) {
-      setSelectedGamesLoading(false)
-      setSelectedGamesError(null)
-      return
-    }
-
-    setSelectedGamesLoading(true)
-    setSelectedGamesError(null)
+    if (selectedGameIds.length === 0) return
 
     void (async () => {
-      const { data, error } = await getCatalogGamesByIds(nextGameIds)
+      const { data, error } = await getCatalogGamesByIds(selectedGameIds)
 
       if (selectedGamesRequestIdRef.current !== requestId) return
 
       if (error) {
-        setSelectedGamesError(error.message || t('profileTopFive.loadSelectedError'))
-        setSelectedGamesLoading(false)
+        setSelectedGamesLoadResult({
+          requestKey: selectedGamesRequestKey,
+          error: error.message || t('profileTopFive.loadSelectedError'),
+        })
         return
       }
 
@@ -207,10 +245,9 @@ export function ProfileTopFiveSection({
         })
         return nextGamesById
       })
-      setSelectedGamesError(null)
-      setSelectedGamesLoading(false)
+      setSelectedGamesLoadResult({ requestKey: selectedGamesRequestKey, error: null })
     })()
-  }, [storedEntries, t])
+  }, [selectedGameIds, selectedGamesRequestKey, t])
 
   useEffect(() => {
     if (!activeSlotPosition) return
@@ -274,7 +311,11 @@ export function ProfileTopFiveSection({
       }))
     }
 
-    setStoredEntries(normalizedNextEntries)
+    setStoredEntriesOverride({
+      sourceSignature: normalizedEntriesSignature,
+      entriesSignature: nextEntriesSignature,
+      entries: normalizedNextEntries,
+    })
     setIsSavingTopFive(true)
     setActionError(null)
 
@@ -283,7 +324,11 @@ export function ProfileTopFiveSection({
     setIsSavingTopFive(false)
 
     if (!result.ok) {
-      setStoredEntries(previousEntries)
+      setStoredEntriesOverride({
+        sourceSignature: normalizedEntriesSignature,
+        entriesSignature: previousEntriesSignature,
+        entries: previousEntries,
+      })
       setActionError(result.message || t('profileTopFive.updateError'))
       return
     }

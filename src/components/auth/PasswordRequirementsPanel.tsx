@@ -17,7 +17,7 @@ function PasswordRequirementsPanel({
   className = '',
 }: PasswordRequirementsPanelProps) {
   const { t } = useI18n()
-  const requirementStates = getPasswordRequirementStates(password, shouldValidate)
+  const requirementStates = getPasswordRequirementStates(password, t, shouldValidate)
 
   return (
     <aside

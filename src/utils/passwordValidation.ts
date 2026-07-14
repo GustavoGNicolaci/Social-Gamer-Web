@@ -1,5 +1,3 @@
-import { translate } from '../i18n'
-
 export type PasswordRequirementId =
   | 'letterAndNumber'
   | 'minLength'
@@ -8,6 +6,7 @@ export type PasswordRequirementId =
   | 'symbol'
 
 export type PasswordRequirementStatus = 'pending' | 'invalid' | 'valid'
+export type PasswordTranslator = (key: string) => string
 
 interface PasswordRequirementDefinition {
   id: PasswordRequirementId
@@ -28,10 +27,6 @@ const NUMBER_REGEX = /\d/
 const LOWERCASE_REGEX = /[a-z]/
 const UPPERCASE_REGEX = /[A-Z]/
 const SYMBOL_REGEX = /[^A-Za-z0-9\s]/
-
-export const PASSWORD_REQUIREMENTS_TITLE = translate('auth.passwordRequirementsTitle')
-export const PASSWORD_REQUIRED_MESSAGE = translate('auth.passwordRequired')
-export const PASSWORD_INVALID_MESSAGE = translate('auth.passwordInvalid')
 
 const PASSWORD_REQUIREMENT_DEFINITIONS: PasswordRequirementDefinition[] = [
   {
@@ -61,13 +56,9 @@ const PASSWORD_REQUIREMENT_DEFINITIONS: PasswordRequirementDefinition[] = [
   },
 ]
 
-export const PASSWORD_REQUIREMENTS = PASSWORD_REQUIREMENT_DEFINITIONS.map(({ id, labelKey }) => ({
-  id,
-  label: translate(labelKey),
-}))
-
 export const getPasswordRequirementStates = (
   password: string,
+  translator: PasswordTranslator,
   shouldValidate = false
 ): PasswordRequirementState[] => {
   const isNeutralState = !shouldValidate
@@ -77,7 +68,7 @@ export const getPasswordRequirementStates = (
 
     return {
       id,
-      label: translate(labelKey),
+      label: translator(labelKey),
       isMet,
       status: isNeutralState ? 'pending' : isMet ? 'valid' : 'invalid',
     }
@@ -87,14 +78,17 @@ export const getPasswordRequirementStates = (
 export const isPasswordValid = (password: string) =>
   PASSWORD_REQUIREMENT_DEFINITIONS.every(({ validate }) => validate(password))
 
-export const getPasswordValidationError = (password: string) => {
+export const getPasswordValidationError = (
+  password: string,
+  translator: PasswordTranslator
+) => {
   if (!password) {
-    return translate('auth.passwordRequired')
+    return translator('auth.passwordRequired')
   }
 
   if (isPasswordValid(password)) {
     return null
   }
 
-  return translate('auth.passwordInvalid')
+  return translator('auth.passwordInvalid')
 }

@@ -116,7 +116,7 @@ function RegisterPage() {
       nextErrors.email = t('auth.invalidEmail')
     }
 
-    const passwordError = getPasswordValidationError(formData.password)
+    const passwordError = getPasswordValidationError(formData.password, t)
 
     if (passwordError) {
       nextErrors.password = passwordError

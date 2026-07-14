@@ -188,6 +188,7 @@ export interface CommunityCreationQuota {
 export interface CommunityMembersOptions {
   search?: string
   limit?: number
+  offset?: number
 }
 
 export interface CommunityPostsOptions {
@@ -217,6 +218,7 @@ export interface UpdateCommunityInput extends CreateCommunityInput {
 
 export interface UpdateCommunityModeratedInput {
   comunidadeId: string
+  currentUserId: string
   descricao?: string | null
   bannerPath?: string | null
   regras?: string | null
@@ -277,6 +279,19 @@ interface MemberRow {
   entrou_em: string
   atualizado_em: string
   usuario?: Relation<AuthorRow>
+}
+
+interface MemberPageRow {
+  comunidade_id: string
+  usuario_id: string
+  cargo: CommunityRole
+  entrou_em: string
+  atualizado_em: string
+  user_id: string
+  username: string | null
+  nome_completo: string | null
+  avatar_path: string | null
+  total_count: number | string
 }
 
 interface PostRow {
@@ -384,15 +399,6 @@ const COMMUNITY_SELECT = `
   updated_at,
   jogo:jogos(id, titulo, capa_url),
   lider:usuarios!comunidades_lider_id_fkey(id, username, nome_completo, avatar_path)
-`
-
-const MEMBER_SELECT = `
-  comunidade_id,
-  usuario_id,
-  cargo,
-  entrou_em,
-  atualizado_em,
-  usuario:usuarios!comunidade_membros_usuario_id_fkey(id, username, nome_completo, avatar_path)
 `
 
 const POST_SELECT = `
@@ -1038,12 +1044,14 @@ export async function getCommunityMembers(
   options: CommunityMembersOptions = {}
 ): Promise<PaginatedServiceResult<CommunityMember[]>> {
   try {
-    const { data, error } = await supabase
-      .from('comunidade_membros')
-      .select(MEMBER_SELECT)
-      .eq('comunidade_id', communityId)
-      .order('cargo', { ascending: true })
-      .order('entrou_em', { ascending: true })
+    const limit = Math.min(Math.max(options.limit || 50, 1), 250)
+    const offset = Math.max(options.offset || 0, 0)
+    const { data, error } = await supabase.rpc('get_community_members_page', {
+      p_community_id: communityId,
+      p_search: normalizeSearch(options.search) || null,
+      p_limit: limit,
+      p_offset: offset,
+    })
 
     if (error) {
       return {
@@ -1055,21 +1063,25 @@ export async function getCommunityMembers(
       }
     }
 
-    const search = normalizeSearch(options.search)
-    const members = ((data || []) as MemberRow[]).map(normalizeMember)
-    const filteredMembers = search
-      ? members.filter(member => {
-          const username = normalizeSearch(member.usuario?.username)
-          const displayName = normalizeSearch(member.usuario?.nome_completo)
-          const role = normalizeSearch(member.cargo)
-          return username.includes(search) || displayName.includes(search) || role.includes(search)
-        })
-      : members
+    const rows = (data || []) as MemberPageRow[]
+    const members = rows.map(row => normalizeMember({
+      comunidade_id: row.comunidade_id,
+      usuario_id: row.usuario_id,
+      cargo: row.cargo,
+      entrou_em: row.entrou_em,
+      atualizado_em: row.atualizado_em,
+      usuario: {
+        id: row.user_id,
+        username: row.username || '',
+        nome_completo: row.nome_completo,
+        avatar_path: row.avatar_path,
+      },
+    }))
 
     return {
-      data: filteredMembers.slice(0, options.limit || 200),
+      data: members,
       error: null,
-      totalCount: filteredMembers.length,
+      totalCount: rows.length > 0 ? normalizeNumber(rows[0].total_count) : 0,
     }
   } catch (error) {
     return {
@@ -1211,7 +1223,7 @@ export async function updateCommunityModeratedDetails(
     }
   }
 
-  const currentRole = await getCurrentUserRoles([input.comunidadeId])
+  const currentRole = await getCurrentUserRoles([input.comunidadeId], input.currentUserId)
   return {
     data: normalizeCommunity(data as CommunityRow, currentRole.get(input.comunidadeId) || null, null),
     error: null,

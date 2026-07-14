@@ -217,7 +217,6 @@ export async function submitProfileReport({
         usuario_denunciado_id: reportedUserId,
         motivo: reason,
         descricao: normalizeOptionalText(description),
-        created_at: new Date().toISOString(),
       })
       .select(PROFILE_REPORT_SELECT)
       .maybeSingle()

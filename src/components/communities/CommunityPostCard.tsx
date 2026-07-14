@@ -121,9 +121,19 @@ export function CommunityPostCard({
   const authorName = getAuthorName(post.autor)
   const authorProfilePath = getOptionalPublicProfilePath(post.autor?.username)
   const postImageUrl = post.imagem_url
+  const activeCommentIndex = useMemo(() => {
+    if (!activeAnchorId?.startsWith('community-comment-')) return -1
+
+    const commentId = activeAnchorId.replace('community-comment-', '')
+    return post.comentarios.findIndex(comment => comment.id === commentId)
+  }, [activeAnchorId, post.comentarios])
+  const effectiveVisibleCommentCount =
+    activeCommentIndex >= 0
+      ? Math.max(visibleCommentCount, activeCommentIndex + 1)
+      : visibleCommentCount
   const visibleComments = useMemo(
-    () => post.comentarios.slice(0, visibleCommentCount),
-    [post.comentarios, visibleCommentCount]
+    () => post.comentarios.slice(0, effectiveVisibleCommentCount),
+    [effectiveVisibleCommentCount, post.comentarios]
   )
   const hiddenCommentsCount = post.comentarios.length - visibleComments.length
   const isModerator = currentUserRole === 'lider' || currentUserRole === 'admin'
@@ -168,15 +178,7 @@ export function CommunityPostCard({
 
     if (!activeAnchorId.startsWith('community-comment-')) return
 
-    const commentId = activeAnchorId.replace('community-comment-', '')
-    const commentIndex = post.comentarios.findIndex(comment => comment.id === commentId)
-
-    if (commentIndex < 0) return
-
-    if (commentIndex >= visibleCommentCount) {
-      setVisibleCommentCount(commentIndex + 1)
-      return
-    }
+    if (activeCommentIndex < 0) return
 
     const frameId = window.requestAnimationFrame(() => {
       document.getElementById(activeAnchorId)?.scrollIntoView({
@@ -186,7 +188,7 @@ export function CommunityPostCard({
     })
 
     return () => window.cancelAnimationFrame(frameId)
-  }, [activeAnchorId, post.comentarios, post.id, visibleCommentCount])
+  }, [activeAnchorId, activeCommentIndex, post.id])
 
   const handleReaction = async (reaction: CommunityReactionType) => {
     setPendingAction(reaction)

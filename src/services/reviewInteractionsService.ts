@@ -1,5 +1,8 @@
 import { supabase } from '../supabase-client'
-import type { ReviewError } from './reviewService'
+import {
+  normalizeReviewError,
+  type ReviewError,
+} from '../features/reviews/domain/reviewError'
 
 export type ReportTargetType = 'review' | 'comment'
 export type ReportReason =
@@ -39,24 +42,36 @@ interface ServiceResult<T> {
   error: ReviewError | null
 }
 
-interface ReviewLikeRow {
-  avaliacao_id: string
-  usuario_id: string
+type ReactionContentType = 'review' | 'comment'
+type ReactionType = 'like' | 'dislike'
+type ReactionToggleStatus = 'liked' | 'unliked' | 'disliked' | 'undisliked'
+
+interface ReactionSummaryRow {
+  content_type: ReactionContentType
+  content_id: string
+  curtidas: number
+  dislikes: number
+  liked_by_current_user: boolean
+  disliked_by_current_user: boolean
 }
 
-interface ReviewDislikeRow {
-  avaliacao_id: string
-  usuario_id: string
+interface ReactionToggleRow {
+  reaction_status: ReactionToggleStatus
+  curtidas: number
+  dislikes: number
+  liked_by_current_user: boolean
+  disliked_by_current_user: boolean
 }
 
-interface CommentLikeRow {
-  comentario_id: string
-  usuario_id: string
+export interface ReactionSummaryMaps {
+  reviews: Map<string, ReviewReactionState>
+  comments: Map<string, CommentReactionState>
 }
 
-interface CommentDislikeRow {
-  comentario_id: string
-  usuario_id: string
+export interface AtomicReactionToggleResult {
+  status: ReactionToggleStatus | 'error'
+  data: ReviewReactionState | null
+  error: ReviewError | null
 }
 
 interface ContentReportRow {
@@ -183,31 +198,16 @@ export const REPORT_STATUS_LABELS: Record<ReportStatus, string> = {
   dismissed: 'Arquivada',
 }
 
-function normalizeReviewError(error: unknown, fallbackMessage: string): ReviewError {
-  if (error && typeof error === 'object') {
-    const message =
-      'message' in error && typeof error.message === 'string' ? error.message : fallbackMessage
-    const code = 'code' in error && typeof error.code === 'string' ? error.code : undefined
-    const details =
-      'details' in error && typeof error.details === 'string' ? error.details : null
-    const hint = 'hint' in error && typeof error.hint === 'string' ? error.hint : null
-
-    return { code, message, details, hint }
-  }
-
-  return { message: fallbackMessage }
-}
-
 function normalizeOptionalText(value: string | null | undefined) {
   const trimmedValue = value?.trim() || ''
   return trimmedValue ? trimmedValue : null
 }
 
-function createReviewReactionStateMap(reviewIds: string[]) {
+function createReactionStateMap(contentIds: string[]) {
   const reactionStates = new Map<string, ReviewReactionState>()
 
-  reviewIds.forEach(reviewId => {
-    reactionStates.set(reviewId, {
+  contentIds.forEach(contentId => {
+    reactionStates.set(contentId, {
       curtidas: 0,
       likedByCurrentUser: false,
       dislikes: 0,
@@ -218,19 +218,39 @@ function createReviewReactionStateMap(reviewIds: string[]) {
   return reactionStates
 }
 
-function createCommentReactionStateMap(commentIds: string[]) {
-  const reactionStates = new Map<string, CommentReactionState>()
+function normalizeReactionState(row: ReactionSummaryRow | ReactionToggleRow): ReviewReactionState {
+  return {
+    curtidas: Math.max(Number(row.curtidas) || 0, 0),
+    likedByCurrentUser: Boolean(row.liked_by_current_user),
+    dislikes: Math.max(Number(row.dislikes) || 0, 0),
+    dislikedByCurrentUser: Boolean(row.disliked_by_current_user),
+  }
+}
 
-  commentIds.forEach(commentId => {
-    reactionStates.set(commentId, {
-      curtidas: 0,
-      likedByCurrentUser: false,
-      dislikes: 0,
-      dislikedByCurrentUser: false,
-    })
-  })
+function normalizeContentIds(contentIds: string[]) {
+  return Array.from(new Set(contentIds.filter(Boolean)))
+}
 
-  return reactionStates
+const REACTION_SUMMARY_BATCH_SIZE = 500
+
+function createReactionSummaryBatches(reviewIds: string[], commentIds: string[]) {
+  const batches: Array<{ reviewIds: string[]; commentIds: string[] }> = []
+  let reviewIndex = 0
+  let commentIndex = 0
+
+  while (reviewIndex < reviewIds.length || commentIndex < commentIds.length) {
+    let remaining = REACTION_SUMMARY_BATCH_SIZE
+    const batchReviewIds = reviewIds.slice(reviewIndex, reviewIndex + remaining)
+    reviewIndex += batchReviewIds.length
+    remaining -= batchReviewIds.length
+
+    const batchCommentIds = commentIds.slice(commentIndex, commentIndex + remaining)
+    commentIndex += batchCommentIds.length
+
+    batches.push({ reviewIds: batchReviewIds, commentIds: batchCommentIds })
+  }
+
+  return batches
 }
 
 function normalizeReportSummary(row: ContentReportRow): CurrentUserReportSummary {
@@ -244,45 +264,18 @@ function normalizeReportSummary(row: ContentReportRow): CurrentUserReportSummary
   }
 }
 
-async function rollbackInsertedReviewLike(reviewId: string, userId: string) {
-  await supabase
-    .from('avaliacao_curtidas')
-    .delete()
-    .eq('avaliacao_id', reviewId)
-    .eq('usuario_id', userId)
-}
-
-async function rollbackInsertedReviewDislike(reviewId: string, userId: string) {
-  await supabase
-    .from('avaliacao_deslikes')
-    .delete()
-    .eq('avaliacao_id', reviewId)
-    .eq('usuario_id', userId)
-}
-
-async function rollbackInsertedCommentLike(commentId: string, userId: string) {
-  await supabase
-    .from('comentario_curtidas')
-    .delete()
-    .eq('comentario_id', commentId)
-    .eq('usuario_id', userId)
-}
-
-async function rollbackInsertedCommentDislike(commentId: string, userId: string) {
-  await supabase
-    .from('comentario_deslikes')
-    .delete()
-    .eq('comentario_id', commentId)
-    .eq('usuario_id', userId)
-}
-
-export async function getReviewLikeStates(
+export async function getReactionSummaryStates(
   reviewIds: string[],
-  currentUserId?: string | null
-): Promise<ServiceResult<Map<string, ReviewReactionState>>> {
-  const reactionStates = createReviewReactionStateMap(reviewIds)
+  commentIds: string[]
+): Promise<ServiceResult<ReactionSummaryMaps>> {
+  const normalizedReviewIds = normalizeContentIds(reviewIds)
+  const normalizedCommentIds = normalizeContentIds(commentIds)
+  const reactionStates: ReactionSummaryMaps = {
+    reviews: createReactionStateMap(normalizedReviewIds),
+    comments: createReactionStateMap(normalizedCommentIds),
+  }
 
-  if (reviewIds.length === 0) {
+  if (normalizedReviewIds.length === 0 && normalizedCommentIds.length === 0) {
     return {
       data: reactionStates,
       error: null,
@@ -290,143 +283,36 @@ export async function getReviewLikeStates(
   }
 
   try {
-    const { data, error } = await supabase
-      .from('avaliacao_curtidas')
-      .select('avaliacao_id, usuario_id')
-      .in('avaliacao_id', reviewIds)
+    const summaryRows: ReactionSummaryRow[] = []
 
-    if (error) {
-      return {
-        data: reactionStates,
-        error: normalizeReviewError(error, 'Nao foi possivel carregar as curtidas das reviews.'),
-      }
-    }
-
-    const likeRows = (data || []) as ReviewLikeRow[]
-
-    likeRows.forEach(like => {
-      const currentState = reactionStates.get(like.avaliacao_id)
-
-      if (!currentState) return
-
-      reactionStates.set(like.avaliacao_id, {
-        ...currentState,
-        curtidas: currentState.curtidas + 1,
-        likedByCurrentUser:
-          currentState.likedByCurrentUser ||
-          Boolean(currentUserId && like.usuario_id === currentUserId),
+    for (const batch of createReactionSummaryBatches(
+      normalizedReviewIds,
+      normalizedCommentIds
+    )) {
+      const { data, error } = await supabase.rpc('get_review_reaction_summaries', {
+        p_review_ids: batch.reviewIds,
+        p_comment_ids: batch.commentIds,
       })
-    })
 
-    return {
-      data: reactionStates,
-      error: null,
-    }
-  } catch (error) {
-    return {
-      data: reactionStates,
-      error: normalizeReviewError(error, 'Erro inesperado ao carregar as curtidas das reviews.'),
-    }
-  }
-}
-
-export async function getReviewDislikeStates(
-  reviewIds: string[],
-  currentUserId?: string | null
-): Promise<ServiceResult<Map<string, ReviewReactionState>>> {
-  const reactionStates = createReviewReactionStateMap(reviewIds)
-
-  if (reviewIds.length === 0) {
-    return {
-      data: reactionStates,
-      error: null,
-    }
-  }
-
-  try {
-    const { data, error } = await supabase
-      .from('avaliacao_deslikes')
-      .select('avaliacao_id, usuario_id')
-      .in('avaliacao_id', reviewIds)
-
-    if (error) {
-      return {
-        data: reactionStates,
-        error: normalizeReviewError(error, 'Nao foi possivel carregar os dislikes das reviews.'),
+      if (error) {
+        return {
+          data: reactionStates,
+          error: normalizeReviewError(
+            error,
+            'Nao foi possivel carregar as reacoes das reviews.'
+          ),
+        }
       }
+
+      summaryRows.push(...((data || []) as ReactionSummaryRow[]))
     }
 
-    const dislikeRows = (data || []) as ReviewDislikeRow[]
+    summaryRows.forEach(row => {
+      const targetMap = row.content_type === 'review' ? reactionStates.reviews : reactionStates.comments
 
-    dislikeRows.forEach(dislike => {
-      const currentState = reactionStates.get(dislike.avaliacao_id)
+      if (!targetMap.has(row.content_id)) return
 
-      if (!currentState) return
-
-      reactionStates.set(dislike.avaliacao_id, {
-        ...currentState,
-        dislikes: currentState.dislikes + 1,
-        dislikedByCurrentUser:
-          currentState.dislikedByCurrentUser ||
-          Boolean(currentUserId && dislike.usuario_id === currentUserId),
-      })
-    })
-
-    return {
-      data: reactionStates,
-      error: null,
-    }
-  } catch (error) {
-    return {
-      data: reactionStates,
-      error: normalizeReviewError(error, 'Erro inesperado ao carregar os dislikes das reviews.'),
-    }
-  }
-}
-
-export async function getCommentLikeStates(
-  commentIds: string[],
-  currentUserId?: string | null
-): Promise<ServiceResult<Map<string, CommentReactionState>>> {
-  const reactionStates = createCommentReactionStateMap(commentIds)
-
-  if (commentIds.length === 0) {
-    return {
-      data: reactionStates,
-      error: null,
-    }
-  }
-
-  try {
-    const { data, error } = await supabase
-      .from('comentario_curtidas')
-      .select('comentario_id, usuario_id')
-      .in('comentario_id', commentIds)
-
-    if (error) {
-      return {
-        data: reactionStates,
-        error: normalizeReviewError(
-          error,
-          'Nao foi possivel carregar as curtidas dos comentarios.'
-        ),
-      }
-    }
-
-    const likeRows = (data || []) as CommentLikeRow[]
-
-    likeRows.forEach(like => {
-      const currentState = reactionStates.get(like.comentario_id)
-
-      if (!currentState) return
-
-      reactionStates.set(like.comentario_id, {
-        ...currentState,
-        curtidas: currentState.curtidas + 1,
-        likedByCurrentUser:
-          currentState.likedByCurrentUser ||
-          Boolean(currentUserId && like.usuario_id === currentUserId),
-      })
+      targetMap.set(row.content_id, normalizeReactionState(row))
     })
 
     return {
@@ -438,62 +324,54 @@ export async function getCommentLikeStates(
       data: reactionStates,
       error: normalizeReviewError(
         error,
-        'Erro inesperado ao carregar as curtidas dos comentarios.'
+        'Erro inesperado ao carregar as reacoes das reviews.'
       ),
     }
   }
 }
 
-export async function getCommentDislikeStates(
-  commentIds: string[],
-  currentUserId?: string | null
-): Promise<ServiceResult<Map<string, CommentReactionState>>> {
-  const reactionStates = createCommentReactionStateMap(commentIds)
-
-  if (commentIds.length === 0) {
-    return {
-      data: reactionStates,
-      error: null,
-    }
-  }
-
+export async function toggleContentReaction(
+  contentType: ReactionContentType,
+  contentId: string,
+  reaction: ReactionType
+): Promise<AtomicReactionToggleResult> {
   try {
-    const { data, error } = await supabase
-      .from('comentario_deslikes')
-      .select('comentario_id, usuario_id')
-      .in('comentario_id', commentIds)
+    const { data, error } = await supabase.rpc('toggle_review_reaction', {
+      p_content_type: contentType,
+      p_content_id: contentId,
+      p_reaction: reaction,
+    })
 
     if (error) {
       return {
-        data: reactionStates,
-        error: normalizeReviewError(error, 'Nao foi possivel carregar os dislikes dos comentarios.'),
+        status: 'error',
+        data: null,
+        error: normalizeReviewError(error, 'Nao foi possivel atualizar esta reacao.'),
       }
     }
 
-    const dislikeRows = (data || []) as CommentDislikeRow[]
+    const row = (data?.[0] || null) as ReactionToggleRow | null
 
-    dislikeRows.forEach(dislike => {
-      const currentState = reactionStates.get(dislike.comentario_id)
-
-      if (!currentState) return
-
-      reactionStates.set(dislike.comentario_id, {
-        ...currentState,
-        dislikes: currentState.dislikes + 1,
-        dislikedByCurrentUser:
-          currentState.dislikedByCurrentUser ||
-          Boolean(currentUserId && dislike.usuario_id === currentUserId),
-      })
-    })
+    if (!row) {
+      return {
+        status: 'error',
+        data: null,
+        error: {
+          message: 'A atualizacao da reacao nao retornou um estado valido.',
+        },
+      }
+    }
 
     return {
-      data: reactionStates,
+      status: row.reaction_status,
+      data: normalizeReactionState(row),
       error: null,
     }
   } catch (error) {
     return {
-      data: reactionStates,
-      error: normalizeReviewError(error, 'Erro inesperado ao carregar os dislikes dos comentarios.'),
+      status: 'error',
+      data: null,
+      error: normalizeReviewError(error, 'Erro inesperado ao atualizar esta reacao.'),
     }
   }
 }
@@ -573,57 +451,6 @@ export async function getCurrentUserContentReports(
   }
 }
 
-export async function getSingleReviewReactionState(
-  reviewId: string,
-  currentUserId?: string | null
-): Promise<ServiceResult<ReviewReactionState | null>> {
-  const [likeStatesResult, dislikeStatesResult] = await Promise.all([
-    getReviewLikeStates([reviewId], currentUserId),
-    getReviewDislikeStates([reviewId], currentUserId),
-  ])
-
-  const likeState = likeStatesResult.data.get(reviewId)
-  const dislikeState = dislikeStatesResult.data.get(reviewId)
-
-  return {
-    data: {
-      curtidas: likeState?.curtidas ?? 0,
-      likedByCurrentUser: likeState?.likedByCurrentUser ?? false,
-      dislikes: dislikeState?.dislikes ?? 0,
-      dislikedByCurrentUser: dislikeState?.dislikedByCurrentUser ?? false,
-    },
-    error: likeStatesResult.error || dislikeStatesResult.error,
-  }
-}
-
-export async function getSingleCommentReactionState(
-  commentId: string,
-  currentUserId?: string | null
-): Promise<ServiceResult<CommentReactionState | null>> {
-  const [likeStatesResult, dislikeStatesResult] = await Promise.all([
-    getCommentLikeStates([commentId], currentUserId),
-    getCommentDislikeStates([commentId], currentUserId),
-  ])
-
-  return {
-    data: {
-      curtidas: likeStatesResult.data.get(commentId)?.curtidas ?? 0,
-      likedByCurrentUser: likeStatesResult.data.get(commentId)?.likedByCurrentUser ?? false,
-      dislikes: dislikeStatesResult.data.get(commentId)?.dislikes ?? 0,
-      dislikedByCurrentUser:
-        dislikeStatesResult.data.get(commentId)?.dislikedByCurrentUser ?? false,
-    },
-    error: likeStatesResult.error || dislikeStatesResult.error,
-  }
-}
-
-async function getSingleCommentDislikeState(
-  commentId: string,
-  currentUserId?: string | null
-) {
-  return getSingleCommentReactionState(commentId, currentUserId)
-}
-
 async function getExistingContentReport(
   userId: string,
   targetType: ReportTargetType,
@@ -667,10 +494,6 @@ export async function toggleReviewDislike({
   reviewId,
   userId,
   reviewAuthorId,
-  likedByCurrentUser,
-  dislikedByCurrentUser,
-  currentLikeCount,
-  currentDislikeCount,
 }: ToggleReviewDislikeParams): Promise<ToggleReviewDislikeResult> {
   if (userId === reviewAuthorId) {
     return {
@@ -682,90 +505,20 @@ export async function toggleReviewDislike({
     }
   }
 
-  try {
-    if (dislikedByCurrentUser) {
-      const { error } = await supabase
-        .from('avaliacao_deslikes')
-        .delete()
-        .eq('avaliacao_id', reviewId)
-        .eq('usuario_id', userId)
+  const result = await toggleContentReaction('review', reviewId, 'dislike')
 
-      if (error) {
-        return {
-          status: 'error',
-          data: null,
-          error: normalizeReviewError(error, 'Nao foi possivel remover o "Não gostei" desta review.'),
-        }
-      }
-
-      const reactionStateResult = await getSingleReviewReactionState(reviewId, userId)
-
-      return {
-        status: 'undisliked',
-        data: reactionStateResult.data || {
-          curtidas: currentLikeCount,
-          likedByCurrentUser,
-          dislikes: Math.max(currentDislikeCount - 1, 0),
-          dislikedByCurrentUser: false,
-        },
-        error: null,
-      }
-    }
-
-    const { error: insertDislikeError } = await supabase.from('avaliacao_deslikes').insert({
-      avaliacao_id: reviewId,
-      usuario_id: userId,
-    })
-
-    if (insertDislikeError && insertDislikeError.code !== '23505') {
-      return {
-        status: 'error',
-        data: null,
-        error: normalizeReviewError(insertDislikeError, 'Nao foi possivel marcar "Não gostei" nesta review.'),
-      }
-    }
-
-    if (likedByCurrentUser) {
-      const { error: removeLikeError } = await supabase
-        .from('avaliacao_curtidas')
-        .delete()
-        .eq('avaliacao_id', reviewId)
-        .eq('usuario_id', userId)
-
-      if (removeLikeError) {
-        if (!insertDislikeError) {
-          await rollbackInsertedReviewDislike(reviewId, userId)
-        }
-
-        return {
-          status: 'error',
-          data: null,
-          error: normalizeReviewError(
-            removeLikeError,
-            'Nao foi possivel sincronizar curtida e "Não gostei" desta review.'
-          ),
-        }
-      }
-    }
-
-    const reactionStateResult = await getSingleReviewReactionState(reviewId, userId)
-
-    return {
-      status: 'disliked',
-      data: reactionStateResult.data || {
-        curtidas: Math.max(currentLikeCount - (likedByCurrentUser ? 1 : 0), 0),
-        likedByCurrentUser: false,
-        dislikes: currentDislikeCount + (dislikedByCurrentUser ? 0 : 1),
-        dislikedByCurrentUser: true,
-      },
-      error: null,
-    }
-  } catch (error) {
+  if (result.status !== 'disliked' && result.status !== 'undisliked') {
     return {
       status: 'error',
-      data: null,
-      error: normalizeReviewError(error, 'Erro inesperado ao atualizar o "Não gostei" desta review.'),
+      data: result.data,
+      error: result.error || { message: 'A review retornou um estado de reacao inesperado.' },
     }
+  }
+
+  return {
+    status: result.status,
+    data: result.data,
+    error: result.error,
   }
 }
 
@@ -773,10 +526,6 @@ export async function toggleCommentLike({
   commentId,
   userId,
   commentAuthorId,
-  likedByCurrentUser,
-  dislikedByCurrentUser,
-  currentLikeCount,
-  currentDislikeCount,
 }: ToggleCommentLikeParams): Promise<ToggleCommentLikeResult> {
   if (userId === commentAuthorId) {
     return {
@@ -788,190 +537,27 @@ export async function toggleCommentLike({
     }
   }
 
-  try {
-    if (likedByCurrentUser) {
-      const { error } = await supabase
-        .from('comentario_curtidas')
-        .delete()
-        .eq('comentario_id', commentId)
-        .eq('usuario_id', userId)
+  const result = await toggleContentReaction('comment', commentId, 'like')
 
-      if (error) {
-        return {
-          status: 'error',
-          data: null,
-          error: normalizeReviewError(error, 'Nao foi possivel remover a curtida deste comentario.'),
-        }
-      }
-
-      const reactionStateResult = await getSingleCommentReactionState(commentId, userId)
-
-      return {
-        status: 'unliked',
-        data: reactionStateResult.data || {
-          curtidas: Math.max(currentLikeCount - 1, 0),
-          likedByCurrentUser: false,
-          dislikes: currentDislikeCount,
-          dislikedByCurrentUser,
-        },
-        error: null,
-      }
-    }
-
-    const { error: insertLikeError } = await supabase.from('comentario_curtidas').insert({
-      comentario_id: commentId,
-      usuario_id: userId,
-    })
-
-    if (insertLikeError && insertLikeError.code !== '23505') {
-      return {
-        status: 'error',
-        data: null,
-        error: normalizeReviewError(insertLikeError, 'Nao foi possivel curtir este comentario.'),
-      }
-    }
-
-    if (dislikedByCurrentUser) {
-      const { error: removeDislikeError } = await supabase
-        .from('comentario_deslikes')
-        .delete()
-        .eq('comentario_id', commentId)
-        .eq('usuario_id', userId)
-
-      if (removeDislikeError) {
-        if (!insertLikeError) {
-          await rollbackInsertedCommentLike(commentId, userId)
-        }
-
-        return {
-          status: 'error',
-          data: null,
-          error: normalizeReviewError(
-            removeDislikeError,
-            'Nao foi possivel sincronizar curtida e Nao gostei deste comentario.'
-          ),
-        }
-      }
-    }
-
-    const reactionStateResult = await getSingleCommentReactionState(commentId, userId)
-
-    return {
-      status: 'liked',
-      data: reactionStateResult.data || {
-        curtidas: currentLikeCount + (likedByCurrentUser ? 0 : 1),
-        likedByCurrentUser: true,
-        dislikes: Math.max(currentDislikeCount - (dislikedByCurrentUser ? 1 : 0), 0),
-        dislikedByCurrentUser: false,
-      },
-      error: null,
-    }
-  } catch (error) {
+  if (result.status !== 'liked' && result.status !== 'unliked') {
     return {
       status: 'error',
-      data: null,
-      error: normalizeReviewError(error, 'Erro inesperado ao atualizar a curtida deste comentario.'),
+      data: result.data,
+      error: result.error || { message: 'O comentario retornou um estado de reacao inesperado.' },
     }
+  }
+
+  return {
+    status: result.status,
+    data: result.data,
+    error: result.error,
   }
 }
-
-async function toggleCommentDislikeLegacy({
-  commentId,
-  userId,
-  commentAuthorId,
-  likedByCurrentUser,
-  dislikedByCurrentUser,
-  currentLikeCount,
-  currentDislikeCount,
-}: ToggleCommentDislikeParams): Promise<ToggleCommentDislikeResult> {
-  if (userId === commentAuthorId) {
-    return {
-      status: 'error',
-      data: null,
-      error: {
-        message: 'Voce nao pode marcar "Não gostei" no proprio comentario.',
-      },
-    }
-  }
-
-  try {
-    if (dislikedByCurrentUser) {
-      const { error } = await supabase
-        .from('comentario_deslikes')
-        .delete()
-        .eq('comentario_id', commentId)
-        .eq('usuario_id', userId)
-
-      if (error) {
-        return {
-          status: 'error',
-          data: null,
-          error: normalizeReviewError(error, 'Nao foi possivel remover o "Não gostei" deste comentario.'),
-        }
-      }
-
-      const reactionStateResult = await getSingleCommentReactionState(commentId, userId)
-
-      return {
-        status: 'undisliked',
-        data: reactionStateResult.data || {
-          curtidas: currentLikeCount,
-          likedByCurrentUser,
-          dislikes: Math.max(currentDislikeCount - 1, 0),
-          dislikedByCurrentUser: false,
-        },
-        error: null,
-      }
-    }
-
-    const { error: insertDislikeError } = await supabase.from('comentario_deslikes').insert({
-      comentario_id: commentId,
-      usuario_id: userId,
-    })
-    const error = insertDislikeError
-
-    if (insertDislikeError && insertDislikeError.code !== '23505') {
-      return {
-        status: 'error',
-        data: null,
-        error: normalizeReviewError(error, 'Nao foi possivel marcar "Não gostei" neste comentario.'),
-      }
-    }
-
-    const dislikeStateResult = await getSingleCommentDislikeState(commentId, userId)
-
-    return {
-      status: 'disliked',
-      data: dislikeStateResult.data || {
-        curtidas: Math.max(currentLikeCount - (likedByCurrentUser ? 1 : 0), 0),
-        likedByCurrentUser: false,
-        dislikes: currentDislikeCount + 1,
-        dislikedByCurrentUser: true,
-      },
-      error: null,
-    }
-  } catch (error) {
-    return {
-      status: 'error',
-      data: null,
-      error: normalizeReviewError(
-        error,
-        'Erro inesperado ao atualizar o "Não gostei" deste comentario.'
-      ),
-    }
-  }
-}
-
-void toggleCommentDislikeLegacy
 
 export async function toggleCommentDislike({
   commentId,
   userId,
   commentAuthorId,
-  likedByCurrentUser,
-  dislikedByCurrentUser,
-  currentLikeCount,
-  currentDislikeCount,
 }: ToggleCommentDislikeParams): Promise<ToggleCommentDislikeResult> {
   if (userId === commentAuthorId) {
     return {
@@ -983,96 +569,20 @@ export async function toggleCommentDislike({
     }
   }
 
-  try {
-    if (dislikedByCurrentUser) {
-      const { error } = await supabase
-        .from('comentario_deslikes')
-        .delete()
-        .eq('comentario_id', commentId)
-        .eq('usuario_id', userId)
+  const result = await toggleContentReaction('comment', commentId, 'dislike')
 
-      if (error) {
-        return {
-          status: 'error',
-          data: null,
-          error: normalizeReviewError(error, 'Não foi possível remover o "Não gostei" deste comentário.'),
-        }
-      }
-
-      const reactionStateResult = await getSingleCommentReactionState(commentId, userId)
-
-      return {
-        status: 'undisliked',
-        data: reactionStateResult.data || {
-          curtidas: currentLikeCount,
-          likedByCurrentUser,
-          dislikes: Math.max(currentDislikeCount - 1, 0),
-          dislikedByCurrentUser: false,
-        },
-        error: null,
-      }
-    }
-
-    const { error: insertDislikeError } = await supabase.from('comentario_deslikes').insert({
-      comentario_id: commentId,
-      usuario_id: userId,
-    })
-
-    if (insertDislikeError && insertDislikeError.code !== '23505') {
-      return {
-        status: 'error',
-        data: null,
-        error: normalizeReviewError(
-          insertDislikeError,
-          'Não foi possível marcar "Não gostei" neste comentário.'
-        ),
-      }
-    }
-
-    if (likedByCurrentUser) {
-      const { error: removeLikeError } = await supabase
-        .from('comentario_curtidas')
-        .delete()
-        .eq('comentario_id', commentId)
-        .eq('usuario_id', userId)
-
-      if (removeLikeError) {
-        if (!insertDislikeError) {
-          await rollbackInsertedCommentDislike(commentId, userId)
-        }
-
-        return {
-          status: 'error',
-          data: null,
-          error: normalizeReviewError(
-            removeLikeError,
-            'Não foi possível sincronizar curtida e "Não gostei" deste comentário.'
-          ),
-        }
-      }
-    }
-
-    const reactionStateResult = await getSingleCommentReactionState(commentId, userId)
-
-    return {
-      status: 'disliked',
-      data: reactionStateResult.data || {
-        curtidas: Math.max(currentLikeCount - (likedByCurrentUser ? 1 : 0), 0),
-        likedByCurrentUser: false,
-        dislikes: currentDislikeCount + (dislikedByCurrentUser ? 0 : 1),
-        dislikedByCurrentUser: true,
-      },
-      error: null,
-    }
-  } catch (error) {
+  if (result.status !== 'disliked' && result.status !== 'undisliked') {
     return {
       status: 'error',
-      data: null,
-      error: normalizeReviewError(
-        error,
-        'Erro inesperado ao atualizar o "Não gostei" deste comentário.'
-      ),
+      data: result.data,
+      error: result.error || { message: 'O comentario retornou um estado de reacao inesperado.' },
     }
+  }
+
+  return {
+    status: result.status,
+    data: result.data,
+    error: result.error,
   }
 }
 
@@ -1106,7 +616,6 @@ export async function submitContentReport({
         comentario_id: targetType === 'comment' ? targetId : null,
         motivo: reason,
         descricao: normalizedDescription,
-        created_at: new Date().toISOString(),
       })
       .select(CONTENT_REPORT_SELECT)
       .maybeSingle()
@@ -1191,22 +700,4 @@ export async function deleteContentReport({
       error: normalizeReviewError(error, 'Erro inesperado ao remover esta denuncia.'),
     }
   }
-}
-
-export async function syncReviewLikeWithDislikeRemoval(reviewId: string, userId: string) {
-  const { error } = await supabase
-    .from('avaliacao_deslikes')
-    .delete()
-    .eq('avaliacao_id', reviewId)
-    .eq('usuario_id', userId)
-
-  return {
-    error: error
-      ? normalizeReviewError(error, 'Nao foi possivel remover o "Não gostei" desta review.')
-      : null,
-  }
-}
-
-export async function rollbackInsertedLike(reviewId: string, userId: string) {
-  await rollbackInsertedReviewLike(reviewId, userId)
 }

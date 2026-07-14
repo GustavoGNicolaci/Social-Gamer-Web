@@ -655,26 +655,19 @@ export function ProfilePage() {
   const topFiveEntries = resolvedProfile?.topFiveEntries || []
 
   useEffect(() => {
-    if (editableProfile && !isEditing) {
-      setDraftProfile(createProfileDraft(editableProfile))
-      return
-    }
+    const timeoutId = window.setTimeout(() => {
+      setActiveTab('status')
+      setStatusControls({
+        sortValue: DEFAULT_STATUS_CONTROLS.sortValue,
+        statuses: [],
+      })
+      setIsConnectionsModalOpen(false)
+      setConnectionsInitialTab('followers')
+      setIsProfileReportModalOpen(false)
+      setProfileReportFeedback(null)
+    }, 0)
 
-    if (!editableProfile && !isEditing) {
-      setDraftProfile(createProfileDraft(null))
-    }
-  }, [editableProfile, isEditing])
-
-  useEffect(() => {
-    setActiveTab('status')
-    setStatusControls({
-      sortValue: DEFAULT_STATUS_CONTROLS.sortValue,
-      statuses: [],
-    })
-    setIsConnectionsModalOpen(false)
-    setConnectionsInitialTab('followers')
-    setIsProfileReportModalOpen(false)
-    setProfileReportFeedback(null)
+    return () => window.clearTimeout(timeoutId)
   }, [activeProfile?.id])
 
   const collectionsKey = useMemo(() => {
@@ -1050,20 +1043,29 @@ export function ProfilePage() {
   )
 
   useEffect(() => {
-    if (!collectionsKey) {
-      if (loadedCollectionsKey !== null) {
-        resetCollections(null)
+    const timeoutId = window.setTimeout(() => {
+      if (!collectionsKey) {
+        if (loadedCollectionsKey !== null) {
+          resetCollections(null)
+        }
+        return
       }
-      return
-    }
 
-    if (loadedCollectionsKey !== collectionsKey) {
-      resetCollections(collectionsKey)
-    }
+      if (loadedCollectionsKey !== collectionsKey) {
+        resetCollections(collectionsKey)
+      }
+    }, 0)
+
+    return () => window.clearTimeout(timeoutId)
   }, [collectionsKey, loadedCollectionsKey, resetCollections])
 
   useEffect(() => {
-    if (!activeProfile || !collectionsKey || isRestrictedPublicView) return
+    if (
+      !activeProfile ||
+      !collectionsKey ||
+      loadedCollectionsKey !== collectionsKey ||
+      isRestrictedPublicView
+    ) return
 
     if (activeTab === 'status') {
       void loadStatusPage()
@@ -1083,6 +1085,7 @@ export function ProfilePage() {
     activeTab,
     collectionsKey,
     isRestrictedPublicView,
+    loadedCollectionsKey,
     loadReviewsPage,
     loadStatusPage,
     loadWishlistPage,
@@ -1160,9 +1163,12 @@ export function ProfilePage() {
   }, [activeProfile, user?.id])
 
   useEffect(() => {
-    void refreshFollowState()
+    const timeoutId = window.setTimeout(() => {
+      void refreshFollowState()
+    }, 0)
 
     return () => {
+      window.clearTimeout(timeoutId)
       followStateRequestIdRef.current += 1
     }
   }, [refreshFollowState])

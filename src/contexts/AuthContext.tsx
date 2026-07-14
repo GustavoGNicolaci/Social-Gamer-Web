@@ -14,9 +14,6 @@ const getUsernameTakenMessage = () => translate('auth.usernameTaken')
 const getCurrentPasswordRequiredMessage = () => translate('auth.currentPasswordRequired')
 const getCurrentPasswordInvalidMessage = () => translate('auth.currentPasswordInvalid')
 const getDeleteAccountErrorMessageFallback = () => translate('auth.deleteAccountError')
-const USER_PROFILE_SELECT =
-  'id, username, nome_completo, avatar_path, avatar_url, bio, data_cadastro, configuracoes_privacidade'
-
 interface FunctionErrorPayload {
   error?: string
 }
@@ -273,13 +270,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const fetchProfile = useCallback(async (userId: string) => {
     try {
-      const { data, error } = await supabase
-        .from('usuarios')
-        .select(USER_PROFILE_SELECT)
-        .eq('id', userId)
-        .single()
+      const { data, error } = await supabase.rpc('get_my_profile').maybeSingle()
 
-      if (error) {
+      if (error || !data || data.id !== userId) {
         return null
       }
 
@@ -310,11 +303,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
 
         // The auth listener and the register flow can race to create the same profile.
-        const { data, error } = await supabase
+        const { error } = await supabase
           .from('usuarios')
           .insert(profileData)
-          .select(USER_PROFILE_SELECT)
-          .single()
 
         if (error) {
           if (error.code === '23505') {
@@ -324,7 +315,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           return null
         }
 
-        return data as UserProfile
+        return await fetchProfile(nextUser.id)
       } catch {
         return null
       }
@@ -368,22 +359,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         updates.nome_completo = metadataNomeCompleto
       }
 
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('usuarios')
         .update(updates)
         .eq('id', nextUser.id)
-        .select(USER_PROFILE_SELECT)
-        .single()
 
-      if (error || !data) {
+      if (error) {
         return currentProfile
       }
 
-      return data as UserProfile
+      return await fetchProfile(nextUser.id) || currentProfile
     } catch {
       return currentProfile
     }
-  }, [])
+  }, [fetchProfile])
 
   const fetchOrCreateProfile = useCallback(
     async (nextUser: User) => {
@@ -461,7 +450,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         })
       }
 
-      const passwordError = getPasswordValidationError(normalizedInput.password)
+      const passwordError = getPasswordValidationError(normalizedInput.password, translate)
 
       if (passwordError) {
         return buildValidationErrorResult({
@@ -570,12 +559,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
 
       try {
-        const { data, error } = await supabase
+        const { error } = await supabase
           .from('usuarios')
           .update(updates)
           .eq('id', user.id)
-          .select(USER_PROFILE_SELECT)
-          .single()
 
         if (error) {
           const normalizedError = normalizeProfileUpdateError(
@@ -588,7 +575,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           return { data: null, error: normalizedError }
         }
 
-        if (!data) {
+        const nextProfile = await fetchProfile(user.id)
+
+        if (!nextProfile) {
           const normalizedError = normalizeProfileUpdateError(
             null,
             translate('profile.error.noRecordReturned')
@@ -599,7 +588,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           return { data: null, error: normalizedError }
         }
 
-        const nextProfile = data as UserProfile
         setProfile(nextProfile)
         return { data: nextProfile, error: null }
       } catch (error) {
@@ -613,7 +601,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return { data: null, error: normalizedError }
       }
     },
-    [user]
+    [fetchProfile, user]
   )
 
   useEffect(() => {
@@ -804,7 +792,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   )
 
   const updatePassword = useCallback(async (password: string) => {
-    const passwordError = getPasswordValidationError(password)
+    const passwordError = getPasswordValidationError(password, translate)
 
     if (passwordError) {
       return {

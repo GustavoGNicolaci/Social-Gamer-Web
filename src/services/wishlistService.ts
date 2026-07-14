@@ -74,6 +74,10 @@ interface AddWishlistResult extends ServiceResult<WishlistEntry | null> {
   status: 'added' | 'duplicate' | 'error'
 }
 
+interface AddOwnWishlistRow extends WishlistEntry {
+  inserted: boolean
+}
+
 interface WishlistSortable {
   id: string
   prioridade: number | null
@@ -180,16 +184,6 @@ function sortWishlistItemsByDisplayOrder<T extends WishlistSortable>(items: T[])
   })
 }
 
-function getNextWishlistPriority(items: WishlistSortable[]) {
-  const maxPriority = items.reduce(
-    (currentMax, item) => Math.max(currentMax, item.prioridade || 0),
-    0
-  )
-  const unprioritizedCount = items.filter(item => item.prioridade === null).length
-
-  return maxPriority + unprioritizedCount + 1
-}
-
 function normalizeWishlistPageOptions(options: WishlistPageOptions = {}) {
   const page = Math.max(0, options.page || 0)
   const pageSize = Math.min(Math.max(1, options.pageSize || DEFAULT_WISHLIST_PAGE_SIZE), 48)
@@ -255,51 +249,18 @@ export async function addGameToWishlist({
   userId,
   gameId,
 }: AddWishlistParams): Promise<AddWishlistResult> {
-  const existingEntry = await getWishlistEntry(userId, gameId)
-
-  if (existingEntry.error) {
+  if (!userId.trim() || !Number.isInteger(gameId) || gameId <= 0) {
     return {
       status: 'error',
       data: null,
-      error: existingEntry.error,
-    }
-  }
-
-  if (existingEntry.data) {
-    return {
-      status: 'duplicate',
-      data: existingEntry.data,
-      error: null,
+      error: { message: 'Nao foi possivel identificar o usuario ou o jogo da wishlist.' },
     }
   }
 
   try {
-    const { data: priorityRows, error: priorityError } = await supabase
-      .from('lista_desejos')
-      .select('id, prioridade, adicionado_em')
-      .eq('usuario_id', userId)
-
-    if (priorityError) {
-      return {
-        status: 'error',
-        data: null,
-        error: normalizeWishlistError(
-          priorityError,
-          'Nao foi possivel preparar a ordem da lista de desejos.'
-        ),
-      }
-    }
-
-    const { data, error } = await supabase
-      .from('lista_desejos')
-      .insert({
-        usuario_id: userId,
-        jogo_id: gameId,
-        adicionado_em: new Date().toISOString(),
-        prioridade: getNextWishlistPriority((priorityRows || []) as WishlistEntry[]),
-      })
-      .select('id, usuario_id, jogo_id, adicionado_em, prioridade')
-      .single()
+    const { data, error } = await supabase.rpc('add_own_wishlist_item', {
+      p_game_id: gameId,
+    })
 
     if (error) {
       return {
@@ -309,9 +270,21 @@ export async function addGameToWishlist({
       }
     }
 
+    const row = (Array.isArray(data) ? data[0] : data) as AddOwnWishlistRow | null
+
+    if (!row) {
+      return {
+        status: 'error',
+        data: null,
+        error: { message: 'O Supabase nao retornou o item salvo na lista de desejos.' },
+      }
+    }
+
+    const { inserted, ...entry } = row
+
     return {
-      status: 'added',
-      data: (data as WishlistEntry | null) || null,
+      status: inserted ? 'added' : 'duplicate',
+      data: entry,
       error: null,
     }
   } catch (error) {
@@ -466,37 +439,23 @@ export async function updateWishlistPriorities(
     prioridade: index + 1,
   }))
 
-  const changedItems = itemsWithNextPriority.filter(
-    item => item.prioridade !== (orderedItems.find(currentItem => currentItem.id === item.id)?.prioridade || null)
-  )
-
-  if (changedItems.length === 0) {
+  if (!userId.trim()) {
     return {
-      data: itemsWithNextPriority,
-      error: null,
+      data: orderedItems,
+      error: { message: 'Nao foi possivel identificar o usuario da lista de desejos.' },
     }
   }
 
   try {
-    const updateResults = await Promise.all(
-      changedItems.map(async item => {
-        const { error } = await supabase
-          .from('lista_desejos')
-          .update({ prioridade: item.prioridade })
-          .eq('id', item.id)
-          .eq('usuario_id', userId)
+    const { error } = await supabase.rpc('reorder_own_wishlist', {
+      p_item_ids: itemsWithNextPriority.map(item => item.id),
+    })
 
-        return { id: item.id, error }
-      })
-    )
-
-    const failedUpdate = updateResults.find(result => result.error)
-
-    if (failedUpdate?.error) {
+    if (error) {
       return {
         data: orderedItems,
         error: normalizeWishlistError(
-          failedUpdate.error,
+          error,
           'Nao foi possivel salvar a nova ordem da lista de desejos.'
         ),
       }
@@ -521,14 +480,17 @@ export async function deleteWishlistEntry({
   userId,
   wishlistEntryId,
 }: DeleteWishlistEntryParams): Promise<ServiceResult<null>> {
+  if (!userId.trim() || !wishlistEntryId.trim()) {
+    return {
+      data: null,
+      error: { message: 'Nao foi possivel identificar o item da wishlist.' },
+    }
+  }
+
   try {
-    const { data, error } = await supabase
-      .from('lista_desejos')
-      .delete()
-      .eq('id', wishlistEntryId)
-      .eq('usuario_id', userId)
-      .select('id')
-      .maybeSingle()
+    const { data, error } = await supabase.rpc('remove_own_wishlist_item', {
+      p_item_id: wishlistEntryId,
+    })
 
     if (error) {
       return {
@@ -537,12 +499,11 @@ export async function deleteWishlistEntry({
       }
     }
 
-    if (!data) {
+    if (data !== true) {
       return {
         data: null,
         error: {
-          message:
-            'Nenhum item foi removido. Verifique as policies DELETE da tabela lista_desejos no Supabase.',
+          message: 'Nenhum item foi removido da wishlist deste usuario.',
         },
       }
     }

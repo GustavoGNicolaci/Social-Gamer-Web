@@ -103,6 +103,7 @@ type RelationshipMap = {
     Fk<'denuncias_perfil_usuario_denunciado_id_fkey', ['usuario_denunciado_id'], 'usuarios', ['id']>,
   ]
   game_catalog_cache: []
+  game_import_attempts: []
   game_external_ids: [
     Fk<'game_external_ids_jogo_id_fkey', ['jogo_id'], 'jogos', ['id']>,
   ]
@@ -347,6 +348,12 @@ export type Database = {
         created_at: string
         updated_at: string
       }>
+      game_import_attempts: Table<'game_import_attempts', {
+        id: number
+        user_id: string
+        query_hash: string
+        attempted_at: string
+      }>
       game_external_ids: Table<'game_external_ids', {
         id: number
         jogo_id: number
@@ -464,6 +471,17 @@ export type Database = {
       }>
     }
     Functions: {
+      add_own_wishlist_item: {
+        Args: { p_game_id: number }
+        Returns: {
+          id: string
+          usuario_id: string
+          jogo_id: number
+          adicionado_em: string
+          prioridade: number
+          inserted: boolean
+        }[]
+      }
       alterar_cargo_membro: {
         Args: { p_comunidade_id: string; p_usuario_id: string; p_cargo: string }
         Returns: undefined
@@ -582,6 +600,102 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: { can_create: boolean; created_count: number; limit_count: number; remaining_count: number }[]
       }
+      get_community_members_page: {
+        Args: {
+          p_community_id: string
+          p_search?: string | null
+          p_limit?: number
+          p_offset?: number
+        }
+        Returns: {
+          comunidade_id: string
+          usuario_id: string
+          cargo: PublicEnums['comunidade_cargo']
+          entrou_em: string
+          atualizado_em: string
+          user_id: string
+          username: string | null
+          nome_completo: string | null
+          avatar_path: string | null
+          total_count: number
+        }[]
+      }
+      get_follow_relationship_map: {
+        Args: { p_user_ids: string[] }
+        Returns: {
+          user_id: string
+          is_following: boolean
+          is_mutual_friend: boolean
+        }[]
+      }
+      get_my_profile: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          id: string
+          username: string
+          nome_completo: string | null
+          avatar_path: string | null
+          avatar_url: string | null
+          bio: string | null
+          data_cadastro: string
+          configuracoes_privacidade: Json | null
+        }[]
+      }
+      get_profile_connections: {
+        Args: {
+          p_profile_id: string
+          p_kind: string
+          p_limit?: number
+          p_offset?: number
+        }
+        Returns: {
+          id: string
+          username: string
+          nome_completo: string | null
+          avatar_path: string | null
+          is_following: boolean
+          relationship_started_at: string
+        }[]
+      }
+      get_profile_follow_state: {
+        Args: { p_profile_id: string }
+        Returns: {
+          is_following: boolean
+          followers_count: number
+          following_count: number
+        }[]
+      }
+      get_public_profile_by_username: {
+        Args: { p_username: string }
+        Returns: {
+          id: string
+          username: string
+          nome_completo: string | null
+          avatar_path: string | null
+          bio: string | null
+          data_cadastro: string
+          top_five_entries: Json
+          followers_count: number
+          following_count: number
+          is_private: boolean
+          privacy_mode: string
+          can_view_restricted_content: boolean
+        }[]
+      }
+      get_review_reaction_summaries: {
+        Args: {
+          p_review_ids?: string[]
+          p_comment_ids?: string[]
+        }
+        Returns: {
+          content_type: string
+          content_id: string
+          curtidas: number
+          dislikes: number
+          liked_by_current_user: boolean
+          disliked_by_current_user: boolean
+        }[]
+      }
       get_catalog_facets: {
         Args: { p_query?: string | null }
         Returns: {
@@ -589,6 +703,15 @@ export type Database = {
           value: string | null
           result_count: number
         }[]
+      }
+      get_catalog_translation: {
+        Args: {
+          p_game_id: number
+          p_field: string
+          p_target_locale: string
+          p_source_hash: string
+        }
+        Returns: string | null
       }
       get_home_active_communities: {
         Args: { p_days_window?: number; p_limit?: number }
@@ -671,6 +794,31 @@ export type Database = {
         Args: { p_notification_id: string }
         Returns: Database['public']['Tables']['notifications']['Row']
       }
+      reserve_game_import_attempt: {
+        Args: {
+          p_user_id: string
+          p_query_hash: string
+          p_limit?: number
+          p_window_seconds?: number
+        }
+        Returns: {
+          allowed: boolean
+          remaining: number
+          reset_at: string
+          already_reserved: boolean
+        }[]
+      }
+      reorder_own_wishlist: {
+        Args: { p_item_ids: string[] }
+        Returns: {
+          id: string
+          prioridade: number
+        }[]
+      }
+      remove_own_wishlist_item: {
+        Args: { p_item_id: string }
+        Returns: boolean
+      }
       recusar_solicitacao_comunidade: {
         Args: { p_solicitacao_id: string }
         Returns: undefined
@@ -705,6 +853,20 @@ export type Database = {
       solicitar_entrada_comunidade: {
         Args: { p_comunidade_id: string }
         Returns: Database['public']['Tables']['comunidade_solicitacoes_entrada']['Row']
+      }
+      toggle_review_reaction: {
+        Args: {
+          p_content_type: string
+          p_content_id: string
+          p_reaction: string
+        }
+        Returns: {
+          reaction_status: string
+          curtidas: number
+          dislikes: number
+          liked_by_current_user: boolean
+          disliked_by_current_user: boolean
+        }[]
       }
       transferir_lideranca: {
         Args: { p_comunidade_id: string; p_novo_lider_id: string }
