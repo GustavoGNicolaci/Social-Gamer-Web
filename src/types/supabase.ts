@@ -600,6 +600,19 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: { can_create: boolean; created_count: number; limit_count: number; remaining_count: number }[]
       }
+      get_community_comment_anchor: {
+        Args: {
+          p_post_id: string
+          p_comment_id: string
+          p_limit?: number
+        }
+        Returns: {
+          found: boolean
+          comment_offset: number | null
+          page_offset: number | null
+          total_count: number
+        }[]
+      }
       get_community_members_page: {
         Args: {
           p_community_id: string
@@ -620,12 +633,95 @@ export type Database = {
           total_count: number
         }[]
       }
+      get_community_post_comment_previews: {
+        Args: {
+          p_post_ids: string[]
+          p_limit_per_post?: number
+        }
+        Returns: {
+          post_id: string
+          id: string
+          comunidade_id: string
+          autor_id: string
+          texto: string
+          created_at: string
+          updated_at: string
+          author_username: string | null
+          author_name: string | null
+          author_avatar_path: string | null
+          total_count: number
+        }[]
+      }
+      get_community_post_comments_page: {
+        Args: {
+          p_post_id: string
+          p_limit?: number
+          p_offset?: number
+        }
+        Returns: {
+          post_id: string
+          id: string
+          comunidade_id: string
+          autor_id: string
+          texto: string
+          created_at: string
+          updated_at: string
+          author_username: string | null
+          author_name: string | null
+          author_avatar_path: string | null
+          total_count: number
+        }[]
+      }
       get_follow_relationship_map: {
         Args: { p_user_ids: string[] }
         Returns: {
           user_id: string
           is_following: boolean
           is_mutual_friend: boolean
+        }[]
+      }
+      get_game_review_anchor: {
+        Args: {
+          p_game_id: number
+          p_review_id?: string | null
+          p_comment_id?: string | null
+        }
+        Returns: {
+          target_type: string
+          review_id: string
+          comment_id: string | null
+          review_offset: number
+          comment_offset: number | null
+        }[]
+      }
+      get_game_reviews_page: {
+        Args: {
+          p_game_id: number
+          p_limit?: number
+          p_offset?: number
+        }
+        Returns: {
+          review_id: string
+          game_id: number
+          author_id: string
+          author_username: string
+          author_name: string | null
+          author_avatar_path: string | null
+          score: number
+          review_text: string | null
+          published_at: string
+          edited_at: string | null
+          likes_count: number
+          dislikes_count: number
+          comments_count: number
+          liked_by_current_user: boolean
+          disliked_by_current_user: boolean
+          current_user_report_id: string | null
+          current_user_report_reason: string | null
+          current_user_report_description: string | null
+          current_user_report_status: string | null
+          current_user_report_created_at: string | null
+          total_count: number
         }[]
       }
       get_my_profile: {
@@ -665,6 +761,30 @@ export type Database = {
           following_count: number
         }[]
       }
+      get_profile_game_status_page: {
+        Args: {
+          p_user_id: string
+          p_statuses?: string[] | null
+          p_sort?: string
+          p_limit?: number
+          p_offset?: number
+        }
+        Returns: {
+          id: string
+          usuario_id: string
+          jogo_id: number
+          status: string
+          created_at: string
+          favorito: boolean
+          game_title: string
+          game_cover_url: string | null
+          game_developer: string | null
+          game_genres: string[] | null
+          game_release_date: string | null
+          game_platforms: string[] | null
+          total_count: number
+        }[]
+      }
       get_public_profile_by_username: {
         Args: { p_username: string }
         Returns: {
@@ -680,6 +800,34 @@ export type Database = {
           is_private: boolean
           privacy_mode: string
           can_view_restricted_content: boolean
+        }[]
+      }
+      get_review_comments_page: {
+        Args: {
+          p_review_id: string
+          p_limit?: number
+          p_offset?: number
+        }
+        Returns: {
+          comment_id: string
+          review_id: string
+          author_id: string
+          author_username: string
+          author_name: string | null
+          author_avatar_path: string | null
+          comment_text: string
+          published_at: string
+          edited_at: string | null
+          likes_count: number
+          dislikes_count: number
+          liked_by_current_user: boolean
+          disliked_by_current_user: boolean
+          current_user_report_id: string | null
+          current_user_report_reason: string | null
+          current_user_report_description: string | null
+          current_user_report_status: string | null
+          current_user_report_created_at: string | null
+          total_count: number
         }[]
       }
       get_review_reaction_summaries: {

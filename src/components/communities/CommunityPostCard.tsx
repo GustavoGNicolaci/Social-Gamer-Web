@@ -26,6 +26,7 @@ interface CommunityPostCardProps {
   onToggleSave: (post: CommunityPost) => Promise<void>
   onTogglePin: (post: CommunityPost) => Promise<void>
   onCreateComment: (post: CommunityPost, text: string) => Promise<void>
+  onLoadMoreComments: (post: CommunityPost) => Promise<boolean>
   onDeletePost: (post: CommunityPost) => void
   onDeleteComment: (post: CommunityPost, commentId: string) => void
   onReport: (target: CommunityReportTarget) => void
@@ -104,6 +105,7 @@ export function CommunityPostCard({
   onToggleSave,
   onTogglePin,
   onCreateComment,
+  onLoadMoreComments,
   onDeletePost,
   onDeleteComment,
   onReport,
@@ -114,9 +116,11 @@ export function CommunityPostCard({
   const [visibleCommentCount, setVisibleCommentCount] = useState(INITIAL_VISIBLE_COMMENTS)
   const [commentText, setCommentText] = useState('')
   const [isSubmittingComment, setIsSubmittingComment] = useState(false)
+  const [isLoadingMoreComments, setIsLoadingMoreComments] = useState(false)
   const [pendingAction, setPendingAction] = useState<string | null>(null)
   const [showActionMenu, setShowActionMenu] = useState(false)
   const actionMenuRef = useRef<HTMLDivElement | null>(null)
+  const commentLoadInFlightRef = useRef(false)
 
   const authorName = getAuthorName(post.autor)
   const authorProfilePath = getOptionalPublicProfilePath(post.autor?.username)
@@ -135,7 +139,12 @@ export function CommunityPostCard({
     () => post.comentarios.slice(0, effectiveVisibleCommentCount),
     [effectiveVisibleCommentCount, post.comentarios]
   )
-  const hiddenCommentsCount = post.comentarios.length - visibleComments.length
+  const hiddenCommentsCount = Math.max(
+    post.comentarios_count - visibleComments.length,
+    0
+  )
+  const nextCommentOffset = post.commentsNextOffset ?? post.comentarios.length
+  const hasMoreCommentsToLoad = nextCommentOffset < post.comentarios_count
   const isModerator = currentUserRole === 'lider' || currentUserRole === 'admin'
   const canReport = Boolean(post.canInteract && currentUserId && post.autor_id !== currentUserId)
   const hasPostHeaderActions = post.canPin || canReport || post.canDelete
@@ -230,6 +239,29 @@ export function CommunityPostCard({
       setVisibleCommentCount(currentCount => Math.max(currentCount, INITIAL_VISIBLE_COMMENTS))
     } finally {
       setIsSubmittingComment(false)
+    }
+  }
+
+  const handleShowMoreComments = async () => {
+    if (commentLoadInFlightRef.current) return
+
+    if (!hasMoreCommentsToLoad) {
+      setVisibleCommentCount(currentCount =>
+        Math.min(currentCount + COMMENT_BATCH_SIZE, post.comentarios.length)
+      )
+      return
+    }
+
+    commentLoadInFlightRef.current = true
+    setIsLoadingMoreComments(true)
+    try {
+      const loaded = await onLoadMoreComments(post)
+      if (loaded) {
+        setVisibleCommentCount(currentCount => currentCount + COMMENT_BATCH_SIZE)
+      }
+    } finally {
+      commentLoadInFlightRef.current = false
+      setIsLoadingMoreComments(false)
     }
   }
 
@@ -500,11 +532,8 @@ export function CommunityPostCard({
           <button
             type="button"
             className="community-expand-button"
-            onClick={() =>
-              setVisibleCommentCount(currentCount =>
-                Math.min(currentCount + COMMENT_BATCH_SIZE, post.comentarios.length)
-              )
-            }
+            onClick={() => void handleShowMoreComments()}
+            disabled={isLoadingMoreComments}
           >
             {t('communities.post.moreComments', { count: formatNumber(hiddenCommentsCount) })}
           </button>

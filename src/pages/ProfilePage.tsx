@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { UserAvatar } from '../components/UserAvatar'
 import { ProfileConnectionsModal } from '../components/profile/ProfileConnectionsModal'
@@ -8,319 +8,20 @@ import { ProfileReportModal } from '../components/profile/ProfileReportModal'
 import { ProfileReviewsSection } from '../components/profile/ProfileReviewsSection'
 import { ProfileTopFiveSection } from '../components/profile/ProfileTopFiveSection'
 import { ProfileWishlistSection } from '../components/profile/ProfileWishlistSection'
+import { useAuth } from '../contexts/AuthContext'
 import {
-  useAuth,
-  type ProfileUpdateError,
-  type UserProfile,
-} from '../contexts/AuthContext'
+  useProfileCollections,
+  type ProfileTab,
+} from '../features/profile/hooks/useProfileCollections'
+import { useProfileEditor } from '../features/profile/hooks/useProfileEditor'
+import { useProfileFollow } from '../features/profile/hooks/useProfileFollow'
+import { useProfileReport } from '../features/profile/hooks/useProfileReport'
+import { useResolvedProfile } from '../features/profile/hooks/useResolvedProfile'
 import { useI18n } from '../i18n/I18nContext'
-import {
-  deleteGameStatus,
-  getGameStatusesPageByUserId,
-  saveGameStatus,
-  type GameStatusSortValue,
-  type GameStatusError,
-  type GameStatusItem,
-  type GameStatusValue,
-} from '../services/gameStatusService'
-import {
-  deleteProfileReport,
-  getCurrentUserProfileReport,
-  submitProfileReport,
-  type CurrentUserProfileReportSummary,
-  type ProfileReportError,
-  type ProfileReportReason,
-} from '../services/profileReportService'
-import {
-  deleteReview,
-  getReviewsPageByUserId,
-  type ProfileReviewItem,
-  type ReviewError,
-} from '../services/reviewService'
-import { uploadAvatarImage } from '../services/storageService'
-import {
-  followUser,
-  type FollowListKind,
-  getFollowState,
-  getPublicProfileByUsername,
-  unfollowUser,
-  type PublicUserProfile,
-  type UserFollowState,
-  type UserServiceError,
-} from '../services/userService'
-import {
-  deleteWishlistEntry,
-  getWishlistGamesPageByUserId,
-  getWishlistGamesByUserId,
-  type WishlistError,
-  type WishlistGameItem,
-} from '../services/wishlistService'
-import { getPerformanceNow, logPerformanceTiming } from '../utils/performanceDiagnostics'
-import {
-  getTopFiveEntriesFromPrivacySettings,
-  mergeTopFiveEntriesIntoPrivacySettings,
-  type TopFiveStoredEntry,
-} from '../utils/profileTopFive'
-import { isSupabasePermissionError } from '../utils/supabaseErrors'
+import type { GameStatusValue } from '../services/gameStatusService'
+import type { TopFiveStoredEntry } from '../utils/profileTopFive'
 import './ProfilePage.css'
 
-type FeedbackTone = 'success' | 'error'
-type FollowFeedbackTone = 'error' | 'info'
-type ReportFeedbackTone = 'success' | 'error' | 'info'
-type ProfileTab =
-  | 'status'
-  | 'wishlist'
-  | 'reviews'
-  | 'communities'
-  | 'communityPosts'
-  | 'savedCommunityPosts'
-type LoadedProfileTabs = Record<ProfileTab, boolean>
-
-interface ProfilePageState {
-  totalCount: number | null
-  hasMore: boolean
-  nextPage: number | null
-  loaded: boolean
-}
-
-interface ProfileStatusControls {
-  sortValue: GameStatusSortValue
-  statuses: GameStatusValue[]
-}
-
-interface CachedCollection<T> extends ProfilePageState {
-  items: T[]
-}
-
-interface FeedbackState {
-  tone: FeedbackTone
-  message: string
-}
-
-interface FollowFeedbackState {
-  tone: FollowFeedbackTone
-  message: string
-}
-
-interface ReportFeedbackState {
-  tone: ReportFeedbackTone
-  message: string
-}
-
-interface ProfileDraft {
-  nome_completo: string
-  username: string
-  bio: string
-}
-
-type ResolvedProfile =
-  | {
-      kind: 'own'
-      data: UserProfile
-      topFiveEntries: TopFiveStoredEntry[]
-    }
-  | {
-      kind: 'public'
-      data: PublicUserProfile
-      topFiveEntries: TopFiveStoredEntry[]
-    }
-
-const createProfileDraft = (profile: UserProfile | null): ProfileDraft => ({
-  nome_completo: profile?.nome_completo || '',
-  username: profile?.username || '',
-  bio: profile?.bio || '',
-})
-
-const createEmptyLoadedProfileTabs = (): LoadedProfileTabs => ({
-  status: false,
-  wishlist: false,
-  reviews: false,
-  communities: false,
-  communityPosts: false,
-  savedCommunityPosts: false,
-})
-
-const PROFILE_STATUS_PAGE_SIZE = 12
-const PROFILE_WISHLIST_PAGE_SIZE = 12
-const PROFILE_REVIEWS_PAGE_SIZE = 6
-
-const DEFAULT_STATUS_CONTROLS: ProfileStatusControls = {
-  sortValue: 'recent',
-  statuses: [],
-}
-
-const createEmptyProfilePageState = (): ProfilePageState => ({
-  totalCount: null,
-  hasMore: false,
-  nextPage: null,
-  loaded: false,
-})
-
-const createCachedCollection = <T,>(
-  items: T[],
-  pageState: ProfilePageState
-): CachedCollection<T> => ({
-  items,
-  ...pageState,
-})
-
-const createLoadedPageState = (
-  totalCount: number | null,
-  hasMore: boolean,
-  nextPage: number | null
-): ProfilePageState => ({
-  totalCount,
-  hasMore,
-  nextPage,
-  loaded: true,
-})
-
-function getStatusControlsCacheKey(controls: ProfileStatusControls) {
-  const statusesKey = controls.statuses.length > 0 ? [...controls.statuses].sort().join(',') : 'all'
-  return `${controls.sortValue}:${statusesKey}`
-}
-
-function mergeCollectionsById<T extends { id: string }>(currentItems: T[], nextItems: T[]) {
-  const mergedItems = new Map<string, T>()
-
-  currentItems.forEach(item => {
-    mergedItems.set(item.id, item)
-  })
-
-  nextItems.forEach(item => {
-    mergedItems.set(item.id, item)
-  })
-
-  return Array.from(mergedItems.values())
-}
-
-function getProfileUpdateErrorMessage(error: ProfileUpdateError | null) {
-  if (!error) {
-    return 'Could not save profile changes right now.'
-  }
-
-  const fullMessage = [error.message, error.details, error.hint].filter(Boolean).join(' ').toLowerCase()
-
-  if (
-    error.code === '23505' ||
-    fullMessage.includes('duplicate') ||
-    fullMessage.includes('key (username)') ||
-    fullMessage.includes('unique')
-  ) {
-    return 'This username is already in use. Try another one.'
-  }
-
-  if (
-    error.code === '42501' ||
-    fullMessage.includes('permission denied') ||
-    fullMessage.includes('row-level security') ||
-    fullMessage.includes('policy')
-  ) {
-    return 'Could not update the profile due to permissions. Check the UPDATE and SELECT policies for the usuarios table in Supabase.'
-  }
-
-  if (fullMessage.includes('column')) {
-    return 'Could not save the profile because the usuarios table structure does not match the frontend.'
-  }
-
-  if (
-    fullMessage.includes('nenhum registro') ||
-    fullMessage.includes('no rows') ||
-    fullMessage.includes('json object requested')
-  ) {
-    return 'Could not confirm the profile update. Check the UPDATE and SELECT policies for the usuarios table in Supabase.'
-  }
-
-  return 'Could not save profile changes right now.'
-}
-
-function getPublicProfileErrorMessage(error: UserServiceError | null) {
-  if (!error) {
-    return 'Could not load this profile right now.'
-  }
-
-  const fullMessage = [error.message, error.details, error.hint].filter(Boolean).join(' ').toLowerCase()
-
-  if (
-    error.code === '42501' ||
-    fullMessage.includes('permission denied') ||
-    fullMessage.includes('row-level security') ||
-    fullMessage.includes('policy')
-  ) {
-    return 'Could not load this profile due to permissions. Check the SELECT policies for the usuarios table in Supabase.'
-  }
-
-  return 'Could not load this profile right now.'
-}
-
-function getFollowErrorMessage(error: UserServiceError | null, action: 'load' | 'follow' | 'unfollow') {
-  if (!error) {
-  return action === 'load'
-    ? 'Could not load this profile connections right now.'
-      : action === 'follow'
-        ? 'Could not follow this profile right now.'
-        : 'Could not unfollow this profile right now.'
-  }
-
-  const fullMessage = [error.message, error.details, error.hint].filter(Boolean).join(' ').toLowerCase()
-
-  if (
-    error.code === '42501' ||
-    fullMessage.includes('permission denied') ||
-    fullMessage.includes('row-level security') ||
-    fullMessage.includes('policy')
-  ) {
-    return action === 'load'
-      ? 'Could not load followers due to permissions. Check the policies for the seguidores table in Supabase.'
-      : action === 'follow'
-        ? 'Could not follow this profile due to permissions. Check the INSERT policies for the seguidores table in Supabase.'
-        : 'Could not unfollow this profile due to permissions. Check the DELETE policies for the seguidores table in Supabase.'
-  }
-
-  if (fullMessage.includes('duplicate') || fullMessage.includes('unique')) {
-    return 'You already follow this profile.'
-  }
-
-  return error.message || 'Could not continue this action right now.'
-}
-
-function getProfileReportErrorMessage(
-  error: ProfileReportError | null,
-  action: 'load' | 'submit' | 'delete'
-) {
-  if (!error) {
-    return action === 'load'
-      ? 'Could not load this profile report state right now.'
-      : action === 'submit'
-        ? 'Could not submit this profile report right now.'
-        : 'Could not remove this profile report right now.'
-  }
-
-  const fullMessage = [error.message, error.details, error.hint].filter(Boolean).join(' ').toLowerCase()
-
-  if (
-    error.code === '42501' ||
-    fullMessage.includes('permission denied') ||
-    fullMessage.includes('row-level security') ||
-    fullMessage.includes('policy')
-  ) {
-    return action === 'load'
-      ? 'Could not load this profile report due to permissions. Check the policies for the denuncias_perfil table in Supabase.'
-      : action === 'submit'
-        ? 'Could not submit this report due to permissions. Check the policies for the denuncias_perfil table in Supabase.'
-        : 'Could not remove this report due to permissions. Check the DELETE policies for the denuncias_perfil table in Supabase.'
-  }
-
-  if (fullMessage.includes('duplicate') || fullMessage.includes('unique')) {
-    return 'You already reported this profile.'
-  }
-
-  if (fullMessage.includes('column')) {
-    return 'The denuncias_perfil table structure does not match the frontend.'
-  }
-
-  return error.message
-}
 
 function iconFlag(isFilled: boolean) {
   return (
@@ -346,132 +47,6 @@ function iconFlag(isFilled: boolean) {
   )
 }
 
-function getWishlistErrorMessage(
-  error: WishlistError | null,
-  action: 'load' | 'delete',
-  isOwnerView: boolean
-) {
-  if (!error) {
-    if (action === 'delete') {
-      return 'Could not remove this game from your list right now.'
-    }
-
-    return isOwnerView
-      ? 'Could not load the games you want to play right now.'
-      : 'Could not load the games this profile wants to play right now.'
-  }
-
-  const fullMessage = [error.message, error.details, error.hint].filter(Boolean).join(' ').toLowerCase()
-
-  if (
-    error.code === '42501' ||
-    fullMessage.includes('permission denied') ||
-    fullMessage.includes('row-level security') ||
-    fullMessage.includes('policy')
-  ) {
-    return action === 'delete'
-      ? 'Could not remove this game due to permissions. Check the DELETE policies for the lista_desejos table in Supabase.'
-      : 'Could not load this list due to permissions. Check the policies for the lista_desejos table in Supabase.'
-  }
-
-  return action === 'delete'
-    ? 'Could not remove this game from your list right now.'
-    : isOwnerView
-      ? 'Could not load the games you want to play right now.'
-      : 'Could not load the games this profile wants to play right now.'
-}
-
-function getGameStatusErrorMessage(
-  error: GameStatusError | null,
-  action: 'load' | 'save' | 'delete',
-  isOwnerView: boolean
-) {
-  if (!error) {
-    if (action === 'save') {
-      return 'Could not save this game status right now.'
-    }
-
-    if (action === 'delete') {
-      return 'Could not remove this game from the profile right now.'
-    }
-
-    return isOwnerView
-      ? 'Could not load your profile statuses right now.'
-      : 'Could not load this profile statuses right now.'
-  }
-
-  const fullMessage = [error.message, error.details, error.hint].filter(Boolean).join(' ').toLowerCase()
-
-  if (
-    error.code === '42501' ||
-    fullMessage.includes('permission denied') ||
-    fullMessage.includes('row-level security') ||
-    fullMessage.includes('policy')
-  ) {
-    return action === 'load'
-      ? 'Could not load statuses due to permissions. Check the policies for the status_jogo table in Supabase.'
-      : action === 'save'
-        ? 'Could not save the status due to permissions. Check the policies for the status_jogo table in Supabase.'
-        : 'Could not remove this game from the profile due to permissions. Check the DELETE policies for the status_jogo table in Supabase.'
-  }
-
-  if (fullMessage.includes('column')) {
-    return 'Could not continue because the status_jogo table structure does not match the frontend.'
-  }
-
-  if (action === 'save') {
-    return 'Could not save this game status right now.'
-  }
-
-  if (action === 'delete') {
-    return 'Could not remove this game from the profile right now.'
-  }
-
-  return isOwnerView
-    ? 'Could not load your profile statuses right now.'
-    : 'Could not load this profile statuses right now.'
-}
-
-function getReviewErrorMessage(
-  error: ReviewError | null,
-  action: 'load' | 'delete',
-  isOwnerView: boolean
-) {
-  if (!error) {
-    if (action === 'delete') {
-      return 'Could not delete this review right now.'
-    }
-
-    return isOwnerView
-      ? 'Could not load your reviews right now.'
-      : 'Could not load this profile reviews right now.'
-  }
-
-  const fullMessage = [error.message, error.details, error.hint].filter(Boolean).join(' ').toLowerCase()
-
-  if (
-    error.code === '42501' ||
-    fullMessage.includes('permission denied') ||
-    fullMessage.includes('row-level security') ||
-    fullMessage.includes('policy')
-  ) {
-    return action === 'delete'
-      ? 'Could not delete your review due to permissions. Check the DELETE policies for the avaliacoes table in Supabase.'
-      : 'Could not load reviews due to permissions. Check the policies for the avaliacoes and jogos tables in Supabase.'
-  }
-
-  if (fullMessage.includes('column')) {
-    return action === 'delete'
-      ? 'Could not delete the review because the avaliacoes table structure does not match the frontend.'
-      : 'Could not load reviews because the table structure does not match the frontend.'
-  }
-
-  return action === 'delete'
-    ? error.message || 'Could not delete this review right now.'
-    : isOwnerView
-      ? 'Could not load your reviews right now.'
-      : 'Could not load this profile reviews right now.'
-}
 
 const readOnlySaveStatus = async (_params: {
   gameId: number
@@ -513,667 +88,129 @@ export function ProfilePage() {
   const { username } = useParams()
   const { t, formatDate } = useI18n()
   const requestedUsername = username?.trim() || ''
-  const isUsernameRoute = requestedUsername.length > 0
-
   const { user, profile, loading, updateOwnProfile } = useAuth()
-
-  const [publicProfile, setPublicProfile] = useState<PublicUserProfile | null>(null)
-  const [publicProfileLoading, setPublicProfileLoading] = useState(false)
-  const [publicProfileError, setPublicProfileError] = useState<string | null>(null)
-  const [publicProfileRefreshKey, setPublicProfileRefreshKey] = useState(0)
-  const [draftProfile, setDraftProfile] = useState<ProfileDraft>(() => createProfileDraft(null))
   const [activeTab, setActiveTab] = useState<ProfileTab>('status')
-  const [isEditing, setIsEditing] = useState(false)
-  const [isSaving, setIsSaving] = useState(false)
-  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
-  const [saveFeedback, setSaveFeedback] = useState<FeedbackState | null>(null)
-  const [avatarFeedback, setAvatarFeedback] = useState<FeedbackState | null>(null)
-  const [followState, setFollowState] = useState<UserFollowState>({
-    isFollowing: false,
-    followersCount: 0,
-    followingCount: 0,
+
+  const {
+    activeProfile,
+    editableProfile,
+    isOwnerView,
+    isRestrictedPublicView,
+    isUsernameRoute,
+    pageLoading,
+    publicProfile,
+    publicProfileError,
+    refreshPublicProfile,
+    resolvedProfile,
+    topFiveEntries,
+  } = useResolvedProfile({
+    requestedUsername,
+    user,
+    ownProfile: profile,
+    authLoading: loading,
   })
-  const [followLoading, setFollowLoading] = useState(false)
-  const [followSubmitting, setFollowSubmitting] = useState(false)
-  const [followFeedback, setFollowFeedback] = useState<FollowFeedbackState | null>(null)
-  const [isConnectionsModalOpen, setIsConnectionsModalOpen] = useState(false)
-  const [connectionsInitialTab, setConnectionsInitialTab] = useState<FollowListKind>('followers')
-  const [followersRefreshKey, setFollowersRefreshKey] = useState(0)
-  const [statusGames, setStatusGames] = useState<GameStatusItem[]>([])
-  const [statusLoading, setStatusLoading] = useState(false)
-  const [statusLoadingMore, setStatusLoadingMore] = useState(false)
-  const [statusError, setStatusError] = useState<string | null>(null)
-  const [statusPageState, setStatusPageState] = useState<ProfilePageState>(createEmptyProfilePageState)
-  const [statusControls, setStatusControls] =
-    useState<ProfileStatusControls>(DEFAULT_STATUS_CONTROLS)
-  const [wishlistGames, setWishlistGames] = useState<WishlistGameItem[]>([])
-  const [wishlistLoading, setWishlistLoading] = useState(false)
-  const [wishlistLoadingMore, setWishlistLoadingMore] = useState(false)
-  const [wishlistPreparingReorder, setWishlistPreparingReorder] = useState(false)
-  const [wishlistError, setWishlistError] = useState<string | null>(null)
-  const [wishlistPageState, setWishlistPageState] =
-    useState<ProfilePageState>(createEmptyProfilePageState)
-  const [userReviews, setUserReviews] = useState<ProfileReviewItem[]>([])
-  const [reviewsLoading, setReviewsLoading] = useState(false)
-  const [reviewsLoadingMore, setReviewsLoadingMore] = useState(false)
-  const [reviewsError, setReviewsError] = useState<string | null>(null)
-  const [reviewsPageState, setReviewsPageState] =
-    useState<ProfilePageState>(createEmptyProfilePageState)
-  const [loadedProfileTabs, setLoadedProfileTabs] = useState<LoadedProfileTabs>(
-    createEmptyLoadedProfileTabs
-  )
-  const [loadedCollectionsKey, setLoadedCollectionsKey] = useState<string | null>(null)
-  const [currentProfileReport, setCurrentProfileReport] =
-    useState<CurrentUserProfileReportSummary | null>(null)
-  const [profileReportLoading, setProfileReportLoading] = useState(false)
-  const [isProfileReportModalOpen, setIsProfileReportModalOpen] = useState(false)
-  const [profileReportSubmitting, setProfileReportSubmitting] = useState(false)
-  const [profileReportRemoving, setProfileReportRemoving] = useState(false)
-  const [profileReportFeedback, setProfileReportFeedback] = useState<ReportFeedbackState | null>(null)
 
-  const followStateRequestIdRef = useRef(0)
-  const statusRequestIdRef = useRef(0)
-  const wishlistRequestIdRef = useRef(0)
-  const reviewsRequestIdRef = useRef(0)
-  const statusCacheRef = useRef(new Map<string, CachedCollection<GameStatusItem>>())
-  const wishlistCacheRef = useRef(new Map<string, CachedCollection<WishlistGameItem>>())
-  const reviewsCacheRef = useRef(new Map<string, CachedCollection<ProfileReviewItem>>())
+  const {
+    avatarFeedback,
+    draftProfile,
+    handleAvatarChange,
+    handleCancelEditing,
+    handleDraftChange,
+    handleSaveProfile,
+    handleSaveTopFive,
+    handleStartEditing,
+    isEditing,
+    isSaving,
+    isUploadingAvatar,
+    saveFeedback,
+  } = useProfileEditor({
+    editableProfile,
+    user,
+    updateOwnProfile,
+  })
 
-  useEffect(() => {
-    let isMounted = true
+  const {
+    handleDeleteReview,
+    handleDeleteStatus,
+    handleDeleteWishlistItem,
+    handleLoadFullWishlistForReorder,
+    handleLoadMoreReviews,
+    handleLoadMoreStatusGames,
+    handleLoadMoreWishlistGames,
+    handleRefreshStatusGames,
+    handleSaveGameStatus,
+    handleStatusControlsChange,
+    hasCurrentCollections,
+    loadedProfileTabs,
+    reviewItemsForView,
+    reviewsError,
+    reviewsLoading,
+    reviewsLoadingMore,
+    reviewsPageState,
+    statusError,
+    statusItemsForView,
+    statusLoading,
+    statusLoadingMore,
+    statusPageState,
+    wishlistError,
+    wishlistItemsForView,
+    wishlistLoading,
+    wishlistLoadingMore,
+    wishlistPageState,
+    wishlistPreparingReorder,
+  } = useProfileCollections({
+    activeProfile,
+    activeTab,
+    editableProfile,
+    isOwnerView,
+    isRestrictedPublicView,
+    userId: user?.id,
+  })
 
-    const loadRequestedProfile = async () => {
-      if (!isUsernameRoute) {
-        if (isMounted) {
-          setPublicProfile(null)
-          setPublicProfileLoading(false)
-          setPublicProfileError(null)
-        }
-        return
-      }
+  const {
+    closeConnectionsModal,
+    connectionsInitialTab,
+    followFeedback,
+    followLoading,
+    followState,
+    followSubmitting,
+    followersRefreshKey,
+    handleOpenConnectionsModal,
+    handleToggleFollow,
+    isConnectionsModalOpen,
+    refreshFollowState,
+  } = useProfileFollow({
+    activeProfile,
+    isRestrictedPublicView,
+    onFollowChanged: refreshPublicProfile,
+    user,
+  })
 
-      setPublicProfileLoading(true)
-      setPublicProfileError(null)
-      setFollowFeedback(null)
-
-      const result = await getPublicProfileByUsername(requestedUsername, user?.id)
-
-      if (!isMounted) return
-
-      if (result.error) {
-        setPublicProfile(null)
-        setPublicProfileError(getPublicProfileErrorMessage(result.error))
-      } else {
-        setPublicProfile(result.data)
-        setPublicProfileError(null)
-      }
-
-      setPublicProfileLoading(false)
-    }
-
-    void loadRequestedProfile()
-
-    return () => {
-      isMounted = false
-    }
-  }, [isUsernameRoute, publicProfileRefreshKey, requestedUsername, user?.id])
-
-  const resolvedProfile = useMemo<ResolvedProfile | null>(() => {
-    if (!isUsernameRoute) {
-      if (!profile) return null
-
-      return {
-        kind: 'own',
-        data: profile,
-        topFiveEntries: getTopFiveEntriesFromPrivacySettings(profile.configuracoes_privacidade),
-      }
-    }
-
-    if (!publicProfile) return null
-
-    if (user && profile && user.id === publicProfile.id && profile.id === user.id) {
-      return {
-        kind: 'own',
-        data: profile,
-        topFiveEntries: getTopFiveEntriesFromPrivacySettings(profile.configuracoes_privacidade),
-      }
-    }
-
-    return {
-      kind: 'public',
-      data: publicProfile,
-      topFiveEntries: publicProfile.topFiveEntries,
-    }
-  }, [isUsernameRoute, profile, publicProfile, user])
-
-  const activeProfile = resolvedProfile?.data || null
-  const editableProfile = resolvedProfile?.kind === 'own' ? resolvedProfile.data : null
-  const isOwnerView = resolvedProfile?.kind === 'own'
-  const isRestrictedPublicView = Boolean(
-    resolvedProfile?.kind === 'public' && !resolvedProfile.data.canViewRestrictedContent
-  )
-  const topFiveEntries = resolvedProfile?.topFiveEntries || []
+  const {
+    canReportProfile,
+    currentProfileReport,
+    handleCloseProfileReportModal,
+    handleOpenProfileReportModal,
+    handleRemoveProfileReport,
+    handleSubmitProfileReport,
+    isProfileReportModalOpen,
+    profileReportFeedback,
+    profileReportLoading,
+    profileReportRemoving,
+    profileReportSubmitting,
+  } = useProfileReport({
+    activeProfile,
+    isOwnerView,
+    user,
+  })
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
       setActiveTab('status')
-      setStatusControls({
-        sortValue: DEFAULT_STATUS_CONTROLS.sortValue,
-        statuses: [],
-      })
-      setIsConnectionsModalOpen(false)
-      setConnectionsInitialTab('followers')
-      setIsProfileReportModalOpen(false)
-      setProfileReportFeedback(null)
     }, 0)
 
     return () => window.clearTimeout(timeoutId)
   }, [activeProfile?.id])
-
-  const collectionsKey = useMemo(() => {
-    if (!activeProfile || isRestrictedPublicView) return null
-
-    return [
-      activeProfile.id,
-      user?.id || 'anon',
-      isOwnerView ? 'owner' : 'viewer',
-    ].join(':')
-  }, [activeProfile, isOwnerView, isRestrictedPublicView, user?.id])
-
-  const statusCacheKey = useMemo(
-    () => (collectionsKey ? `${collectionsKey}:status:${getStatusControlsCacheKey(statusControls)}` : null),
-    [collectionsKey, statusControls]
-  )
-  const wishlistCacheKey = useMemo(
-    () => (collectionsKey ? `${collectionsKey}:wishlist` : null),
-    [collectionsKey]
-  )
-  const reviewsCacheKey = useMemo(
-    () => (collectionsKey ? `${collectionsKey}:reviews` : null),
-    [collectionsKey]
-  )
-
-  const resetCollections = useCallback((nextCollectionsKey: string | null) => {
-    setStatusGames([])
-    setStatusError(null)
-    setStatusLoading(false)
-    setStatusLoadingMore(false)
-    setStatusPageState(createEmptyProfilePageState())
-    setWishlistGames([])
-    setWishlistError(null)
-    setWishlistLoading(false)
-    setWishlistLoadingMore(false)
-    setWishlistPreparingReorder(false)
-    setWishlistPageState(createEmptyProfilePageState())
-    setUserReviews([])
-    setReviewsError(null)
-    setReviewsLoading(false)
-    setReviewsLoadingMore(false)
-    setReviewsPageState(createEmptyProfilePageState())
-    setLoadedProfileTabs(createEmptyLoadedProfileTabs())
-    setLoadedCollectionsKey(nextCollectionsKey)
-  }, [])
-
-  const loadStatusPage = useCallback(
-    async ({
-      page = 0,
-      append = false,
-      force = false,
-    }: {
-      page?: number
-      append?: boolean
-      force?: boolean
-    } = {}) => {
-      if (!activeProfile || !statusCacheKey || !collectionsKey || isRestrictedPublicView) {
-        return { ok: false }
-      }
-
-      const cachedCollection = statusCacheRef.current.get(statusCacheKey)
-
-      if (!force && !append && cachedCollection?.loaded) {
-        setStatusGames(cachedCollection.items)
-        setStatusPageState({
-          totalCount: cachedCollection.totalCount,
-          hasMore: cachedCollection.hasMore,
-          nextPage: cachedCollection.nextPage,
-          loaded: cachedCollection.loaded,
-        })
-        setStatusError(null)
-        setLoadedProfileTabs(currentTabs => ({ ...currentTabs, status: true }))
-        return { ok: true }
-      }
-
-      const requestId = statusRequestIdRef.current + 1
-      statusRequestIdRef.current = requestId
-
-      if (append) {
-        setStatusLoadingMore(true)
-      } else {
-        setStatusLoading(true)
-      }
-
-      setStatusError(null)
-      const startedAt = getPerformanceNow()
-
-      const statusResult = await getGameStatusesPageByUserId(activeProfile.id, {
-        page,
-        pageSize: PROFILE_STATUS_PAGE_SIZE,
-        sort: statusControls.sortValue,
-        statuses: statusControls.statuses,
-      })
-
-      if (statusRequestIdRef.current !== requestId) {
-        return { ok: false }
-      }
-
-      logPerformanceTiming('profile.status.ui-load', getPerformanceNow() - startedAt, {
-        profileId: activeProfile.id,
-        page,
-        append,
-        requestCount: statusResult.timings.requestCount,
-        itemCount: statusResult.data.length,
-      })
-
-      if (statusResult.error) {
-        if (!isOwnerView && isSupabasePermissionError(statusResult.error)) {
-          setStatusGames([])
-          setStatusPageState(createLoadedPageState(0, false, null))
-          setStatusError(null)
-          setStatusLoading(false)
-          setStatusLoadingMore(false)
-          setLoadedProfileTabs(currentTabs => ({ ...currentTabs, status: true }))
-          return { ok: true }
-        }
-
-        console.error('Erro ao carregar status dos jogos do perfil:', statusResult.error)
-        if (!append) {
-          setStatusGames([])
-          setStatusPageState(createEmptyProfilePageState())
-        }
-        setStatusError(getGameStatusErrorMessage(statusResult.error, 'load', Boolean(isOwnerView)))
-        setStatusLoading(false)
-        setStatusLoadingMore(false)
-        setLoadedProfileTabs(currentTabs => ({ ...currentTabs, status: true }))
-        return { ok: false }
-      }
-
-      const nextPageState = createLoadedPageState(
-        statusResult.totalCount,
-        statusResult.hasMore,
-        statusResult.nextPage
-      )
-
-      setStatusGames(currentItems => {
-        const nextItems = append ? mergeCollectionsById(currentItems, statusResult.data) : statusResult.data
-        statusCacheRef.current.set(statusCacheKey, createCachedCollection(nextItems, nextPageState))
-        return nextItems
-      })
-      setStatusPageState(nextPageState)
-      setStatusError(null)
-      setStatusLoading(false)
-      setStatusLoadingMore(false)
-      setLoadedProfileTabs(currentTabs => ({ ...currentTabs, status: true }))
-
-      return { ok: true }
-    },
-    [
-      activeProfile,
-      collectionsKey,
-      isOwnerView,
-      isRestrictedPublicView,
-      statusCacheKey,
-      statusControls.sortValue,
-      statusControls.statuses,
-    ]
-  )
-
-  const loadWishlistPage = useCallback(
-    async ({
-      page = 0,
-      append = false,
-      force = false,
-    }: {
-      page?: number
-      append?: boolean
-      force?: boolean
-    } = {}) => {
-      if (!activeProfile || !wishlistCacheKey || !collectionsKey || isRestrictedPublicView) {
-        return { ok: false }
-      }
-
-      const cachedCollection = wishlistCacheRef.current.get(wishlistCacheKey)
-
-      if (!force && !append && cachedCollection?.loaded) {
-        setWishlistGames(cachedCollection.items)
-        setWishlistPageState({
-          totalCount: cachedCollection.totalCount,
-          hasMore: cachedCollection.hasMore,
-          nextPage: cachedCollection.nextPage,
-          loaded: cachedCollection.loaded,
-        })
-        setWishlistError(null)
-        setLoadedProfileTabs(currentTabs => ({ ...currentTabs, wishlist: true }))
-        return { ok: true }
-      }
-
-      const requestId = wishlistRequestIdRef.current + 1
-      wishlistRequestIdRef.current = requestId
-
-      if (append) {
-        setWishlistLoadingMore(true)
-      } else {
-        setWishlistLoading(true)
-      }
-
-      setWishlistError(null)
-      const startedAt = getPerformanceNow()
-
-      const wishlistResult = await getWishlistGamesPageByUserId(activeProfile.id, {
-        page,
-        pageSize: PROFILE_WISHLIST_PAGE_SIZE,
-      })
-
-      if (wishlistRequestIdRef.current !== requestId) {
-        return { ok: false }
-      }
-
-      logPerformanceTiming('profile.wishlist.ui-load', getPerformanceNow() - startedAt, {
-        profileId: activeProfile.id,
-        page,
-        append,
-        requestCount: wishlistResult.timings.requestCount,
-        itemCount: wishlistResult.data.length,
-      })
-
-      if (wishlistResult.error) {
-        if (!isOwnerView && isSupabasePermissionError(wishlistResult.error)) {
-          setWishlistGames([])
-          setWishlistPageState(createLoadedPageState(0, false, null))
-          setWishlistError(null)
-          setWishlistLoading(false)
-          setWishlistLoadingMore(false)
-          setLoadedProfileTabs(currentTabs => ({ ...currentTabs, wishlist: true }))
-          return { ok: true }
-        }
-
-        console.error('Erro ao carregar jogos que quero jogar:', wishlistResult.error)
-        if (!append) {
-          setWishlistGames([])
-          setWishlistPageState(createEmptyProfilePageState())
-        }
-        setWishlistError(getWishlistErrorMessage(wishlistResult.error, 'load', Boolean(isOwnerView)))
-        setWishlistLoading(false)
-        setWishlistLoadingMore(false)
-        setLoadedProfileTabs(currentTabs => ({ ...currentTabs, wishlist: true }))
-        return { ok: false }
-      }
-
-      const nextPageState = createLoadedPageState(
-        wishlistResult.totalCount,
-        wishlistResult.hasMore,
-        wishlistResult.nextPage
-      )
-
-      setWishlistGames(currentItems => {
-        const nextItems = append ? mergeCollectionsById(currentItems, wishlistResult.data) : wishlistResult.data
-        wishlistCacheRef.current.set(wishlistCacheKey, createCachedCollection(nextItems, nextPageState))
-        return nextItems
-      })
-      setWishlistPageState(nextPageState)
-      setWishlistError(null)
-      setWishlistLoading(false)
-      setWishlistLoadingMore(false)
-      setLoadedProfileTabs(currentTabs => ({ ...currentTabs, wishlist: true }))
-
-      return { ok: true }
-    },
-    [activeProfile, collectionsKey, isOwnerView, isRestrictedPublicView, wishlistCacheKey]
-  )
-
-  const loadReviewsPage = useCallback(
-    async ({
-      page = 0,
-      append = false,
-      force = false,
-    }: {
-      page?: number
-      append?: boolean
-      force?: boolean
-    } = {}) => {
-      if (!activeProfile || !reviewsCacheKey || !collectionsKey || isRestrictedPublicView) {
-        return { ok: false }
-      }
-
-      const cachedCollection = reviewsCacheRef.current.get(reviewsCacheKey)
-
-      if (!force && !append && cachedCollection?.loaded) {
-        setUserReviews(cachedCollection.items)
-        setReviewsPageState({
-          totalCount: cachedCollection.totalCount,
-          hasMore: cachedCollection.hasMore,
-          nextPage: cachedCollection.nextPage,
-          loaded: cachedCollection.loaded,
-        })
-        setReviewsError(null)
-        setLoadedProfileTabs(currentTabs => ({ ...currentTabs, reviews: true }))
-        return { ok: true }
-      }
-
-      const requestId = reviewsRequestIdRef.current + 1
-      reviewsRequestIdRef.current = requestId
-
-      if (append) {
-        setReviewsLoadingMore(true)
-      } else {
-        setReviewsLoading(true)
-      }
-
-      setReviewsError(null)
-      const startedAt = getPerformanceNow()
-
-      const reviewsResult = await getReviewsPageByUserId(activeProfile.id, {
-        page,
-        pageSize: PROFILE_REVIEWS_PAGE_SIZE,
-        currentUserId: user?.id,
-        includeRestrictedAuthorReviews: Boolean(isOwnerView),
-      })
-
-      if (reviewsRequestIdRef.current !== requestId) {
-        return { ok: false }
-      }
-
-      logPerformanceTiming('profile.reviews.ui-load', getPerformanceNow() - startedAt, {
-        profileId: activeProfile.id,
-        page,
-        append,
-        requestCount: reviewsResult.timings.requestCount,
-        itemCount: reviewsResult.data.length,
-      })
-
-      if (reviewsResult.error) {
-        if (!isOwnerView && isSupabasePermissionError(reviewsResult.error)) {
-          setUserReviews(reviewsResult.data)
-          setReviewsPageState(createLoadedPageState(reviewsResult.data.length, false, null))
-          setReviewsError(null)
-          setReviewsLoading(false)
-          setReviewsLoadingMore(false)
-          setLoadedProfileTabs(currentTabs => ({ ...currentTabs, reviews: true }))
-          return { ok: true }
-        }
-
-        console.error('Erro ao carregar reviews do perfil:', reviewsResult.error)
-        if (!append) {
-          setUserReviews(reviewsResult.data)
-          setReviewsPageState(createEmptyProfilePageState())
-        }
-        setReviewsError(getReviewErrorMessage(reviewsResult.error, 'load', Boolean(isOwnerView)))
-        setReviewsLoading(false)
-        setReviewsLoadingMore(false)
-        setLoadedProfileTabs(currentTabs => ({ ...currentTabs, reviews: true }))
-        return { ok: false }
-      }
-
-      const nextPageState = createLoadedPageState(
-        reviewsResult.totalCount,
-        reviewsResult.hasMore,
-        reviewsResult.nextPage
-      )
-
-      setUserReviews(currentItems => {
-        const nextItems = append ? mergeCollectionsById(currentItems, reviewsResult.data) : reviewsResult.data
-        reviewsCacheRef.current.set(reviewsCacheKey, createCachedCollection(nextItems, nextPageState))
-        return nextItems
-      })
-      setReviewsPageState(nextPageState)
-      setReviewsError(null)
-      setReviewsLoading(false)
-      setReviewsLoadingMore(false)
-      setLoadedProfileTabs(currentTabs => ({ ...currentTabs, reviews: true }))
-
-      return { ok: true }
-    },
-    [
-      activeProfile,
-      collectionsKey,
-      isOwnerView,
-      isRestrictedPublicView,
-      reviewsCacheKey,
-      user?.id,
-    ]
-  )
-
-  useEffect(() => {
-    const timeoutId = window.setTimeout(() => {
-      if (!collectionsKey) {
-        if (loadedCollectionsKey !== null) {
-          resetCollections(null)
-        }
-        return
-      }
-
-      if (loadedCollectionsKey !== collectionsKey) {
-        resetCollections(collectionsKey)
-      }
-    }, 0)
-
-    return () => window.clearTimeout(timeoutId)
-  }, [collectionsKey, loadedCollectionsKey, resetCollections])
-
-  useEffect(() => {
-    if (
-      !activeProfile ||
-      !collectionsKey ||
-      loadedCollectionsKey !== collectionsKey ||
-      isRestrictedPublicView
-    ) return
-
-    if (activeTab === 'status') {
-      void loadStatusPage()
-      return
-    }
-
-    if (activeTab === 'wishlist') {
-      void loadWishlistPage()
-      return
-    }
-
-    if (activeTab === 'reviews') {
-      void loadReviewsPage()
-    }
-  }, [
-    activeProfile,
-    activeTab,
-    collectionsKey,
-    isRestrictedPublicView,
-    loadedCollectionsKey,
-    loadReviewsPage,
-    loadStatusPage,
-    loadWishlistPage,
-  ])
-
-  useEffect(() => {
-    let isMounted = true
-
-    const loadCurrentProfileReport = async () => {
-      if (!user || !activeProfile || isOwnerView) {
-        if (isMounted) {
-          setCurrentProfileReport(null)
-          setProfileReportLoading(false)
-          setProfileReportSubmitting(false)
-          setProfileReportRemoving(false)
-        }
-        return
-      }
-
-      setProfileReportLoading(true)
-
-      const result = await getCurrentUserProfileReport(user.id, activeProfile.id)
-
-      if (!isMounted) return
-
-      if (result.error) {
-        console.error('Erro ao carregar denuncia atual do perfil:', result.error)
-      }
-
-      setCurrentProfileReport(result.data)
-      setProfileReportLoading(false)
-    }
-
-    void loadCurrentProfileReport()
-
-    return () => {
-      isMounted = false
-    }
-  }, [activeProfile, isOwnerView, user])
-
-  const refreshFollowState = useCallback(async () => {
-    const requestId = followStateRequestIdRef.current + 1
-    followStateRequestIdRef.current = requestId
-
-    if (!activeProfile) {
-      setFollowLoading(false)
-      setFollowFeedback(null)
-      setFollowState({
-        isFollowing: false,
-        followersCount: 0,
-        followingCount: 0,
-      })
-      return
-    }
-
-    setFollowLoading(true)
-
-    const result = await getFollowState(user?.id, activeProfile.id)
-
-    if (followStateRequestIdRef.current !== requestId) {
-      return
-    }
-
-    if (result.error) {
-      setFollowFeedback({
-        tone: 'error',
-        message: getFollowErrorMessage(result.error, 'load'),
-      })
-    } else {
-      setFollowFeedback(null)
-    }
-
-    setFollowState(result.data)
-    setFollowLoading(false)
-  }, [activeProfile, user?.id])
-
-  useEffect(() => {
-    const timeoutId = window.setTimeout(() => {
-      void refreshFollowState()
-    }, 0)
-
-    return () => {
-      window.clearTimeout(timeoutId)
-      followStateRequestIdRef.current += 1
-    }
-  }, [refreshFollowState])
-
-  const pageLoading = loading || publicProfileLoading
 
   if (pageLoading) {
     return (
@@ -1285,10 +322,6 @@ export function ProfilePage() {
   const visibleUsername = isEditing ? draftProfile.username || 'usuario' : activeProfile.username || 'usuario'
   const visibleProfileLabel = visibleFullName || visibleUsername
   const visibleBio = isEditing ? draftProfile.bio.trim() : activeProfile.bio?.trim() || ''
-  const hasCurrentCollections = Boolean(collectionsKey && loadedCollectionsKey === collectionsKey)
-  const statusItemsForView = hasCurrentCollections ? statusGames : []
-  const wishlistItemsForView = hasCurrentCollections ? wishlistGames : []
-  const reviewItemsForView = hasCurrentCollections ? userReviews : []
   const statusTotalCount = statusPageState.totalCount ?? statusItemsForView.length
   const wishlistTotalCount = wishlistPageState.totalCount ?? wishlistItemsForView.length
   const reviewsTotalCount = reviewsPageState.totalCount ?? reviewItemsForView.length
@@ -1344,7 +377,6 @@ export function ProfilePage() {
     !isRestrictedPublicView && !followLoading && followState.followersCount > 0
   const canOpenFollowingModal =
     !isRestrictedPublicView && !followLoading && followState.followingCount > 0
-  const canReportProfile = Boolean(user && activeProfile && !isOwnerView)
   const profileReportButtonLabel = profileReportLoading
     ? t('profile.reportLoading')
     : currentProfileReport
@@ -1353,563 +385,6 @@ export function ProfilePage() {
   const profileReportTargetLabel = activeProfile.username
     ? t('profile.reportTargetProfile', { username: activeProfile.username })
     : t('profile.reportTargetThis')
-
-  const resetDraft = () => {
-    setDraftProfile(createProfileDraft(editableProfile))
-  }
-
-  const handleStartEditing = () => {
-    if (!editableProfile) return
-
-    resetDraft()
-    setSaveFeedback(null)
-    setIsEditing(true)
-  }
-
-  const handleCancelEditing = () => {
-    resetDraft()
-    setSaveFeedback(null)
-    setIsEditing(false)
-  }
-
-  const handleDraftChange = (field: keyof ProfileDraft, value: string) => {
-    setDraftProfile(currentDraft => ({
-      ...currentDraft,
-      [field]: value,
-    }))
-  }
-
-  const handleAvatarChange = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file || !editableProfile || !user || user.id !== editableProfile.id) return
-
-    setAvatarFeedback(null)
-    setIsUploadingAvatar(true)
-
-    try {
-      const result = await uploadAvatarImage(file, user.id)
-
-      if (!result) {
-        setAvatarFeedback({
-          tone: 'error',
-          message: t('profile.avatarUploadError'),
-        })
-        return
-      }
-
-      const { error } = await updateOwnProfile({
-        avatar_path: result.path,
-        avatar_url: result.publicUrl,
-      })
-
-      if (error) {
-        setAvatarFeedback({
-          tone: 'error',
-          message: getProfileUpdateErrorMessage(error),
-        })
-        return
-      }
-
-      setAvatarFeedback({
-        tone: 'success',
-        message: t('profile.avatarSuccess'),
-      })
-    } catch (error) {
-      console.error('Erro inesperado ao atualizar avatar do perfil:', error)
-      setAvatarFeedback({
-        tone: 'error',
-        message: t('profile.avatarUpdateError'),
-      })
-    } finally {
-      setIsUploadingAvatar(false)
-      event.target.value = ''
-    }
-  }
-
-  const handleSaveProfile = async () => {
-    if (!editableProfile) return
-
-    const trimmedName = draftProfile.nome_completo.trim()
-    const trimmedUsername = draftProfile.username.trim()
-    const trimmedBio = draftProfile.bio.trim()
-    const currentName = editableProfile.nome_completo?.trim() || ''
-    const currentUsername = editableProfile.username?.trim() || ''
-    const currentBio = editableProfile.bio?.trim() || ''
-
-    if (!trimmedUsername) {
-      setSaveFeedback({
-        tone: 'error',
-        message: t('profile.usernameRequired'),
-      })
-      return
-    }
-
-    if (
-      trimmedName === currentName &&
-      trimmedUsername === currentUsername &&
-      trimmedBio === currentBio
-    ) {
-      setSaveFeedback(null)
-      setIsEditing(false)
-      return
-    }
-
-    setSaveFeedback(null)
-    setIsSaving(true)
-
-    try {
-      const { data, error } = await updateOwnProfile({
-        nome_completo: trimmedName || null,
-        username: trimmedUsername,
-        bio: trimmedBio || null,
-      })
-
-      if (error || !data) {
-        setSaveFeedback({
-          tone: 'error',
-          message: getProfileUpdateErrorMessage(error),
-        })
-        return
-      }
-
-      setDraftProfile(createProfileDraft(data))
-      setSaveFeedback({
-        tone: 'success',
-        message: t('profile.saveSuccess'),
-      })
-      setIsEditing(false)
-    } catch (error) {
-      console.error('Erro inesperado ao salvar perfil:', error)
-      setSaveFeedback({
-        tone: 'error',
-        message: t('profile.error.saveGeneric'),
-      })
-    } finally {
-      setIsSaving(false)
-    }
-  }
-
-  const handleRefreshStatusGames = async () => {
-    if (!activeProfile) {
-      setStatusGames([])
-      setStatusError(null)
-      setStatusLoading(false)
-      setStatusLoadingMore(false)
-      setStatusPageState(createEmptyProfilePageState())
-      return
-    }
-
-    if (statusCacheKey) {
-      statusCacheRef.current.delete(statusCacheKey)
-    }
-
-    await loadStatusPage({ page: 0, force: true })
-  }
-
-  const handleStatusControlsChange = (nextControls: ProfileStatusControls) => {
-    setStatusControls({
-      sortValue: nextControls.sortValue,
-      statuses: [...nextControls.statuses],
-    })
-    setStatusGames([])
-    setStatusPageState(createEmptyProfilePageState())
-    setStatusError(null)
-    setLoadedProfileTabs(currentTabs => ({ ...currentTabs, status: false }))
-  }
-
-  const handleLoadMoreStatusGames = async () => {
-    if (!statusPageState.hasMore || statusPageState.nextPage === null || statusLoadingMore) return
-
-    await loadStatusPage({
-      page: statusPageState.nextPage,
-      append: true,
-    })
-  }
-
-  const handleLoadMoreWishlistGames = async () => {
-    if (!wishlistPageState.hasMore || wishlistPageState.nextPage === null || wishlistLoadingMore) return
-
-    await loadWishlistPage({
-      page: wishlistPageState.nextPage,
-      append: true,
-    })
-  }
-
-  const handleLoadMoreReviews = async () => {
-    if (!reviewsPageState.hasMore || reviewsPageState.nextPage === null || reviewsLoadingMore) return
-
-    await loadReviewsPage({
-      page: reviewsPageState.nextPage,
-      append: true,
-    })
-  }
-
-  const handleLoadFullWishlistForReorder = async () => {
-    if (!activeProfile || !wishlistCacheKey || wishlistPreparingReorder) {
-      return {
-        ok: false,
-        message: t('profile.error.prepareReorder'),
-      }
-    }
-
-    if (!wishlistPageState.hasMore && wishlistPageState.loaded) {
-      return { ok: true }
-    }
-
-    setWishlistPreparingReorder(true)
-    setWishlistError(null)
-    const startedAt = getPerformanceNow()
-    const { data, error } = await getWishlistGamesByUserId(activeProfile.id)
-
-    logPerformanceTiming('profile.wishlist.full-reorder-load', getPerformanceNow() - startedAt, {
-      profileId: activeProfile.id,
-      itemCount: data.length,
-      hasError: Boolean(error),
-    })
-
-    setWishlistPreparingReorder(false)
-
-    if (error) {
-      const message = getWishlistErrorMessage(error, 'load', Boolean(isOwnerView))
-      setWishlistError(message)
-      return {
-        ok: false,
-        message,
-      }
-    }
-
-    const nextPageState = createLoadedPageState(data.length, false, null)
-    setWishlistGames(data)
-    setWishlistPageState(nextPageState)
-    wishlistCacheRef.current.set(wishlistCacheKey, createCachedCollection(data, nextPageState))
-    setLoadedProfileTabs(currentTabs => ({ ...currentTabs, wishlist: true }))
-    setWishlistError(null)
-
-    return { ok: true }
-  }
-
-  const handleSaveGameStatus = async ({
-    gameId,
-    status,
-    favorito,
-  }: {
-    gameId: number
-    status: GameStatusValue
-    favorito: boolean
-  }) => {
-    if (!editableProfile) {
-      return {
-        ok: false,
-        message: t('profile.error.identifyStatusSave'),
-      }
-    }
-
-    const { error } = await saveGameStatus({
-      userId: editableProfile.id,
-      gameId,
-      status,
-      favorito,
-    })
-
-    if (error) {
-      return {
-        ok: false,
-        message: getGameStatusErrorMessage(error, 'save', true),
-      }
-    }
-
-    if (statusCacheKey) {
-      statusCacheRef.current.delete(statusCacheKey)
-    }
-
-    const reloadResult = await loadStatusPage({ page: 0, force: true })
-
-    if (!reloadResult.ok) {
-      return {
-        ok: false,
-        message: t('profile.error.statusSavedRefresh'),
-      }
-    }
-
-    setStatusError(null)
-
-    return {
-      ok: true,
-    }
-  }
-
-  const handleDeleteStatus = async (itemId: string) => {
-    if (!editableProfile) {
-      return {
-        ok: false,
-        message: t('profile.error.identifyStatusDelete'),
-      }
-    }
-
-    const { error } = await deleteGameStatus({
-      userId: editableProfile.id,
-      statusId: itemId,
-    })
-
-    if (error) {
-      return {
-        ok: false,
-        message: getGameStatusErrorMessage(error, 'delete', true),
-      }
-    }
-
-    const nextPageState = {
-      ...statusPageState,
-      totalCount:
-        statusPageState.totalCount === null ? null : Math.max(statusPageState.totalCount - 1, 0),
-    }
-
-    setStatusGames(currentItems => {
-      const nextItems = currentItems.filter(item => item.id !== itemId)
-      if (statusCacheKey) {
-        statusCacheRef.current.set(statusCacheKey, createCachedCollection(nextItems, nextPageState))
-      }
-      return nextItems
-    })
-    setStatusPageState(nextPageState)
-    setStatusError(null)
-
-    return {
-      ok: true,
-    }
-  }
-
-  const handleDeleteWishlistItem = async (itemId: string) => {
-    if (!editableProfile) {
-      return {
-        ok: false,
-        message: t('profile.error.identifyWishlistDelete'),
-      }
-    }
-
-    const { error } = await deleteWishlistEntry({
-      userId: editableProfile.id,
-      wishlistEntryId: itemId,
-    })
-
-    if (error) {
-      return {
-        ok: false,
-        message: getWishlistErrorMessage(error, 'delete', true),
-      }
-    }
-
-    const nextPageState = {
-      ...wishlistPageState,
-      totalCount:
-        wishlistPageState.totalCount === null
-          ? null
-          : Math.max(wishlistPageState.totalCount - 1, 0),
-    }
-
-    setWishlistGames(currentItems => {
-      const nextItems = currentItems.filter(item => item.id !== itemId)
-      if (wishlistCacheKey) {
-        wishlistCacheRef.current.set(wishlistCacheKey, createCachedCollection(nextItems, nextPageState))
-      }
-      return nextItems
-    })
-    setWishlistPageState(nextPageState)
-    setWishlistError(null)
-
-    return {
-      ok: true,
-    }
-  }
-
-  const handleSaveTopFive = async (entries: TopFiveStoredEntry[]) => {
-    if (!editableProfile) {
-      return {
-        ok: false,
-        message: t('profile.error.identifyTopFiveUpdate'),
-      }
-    }
-
-    const nextPrivacySettings = mergeTopFiveEntriesIntoPrivacySettings(
-      editableProfile.configuracoes_privacidade,
-      entries
-    )
-
-    const { data, error } = await updateOwnProfile({
-      configuracoes_privacidade: nextPrivacySettings,
-    })
-
-    if (error || !data) {
-      return {
-        ok: false,
-        message: getProfileUpdateErrorMessage(error),
-      }
-    }
-
-    return {
-      ok: true,
-    }
-  }
-
-  const handleDeleteReview = async (reviewId: string) => {
-    if (!editableProfile) {
-      return {
-        ok: false,
-        message: t('profile.error.identifyReviewDelete'),
-      }
-    }
-
-    const result = await deleteReview({
-      userId: editableProfile.id,
-      reviewId,
-    })
-
-    if (!result.ok) {
-      return {
-        ok: false,
-        message: getReviewErrorMessage(result.error, 'delete', true),
-      }
-    }
-
-    const nextPageState = {
-      ...reviewsPageState,
-      totalCount:
-        reviewsPageState.totalCount === null ? null : Math.max(reviewsPageState.totalCount - 1, 0),
-    }
-
-    setUserReviews(currentReviews => {
-      const nextReviews = currentReviews.filter(currentReview => currentReview.id !== reviewId)
-      if (reviewsCacheKey) {
-        reviewsCacheRef.current.set(reviewsCacheKey, createCachedCollection(nextReviews, nextPageState))
-      }
-      return nextReviews
-    })
-    setReviewsPageState(nextPageState)
-    setReviewsError(null)
-
-    return {
-      ok: true,
-    }
-  }
-
-  const handleOpenConnectionsModal = (kind: FollowListKind) => {
-    const totalItems = kind === 'followers' ? followState.followersCount : followState.followingCount
-
-    if (isRestrictedPublicView || followLoading || totalItems <= 0) return
-
-    setConnectionsInitialTab(kind)
-    setIsConnectionsModalOpen(true)
-  }
-
-  const handleToggleFollow = async () => {
-    if (!user || !activeProfile || followSubmitting || user.id === activeProfile.id) return
-
-    setFollowSubmitting(true)
-    setFollowFeedback(null)
-
-    const result = followState.isFollowing
-      ? await unfollowUser(user.id, activeProfile.id)
-      : await followUser(user.id, activeProfile.id)
-
-    if (result.error) {
-      setFollowFeedback({
-        tone: 'error',
-        message: getFollowErrorMessage(result.error, followState.isFollowing ? 'unfollow' : 'follow'),
-      })
-      setFollowSubmitting(false)
-      return
-    }
-
-    setFollowState(result.data)
-    setFollowersRefreshKey(currentKey => currentKey + 1)
-    setPublicProfileRefreshKey(currentKey => currentKey + 1)
-    setFollowSubmitting(false)
-  }
-
-  const handleOpenProfileReportModal = () => {
-    if (!canReportProfile || profileReportLoading) return
-
-    setProfileReportFeedback(null)
-    setIsProfileReportModalOpen(true)
-  }
-
-  const handleCloseProfileReportModal = () => {
-    if (profileReportSubmitting) return
-    if (profileReportRemoving) return
-
-    setIsProfileReportModalOpen(false)
-    setProfileReportFeedback(null)
-  }
-
-  const handleSubmitProfileReport = async ({
-    reason,
-    description,
-  }: {
-    reason: ProfileReportReason
-    description: string
-  }) => {
-    if (!user || !activeProfile || isOwnerView) return
-
-    setProfileReportSubmitting(true)
-    setProfileReportFeedback(null)
-
-    const reportResult = await submitProfileReport({
-      reporterId: user.id,
-      reportedUserId: activeProfile.id,
-      reason,
-      description,
-    })
-
-    if (reportResult.error) {
-      setProfileReportFeedback({
-        tone: 'error',
-        message: getProfileReportErrorMessage(reportResult.error, 'submit'),
-      })
-      setProfileReportSubmitting(false)
-      return
-    }
-
-    if (reportResult.data) {
-      setCurrentProfileReport(reportResult.data)
-    }
-
-    setProfileReportFeedback({
-      tone: reportResult.status === 'already_exists' ? 'info' : 'success',
-      message:
-        reportResult.status === 'already_exists'
-          ? t('profile.reportAlreadyExists')
-          : t('profile.reportSent'),
-    })
-    setProfileReportSubmitting(false)
-  }
-
-  const handleRemoveProfileReport = async () => {
-    if (!user || !currentProfileReport) return
-
-    setProfileReportRemoving(true)
-    setProfileReportFeedback(null)
-
-    const result = await deleteProfileReport({
-      reporterId: user.id,
-      reportId: currentProfileReport.id,
-    })
-
-    if (result.error) {
-      setProfileReportFeedback({
-        tone: 'error',
-        message: getProfileReportErrorMessage(result.error, 'delete'),
-      })
-      setProfileReportRemoving(false)
-      return
-    }
-
-    setCurrentProfileReport(null)
-    setProfileReportFeedback({
-      tone: 'success',
-      message: t('profile.reportRemoved'),
-    })
-    setProfileReportRemoving(false)
-  }
 
   const avatarContent = (
     <UserAvatar
@@ -2440,7 +915,7 @@ export function ProfilePage() {
             followersCount={followState.followersCount}
             followingCount={followState.followingCount}
             followersRefreshKey={followersRefreshKey}
-            onClose={() => setIsConnectionsModalOpen(false)}
+            onClose={closeConnectionsModal}
             onRefreshFollowState={refreshFollowState}
           />
         ) : null}

@@ -1,5 +1,6 @@
 import { supabase } from '../supabase-client'
 import { translate } from '../i18n'
+import type { Database } from '../types/supabase'
 import {
   normalizeReviewError,
   type ReviewError,
@@ -11,6 +12,8 @@ import {
   getReactionSummaryStates,
   toggleContentReaction,
   type CurrentUserReportSummary,
+  type ReportReason,
+  type ReportStatus,
   type ReviewReactionState,
 } from './reviewInteractionsService'
 
@@ -83,6 +86,46 @@ export interface GameRatingSummary {
 interface ServiceResult<T> {
   data: T
   error: ReviewError | null
+}
+
+export interface GameReviewsPageOptions {
+  currentUserId?: string | null
+  limit?: number
+  offset?: number
+  initialCommentsLimit?: number
+}
+
+export interface ReviewCommentsPageOptions {
+  currentUserId?: string | null
+  limit?: number
+  offset?: number
+}
+
+export interface GameReviewsPageResult extends ServiceResult<ReviewItem[]> {
+  totalCount: number | null
+  hasMore: boolean
+  nextOffset: number | null
+  commentTotals: Record<string, number>
+  fallbackUsed?: boolean
+}
+
+export interface ReviewCommentsPageResult extends ServiceResult<ReviewComment[]> {
+  totalCount: number | null
+  hasMore: boolean
+  nextOffset: number | null
+  fallbackUsed?: boolean
+}
+
+export interface GameReviewAnchor {
+  targetType: 'review' | 'comment'
+  reviewId: string
+  commentId: string | null
+  reviewOffset: number
+  commentOffset: number | null
+}
+
+export interface GameReviewAnchorResult extends ServiceResult<GameReviewAnchor | null> {
+  fallbackUsed?: boolean
 }
 
 interface SaveReviewParams {
@@ -190,6 +233,13 @@ interface GameRatingSummaryRow {
   average_rating: number | string | null
 }
 
+type GameReviewPageRow =
+  Database['public']['Functions']['get_game_reviews_page']['Returns'][number]
+type ReviewCommentPageRow =
+  Database['public']['Functions']['get_review_comments_page']['Returns'][number]
+type GameReviewAnchorRow =
+  Database['public']['Functions']['get_game_review_anchor']['Returns'][number]
+
 interface SaveReviewResult {
   status: 'created' | 'updated' | 'error'
   error: ReviewError | null
@@ -227,6 +277,16 @@ const GAME_REVIEW_SELECT = `
   )
 `
 
+const REVIEW_COMMENT_SELECT = `
+  id,
+  usuario_id,
+  review_id,
+  texto,
+  data_comentario,
+  editado_em,
+  usuario:usuarios(id, username, avatar_path)
+`
+
 const PROFILE_REVIEW_SELECT = `
   id,
   usuario_id,
@@ -238,6 +298,18 @@ const PROFILE_REVIEW_SELECT = `
   editado_em,
   usuario:usuarios(id, username, avatar_path),
   jogo:jogos(id, titulo, capa_url)
+`
+
+const OWN_GAME_REVIEW_SELECT = `
+  id,
+  usuario_id,
+  jogo_id,
+  nota,
+  texto_review,
+  curtidas,
+  data_publicacao,
+  editado_em,
+  usuario:usuarios(id, username, avatar_path)
 `
 
 const RECENT_REVIEW_ACTIVITY_SELECT = `
@@ -255,6 +327,9 @@ const GAME_RATING_SUMMARY_SELECT = `
 `
 
 const DEFAULT_PROFILE_REVIEWS_PAGE_SIZE = 6
+const DEFAULT_GAME_REVIEWS_PAGE_SIZE = 3
+const DEFAULT_REVIEW_COMMENTS_PAGE_SIZE = 2
+const MAX_GAME_REVIEW_READ_PAGE_SIZE = 20
 
 function resolveSingleRelation<T>(value: T | T[] | null | undefined) {
   if (Array.isArray(value)) return value[0] || null
@@ -269,6 +344,49 @@ function normalizeOptionalText(value: string | null | undefined) {
 function normalizeNumber(value: number | string | null | undefined) {
   const normalizedValue = Number(value)
   return Number.isFinite(normalizedValue) ? normalizedValue : null
+}
+
+function normalizeReadPageValue(value: number | undefined, fallback: number) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return fallback
+  return Math.min(Math.max(Math.trunc(value), 1), MAX_GAME_REVIEW_READ_PAGE_SIZE)
+}
+
+function normalizeReadOffset(value: number | undefined) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 0
+  return Math.max(Math.trunc(value), 0)
+}
+
+function isMissingReviewReadRpc(error: ReviewError | null) {
+  return error?.code === 'PGRST202' || error?.code === '42883'
+}
+
+function normalizeCurrentUserReport(
+  targetType: 'review' | 'comment',
+  row: {
+    current_user_report_id: string | null
+    current_user_report_reason: string | null
+    current_user_report_description: string | null
+    current_user_report_status: string | null
+    current_user_report_created_at: string | null
+  }
+): CurrentUserReportSummary | null {
+  if (
+    !row.current_user_report_id ||
+    !row.current_user_report_reason ||
+    !row.current_user_report_status ||
+    !row.current_user_report_created_at
+  ) {
+    return null
+  }
+
+  return {
+    id: row.current_user_report_id,
+    targetType,
+    reason: row.current_user_report_reason as ReportReason,
+    description: normalizeOptionalText(row.current_user_report_description),
+    status: row.current_user_report_status as ReportStatus,
+    createdAt: row.current_user_report_created_at,
+  }
 }
 
 function validateSaveReviewParams({ userId, gameId, nota }: SaveReviewParams): ReviewError | null {
@@ -401,6 +519,61 @@ function normalizeReviewItem(
   }
 }
 
+function normalizeGameReviewPageRow(
+  row: GameReviewPageRow,
+  currentUserId: string | null | undefined,
+  comments: ReviewComment[]
+): ReviewItem {
+  return {
+    id: row.review_id,
+    usuario_id: row.author_id,
+    jogo_id: row.game_id,
+    nota: Number(row.score),
+    texto_review: normalizeOptionalText(row.review_text),
+    curtidas: Math.max(Number(row.likes_count) || 0, 0),
+    data_publicacao: row.published_at,
+    editado_em: row.edited_at,
+    usuario: {
+      id: row.author_id,
+      username: row.author_username?.trim() || row.author_name?.trim() || 'Usuario',
+      avatar_path: row.author_avatar_path,
+    },
+    comentarios: comments,
+    likedByCurrentUser: Boolean(row.liked_by_current_user),
+    canLike: Boolean(currentUserId) && currentUserId !== row.author_id,
+    dislikes: Math.max(Number(row.dislikes_count) || 0, 0),
+    dislikedByCurrentUser: Boolean(row.disliked_by_current_user),
+    canDislike: Boolean(currentUserId) && currentUserId !== row.author_id,
+    currentUserReport: normalizeCurrentUserReport('review', row),
+  }
+}
+
+function normalizeReviewCommentPageRow(
+  row: ReviewCommentPageRow,
+  currentUserId?: string | null
+): ReviewComment {
+  return {
+    id: row.comment_id,
+    usuario_id: row.author_id,
+    review_id: row.review_id,
+    texto: row.comment_text,
+    data_comentario: row.published_at,
+    editado_em: row.edited_at,
+    usuario: {
+      id: row.author_id,
+      username: row.author_username?.trim() || row.author_name?.trim() || 'Usuario',
+      avatar_path: row.author_avatar_path,
+    },
+    curtidas: Math.max(Number(row.likes_count) || 0, 0),
+    likedByCurrentUser: Boolean(row.liked_by_current_user),
+    canLike: Boolean(currentUserId) && currentUserId !== row.author_id,
+    dislikes: Math.max(Number(row.dislikes_count) || 0, 0),
+    dislikedByCurrentUser: Boolean(row.disliked_by_current_user),
+    canDislike: Boolean(currentUserId) && currentUserId !== row.author_id,
+    currentUserReport: normalizeCurrentUserReport('comment', row),
+  }
+}
+
 function normalizeProfileReviewItem(row: ReviewRow & {
   usuario_id: string
   jogo_id: number
@@ -456,6 +629,337 @@ function normalizeRecentReviewActivity(row: RecentReviewActivityRow): RecentRevi
     summary: 'Publicou uma review na comunidade.',
     score: row.nota ?? null,
     publishedAt: row.data_publicacao,
+  }
+}
+
+async function getReviewCommentsPageFromLegacyQuery(
+  reviewId: string,
+  options: Required<Pick<ReviewCommentsPageOptions, 'limit' | 'offset'>> & {
+    currentUserId?: string | null
+  }
+): Promise<ReviewCommentsPageResult> {
+  const { data, error } = await supabase
+    .from('comentarios')
+    .select(REVIEW_COMMENT_SELECT)
+    .eq('review_id', reviewId)
+    .order('data_comentario', { ascending: false })
+
+  if (error) {
+    return {
+      data: [],
+      error: normalizeReviewError(error, 'Nao foi possivel carregar os comentarios desta review.'),
+      totalCount: null,
+      hasMore: false,
+      nextOffset: null,
+      fallbackUsed: true,
+    }
+  }
+
+  const comments = ((data || []) as ReviewCommentRow[])
+    .map(row => normalizeReviewComment(row, options.currentUserId))
+
+  if (comments.length === 0) {
+    return {
+      data: [],
+      error: null,
+      totalCount: 0,
+      hasMore: false,
+      nextOffset: null,
+      fallbackUsed: true,
+    }
+  }
+
+  const commentIds = comments.map(comment => comment.id)
+  const [reactionStatesResult, reportsResult] = await Promise.all([
+    getReactionSummaryStates([], commentIds),
+    getCurrentUserContentReports([], commentIds, options.currentUserId),
+  ])
+  const sortedComments = sortCommentsByRelevance(comments.map(comment => {
+    const reactionState = reactionStatesResult.data.comments.get(comment.id)
+
+    return {
+      ...comment,
+      curtidas: reactionStatesResult.error
+        ? comment.curtidas
+        : reactionState?.curtidas ?? comment.curtidas,
+      likedByCurrentUser: reactionStatesResult.error
+        ? comment.likedByCurrentUser
+        : reactionState?.likedByCurrentUser ?? comment.likedByCurrentUser,
+      dislikes: reactionStatesResult.error
+        ? comment.dislikes
+        : reactionState?.dislikes ?? comment.dislikes,
+      dislikedByCurrentUser: reactionStatesResult.error
+        ? comment.dislikedByCurrentUser
+        : reactionState?.dislikedByCurrentUser ?? comment.dislikedByCurrentUser,
+      currentUserReport: reportsResult.error
+        ? comment.currentUserReport
+        : reportsResult.data.reportsByCommentId.get(comment.id) || comment.currentUserReport,
+    }
+  }))
+  const page = sortedComments.slice(options.offset, options.offset + options.limit)
+  const nextOffset = options.offset + page.length
+  const hasMore = nextOffset < sortedComments.length
+
+  return {
+    data: page,
+    error: reactionStatesResult.error || reportsResult.error,
+    totalCount: sortedComments.length,
+    hasMore,
+    nextOffset: hasMore ? nextOffset : null,
+    fallbackUsed: true,
+  }
+}
+
+export async function getReviewCommentsPage(
+  reviewId: string,
+  pageOptions: ReviewCommentsPageOptions = {}
+): Promise<ReviewCommentsPageResult> {
+  const limit = normalizeReadPageValue(pageOptions.limit, DEFAULT_REVIEW_COMMENTS_PAGE_SIZE)
+  const offset = normalizeReadOffset(pageOptions.offset)
+
+  try {
+    const { data, error } = await supabase.rpc('get_review_comments_page', {
+      p_review_id: reviewId,
+      p_limit: limit,
+      p_offset: offset,
+    })
+
+    if (error) {
+      const normalizedError = normalizeReviewError(
+        error,
+        'Nao foi possivel carregar os comentarios desta review.'
+      )
+
+      if (isMissingReviewReadRpc(normalizedError)) {
+        return getReviewCommentsPageFromLegacyQuery(reviewId, {
+          currentUserId: pageOptions.currentUserId,
+          limit,
+          offset,
+        })
+      }
+
+      return {
+        data: [],
+        error: normalizedError,
+        totalCount: null,
+        hasMore: false,
+        nextOffset: null,
+      }
+    }
+
+    const rows = (data || []) as ReviewCommentPageRow[]
+    const comments = rows.map(row => normalizeReviewCommentPageRow(row, pageOptions.currentUserId))
+    const totalCount = rows[0]?.total_count ?? (offset === 0 ? 0 : null)
+    const nextOffset = offset + comments.length
+    const hasMore = totalCount === null
+      ? comments.length === limit
+      : nextOffset < totalCount
+
+    return {
+      data: comments,
+      error: null,
+      totalCount,
+      hasMore,
+      nextOffset: hasMore ? nextOffset : null,
+    }
+  } catch (error) {
+    return {
+      data: [],
+      error: normalizeReviewError(
+        error,
+        'Erro inesperado ao carregar os comentarios desta review.'
+      ),
+      totalCount: null,
+      hasMore: false,
+      nextOffset: null,
+    }
+  }
+}
+
+export async function getGameReviewsPage(
+  gameId: number,
+  pageOptions: GameReviewsPageOptions = {}
+): Promise<GameReviewsPageResult> {
+  const limit = normalizeReadPageValue(pageOptions.limit, DEFAULT_GAME_REVIEWS_PAGE_SIZE)
+  const offset = normalizeReadOffset(pageOptions.offset)
+  const initialCommentsLimit = normalizeReadPageValue(
+    pageOptions.initialCommentsLimit,
+    DEFAULT_REVIEW_COMMENTS_PAGE_SIZE
+  )
+
+  try {
+    const { data, error } = await supabase.rpc('get_game_reviews_page', {
+      p_game_id: gameId,
+      p_limit: limit,
+      p_offset: offset,
+    })
+
+    if (error) {
+      const normalizedError = normalizeReviewError(
+        error,
+        'Nao foi possivel carregar as reviews deste jogo.'
+      )
+
+      if (isMissingReviewReadRpc(normalizedError)) {
+        const legacyResult = await getReviewsByGameId(gameId, pageOptions.currentUserId)
+        const reviews = legacyResult.data
+          .slice(offset, offset + limit)
+          .map(review => ({
+            ...review,
+            comentarios: review.comentarios.slice(0, initialCommentsLimit),
+          }))
+        const commentTotals = Object.fromEntries(
+          legacyResult.data
+            .slice(offset, offset + limit)
+            .map(review => [review.id, review.comentarios.length])
+        )
+        const nextOffset = offset + reviews.length
+        const hasMore = nextOffset < legacyResult.data.length
+
+        return {
+          data: reviews,
+          error: legacyResult.error,
+          totalCount: legacyResult.data.length,
+          hasMore,
+          nextOffset: hasMore ? nextOffset : null,
+          commentTotals,
+          fallbackUsed: true,
+        }
+      }
+
+      return {
+        data: [],
+        error: normalizedError,
+        totalCount: null,
+        hasMore: false,
+        nextOffset: null,
+        commentTotals: {},
+      }
+    }
+
+    const rows = (data || []) as GameReviewPageRow[]
+    const commentPageResults = await Promise.all(rows.map(row => (
+      Number(row.comments_count) > 0
+        ? getReviewCommentsPage(row.review_id, {
+            currentUserId: pageOptions.currentUserId,
+            limit: initialCommentsLimit,
+            offset: 0,
+          })
+        : Promise.resolve<ReviewCommentsPageResult>({
+            data: [],
+            error: null,
+            totalCount: 0,
+            hasMore: false,
+            nextOffset: null,
+          })
+    )))
+    const reviews = rows.map((row, index) => (
+      normalizeGameReviewPageRow(row, pageOptions.currentUserId, commentPageResults[index].data)
+    ))
+    const commentTotals = Object.fromEntries(rows.map((row, index) => [
+      row.review_id,
+      commentPageResults[index].totalCount ?? Math.max(Number(row.comments_count) || 0, 0),
+    ]))
+    const totalCount = rows[0]?.total_count ?? (offset === 0 ? 0 : null)
+    const nextOffset = offset + reviews.length
+    const hasMore = totalCount === null
+      ? reviews.length === limit
+      : nextOffset < totalCount
+
+    return {
+      data: reviews,
+      error: commentPageResults.find(result => result.error)?.error || null,
+      totalCount,
+      hasMore,
+      nextOffset: hasMore ? nextOffset : null,
+      commentTotals,
+      fallbackUsed: commentPageResults.some(result => result.fallbackUsed),
+    }
+  } catch (error) {
+    return {
+      data: [],
+      error: normalizeReviewError(error, 'Erro inesperado ao carregar as reviews deste jogo.'),
+      totalCount: null,
+      hasMore: false,
+      nextOffset: null,
+      commentTotals: {},
+    }
+  }
+}
+
+export async function resolveGameReviewAnchor(
+  gameId: number,
+  target: { reviewId?: string | null; commentId?: string | null }
+): Promise<GameReviewAnchorResult> {
+  try {
+    const { data, error } = await supabase.rpc('get_game_review_anchor', {
+      p_game_id: gameId,
+      p_review_id: target.reviewId || null,
+      p_comment_id: target.commentId || null,
+    })
+
+    if (error) {
+      const normalizedError = normalizeReviewError(
+        error,
+        'Nao foi possivel localizar a contribuicao solicitada.'
+      )
+
+      if (isMissingReviewReadRpc(normalizedError)) {
+        const legacyResult = await getReviewsByGameId(gameId)
+        const reviewIndex = target.commentId
+          ? legacyResult.data.findIndex(review => (
+              review.comentarios.some(comment => comment.id === target.commentId)
+            ))
+          : legacyResult.data.findIndex(review => review.id === target.reviewId)
+
+        if (reviewIndex < 0) {
+          return {
+            data: null,
+            error: legacyResult.error,
+            fallbackUsed: true,
+          }
+        }
+
+        const review = legacyResult.data[reviewIndex]
+        const commentIndex = target.commentId
+          ? review.comentarios.findIndex(comment => comment.id === target.commentId)
+          : -1
+
+        return {
+          data: {
+            targetType: target.commentId ? 'comment' : 'review',
+            reviewId: review.id,
+            commentId: target.commentId || null,
+            reviewOffset: reviewIndex,
+            commentOffset: commentIndex >= 0 ? commentIndex : null,
+          },
+          error: legacyResult.error,
+          fallbackUsed: true,
+        }
+      }
+
+      return { data: null, error: normalizedError }
+    }
+
+    const row = ((data || []) as GameReviewAnchorRow[])[0]
+    if (!row) return { data: null, error: null }
+
+    return {
+      data: {
+        targetType: row.target_type === 'comment' ? 'comment' : 'review',
+        reviewId: row.review_id,
+        commentId: row.comment_id,
+        reviewOffset: Math.max(Number(row.review_offset) || 0, 0),
+        commentOffset:
+          row.comment_offset === null ? null : Math.max(Number(row.comment_offset) || 0, 0),
+      },
+      error: null,
+    }
+  } catch (error) {
+    return {
+      data: null,
+      error: normalizeReviewError(error, 'Erro inesperado ao localizar a contribuicao.'),
+    }
   }
 }
 
@@ -551,6 +1055,70 @@ export async function getReviewsByGameId(
     return {
       data: [],
       error: normalizeReviewError(error, 'Erro inesperado ao carregar as reviews deste jogo.'),
+    }
+  }
+}
+
+export async function getReviewByGameAndUserId(
+  gameId: number,
+  userId: string
+): Promise<ServiceResult<ReviewItem | null>> {
+  try {
+    const { data, error } = await supabase
+      .from('avaliacoes')
+      .select(OWN_GAME_REVIEW_SELECT)
+      .eq('jogo_id', gameId)
+      .eq('usuario_id', userId)
+      .maybeSingle()
+
+    if (error) {
+      return {
+        data: null,
+        error: normalizeReviewError(error, 'Nao foi possivel carregar a sua review deste jogo.'),
+      }
+    }
+
+    if (!data || !isCompleteReviewRow(data as ReviewRow)) {
+      return { data: null, error: null }
+    }
+
+    const review = normalizeReviewItem(data as ReviewRow & {
+      usuario_id: string
+      jogo_id: number
+      nota: number | string
+      data_publicacao: string
+    }, userId)
+    const [reactionStatesResult, reportsResult] = await Promise.all([
+      getReactionSummaryStates([review.id], []),
+      getCurrentUserContentReports([review.id], [], userId),
+    ])
+    const reactionState = reactionStatesResult.data.reviews.get(review.id)
+
+    return {
+      data: {
+        ...review,
+        curtidas: reactionStatesResult.error
+          ? review.curtidas
+          : reactionState?.curtidas ?? review.curtidas,
+        likedByCurrentUser: reactionStatesResult.error
+          ? review.likedByCurrentUser
+          : reactionState?.likedByCurrentUser ?? review.likedByCurrentUser,
+        dislikes: reactionStatesResult.error
+          ? review.dislikes
+          : reactionState?.dislikes ?? review.dislikes,
+        dislikedByCurrentUser: reactionStatesResult.error
+          ? review.dislikedByCurrentUser
+          : reactionState?.dislikedByCurrentUser ?? review.dislikedByCurrentUser,
+        currentUserReport: reportsResult.error
+          ? null
+          : reportsResult.data.reportsByReviewId.get(review.id) || null,
+      },
+      error: reactionStatesResult.error || reportsResult.error,
+    }
+  } catch (error) {
+    return {
+      data: null,
+      error: normalizeReviewError(error, 'Erro inesperado ao carregar a sua review.'),
     }
   }
 }

@@ -2,12 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const supabaseMocks = vi.hoisted(() => ({
   from: vi.fn(),
+  rpc: vi.fn(),
   logPerformanceTiming: vi.fn(),
 }))
 
 vi.mock('../supabase-client', () => ({
   supabase: {
     from: supabaseMocks.from,
+    rpc: supabaseMocks.rpc,
   },
 }))
 
@@ -103,15 +105,38 @@ const statusRows = [
   },
 ]
 
+const statusRpcRows = statusRows.map(row => {
+  const game = Array.isArray(row.jogo) ? row.jogo[0] : row.jogo
+
+  return {
+    id: row.id,
+    usuario_id: row.usuario_id,
+    jogo_id: row.jogo_id,
+    status: row.status,
+    created_at: row.created_at,
+    favorito: row.favorito,
+    game_title: game.titulo,
+    game_cover_url: game.capa_url,
+    game_developer: game.desenvolvedora,
+    game_genres: game.generos,
+    game_release_date: game.data_lancamento,
+    game_platforms: game.plataformas,
+    total_count: 3,
+  }
+})
+
 describe('game status service', () => {
   beforeEach(() => {
     supabaseMocks.from.mockReset()
+    supabaseMocks.rpc.mockReset()
     supabaseMocks.logPerformanceTiming.mockReset()
   })
 
-  it('sorts the complete authorized set by title before slicing the requested page', async () => {
-    const query = createAwaitableQuery({ data: statusRows, error: null, count: 3 })
-    supabaseMocks.from.mockReturnValue(query)
+  it('uses the paginated RPC and maps its game fields to the existing item shape', async () => {
+    supabaseMocks.rpc.mockResolvedValue({
+      data: [statusRpcRows[2]],
+      error: null,
+    })
 
     const result = await getGameStatusesPageByUserId('user-1', {
       page: 1,
@@ -119,33 +144,108 @@ describe('game status service', () => {
       sort: 'title',
     })
 
-    expect(query.eq).toHaveBeenCalledWith('usuario_id', 'user-1')
-    expect(query.range).not.toHaveBeenCalled()
+    expect(supabaseMocks.rpc).toHaveBeenCalledWith('get_profile_game_status_page', {
+      p_user_id: 'user-1',
+      p_statuses: null,
+      p_sort: 'title',
+      p_limit: 1,
+      p_offset: 1,
+    })
+    expect(supabaseMocks.from).not.toHaveBeenCalled()
     expect(result.data.map(item => item.jogo?.titulo)).toEqual(['Beta'])
+    expect(result.data[0]?.jogo).toMatchObject({
+      id: 2,
+      title: 'Beta',
+      titulo: 'Beta',
+      coverUrl: null,
+      capa_url: null,
+      developer: [],
+      genres: [],
+      platforms: [],
+    })
     expect(result).toMatchObject({
       error: null,
       totalCount: 3,
       hasMore: true,
       nextPage: 2,
+      timings: { requestCount: 1 },
     })
   })
 
-  it('keeps database pagination for recent ordering', async () => {
-    const query = createAwaitableQuery({ data: [statusRows[0]], error: null, count: 3 })
-    supabaseMocks.from.mockReturnValue(query)
+  it('passes filters and zero-based pagination to the RPC', async () => {
+    supabaseMocks.rpc.mockResolvedValue({ data: [statusRpcRows[0]], error: null })
 
     const result = await getGameStatusesPageByUserId('user-1', {
       page: 1,
       pageSize: 1,
       sort: 'recent',
+      statuses: ['jogando'],
     })
 
-    expect(query.order).toHaveBeenCalledWith('created_at', {
-      ascending: false,
-      nullsFirst: false,
+    expect(supabaseMocks.rpc).toHaveBeenCalledWith('get_profile_game_status_page', {
+      p_user_id: 'user-1',
+      p_statuses: ['jogando'],
+      p_sort: 'recent',
+      p_limit: 1,
+      p_offset: 1,
     })
-    expect(query.range).toHaveBeenCalledWith(1, 1)
     expect(result.data).toHaveLength(1)
+  })
+
+  it.each(['PGRST202', '42883'])(
+    'falls back to the legacy query only when the RPC is unavailable (%s)',
+    async code => {
+      const query = createAwaitableQuery({ data: [statusRows[0]], error: null, count: 3 })
+      supabaseMocks.rpc.mockResolvedValue({
+        data: null,
+        error: { code, message: 'RPC unavailable' },
+      })
+      supabaseMocks.from.mockReturnValue(query)
+
+      const result = await getGameStatusesPageByUserId('user-1', {
+        page: 1,
+        pageSize: 1,
+        sort: 'recent',
+      })
+
+      expect(supabaseMocks.from).toHaveBeenCalledWith('status_jogo')
+      expect(query.range).toHaveBeenCalledWith(1, 1)
+      expect(result).toMatchObject({
+        error: null,
+        totalCount: 3,
+        timings: { requestCount: 2, fallbackUsed: true },
+      })
+    }
+  )
+
+  it('returns non-missing RPC errors without querying the legacy tables', async () => {
+    supabaseMocks.rpc.mockResolvedValue({
+      data: null,
+      error: {
+        code: '42501',
+        message: 'permission denied',
+        details: 'RLS rejected the request',
+      },
+    })
+
+    const result = await getGameStatusesPageByUserId('user-1')
+
+    expect(supabaseMocks.from).not.toHaveBeenCalled()
+    expect(result).toMatchObject({
+      data: [],
+      error: {
+        code: '42501',
+        message: 'permission denied',
+        details: 'RLS rejected the request',
+      },
+      totalCount: null,
+      timings: { requestCount: 1 },
+    })
+    expect(supabaseMocks.logPerformanceTiming).toHaveBeenCalledWith(
+      'profile.status.page',
+      expect.any(Number),
+      expect.objectContaining({ fallbackUsed: false, hasError: true })
+    )
   })
 
   it('updates an existing status scoped to both user and status id', async () => {

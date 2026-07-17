@@ -87,8 +87,10 @@ function renderCard(overrides: Partial<ComponentProps<typeof GameReviewCard>> = 
     review,
     currentUserId: 'viewer-1',
     visibleCommentCount: 1,
+    totalCommentCount: 2,
     commentText: '',
     isSubmittingComment: false,
+    isLoadingComments: false,
     isReviewReactionPending: false,
     isReviewDeletePending: false,
     pendingCommentReactionIds: [],
@@ -150,5 +152,25 @@ describe('GameReviewCard', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'game.details.deleteComment' }))
     expect(onDeleteComment).toHaveBeenCalledWith('review-1', review.comentarios[0])
+  })
+
+  it('usa o total remoto para mostrar mais e bloqueia novo clique durante a carga', () => {
+    const onExpandComments = vi.fn()
+    renderCard({
+      totalCommentCount: 6,
+      visibleCommentCount: 2,
+      onExpandComments,
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'game.details.moreCommentsAria:4' }))
+    expect(onExpandComments).toHaveBeenCalledWith('review-1', 6)
+
+    cleanup()
+    renderCard({
+      totalCommentCount: 6,
+      visibleCommentCount: 2,
+      isLoadingComments: true,
+    })
+    expect(screen.getByRole('button', { name: 'game.details.moreCommentsAria:4' })).toBeDisabled()
   })
 })

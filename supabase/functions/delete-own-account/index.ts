@@ -1,5 +1,10 @@
 import { createClient, type SupabaseClient, type User } from '@supabase/supabase-js'
 import { resolveCors } from '../_shared/cors.ts'
+import {
+  extractBearerToken,
+  revokeGlobalSessions,
+  validateWithTemporarySession,
+} from './auth.ts'
 
 declare const Deno: {
   env: {
@@ -163,12 +168,8 @@ async function readDeleteAccountBody(request: Request): Promise<DeleteAccountBod
 async function getAuthenticatedUser(
   supabaseUrl: string,
   anonKey: string,
-  authorizationHeader: string | null
+  accessToken: string
 ) {
-  if (!authorizationHeader) {
-    return { user: null, error: 'not_authenticated' as const }
-  }
-
   const userClient = createClient(supabaseUrl, anonKey, {
     auth: {
       persistSession: false,
@@ -177,7 +178,7 @@ async function getAuthenticatedUser(
     },
     global: {
       headers: {
-        Authorization: authorizationHeader,
+        Authorization: `Bearer ${accessToken}`,
       },
     },
   })
@@ -201,6 +202,8 @@ async function validateCurrentPassword(
     return false
   }
 
+  const email = user.email.trim().toLowerCase()
+
   const validationClient = createClient(supabaseUrl, anonKey, {
     auth: {
       persistSession: false,
@@ -209,16 +212,21 @@ async function validateCurrentPassword(
     },
   })
 
-  const { error } = await validationClient.auth.signInWithPassword({
-    email: user.email.trim().toLowerCase(),
-    password: currentPassword,
+  return validateWithTemporarySession({
+    signIn: () => validationClient.auth.signInWithPassword({
+      email,
+      password: currentPassword,
+    }),
+    signOut: () => validationClient.auth.signOut({ scope: 'local' }),
+    onCleanupError: error => logEdgeError(
+      'delete-own-account password validation session cleanup error',
+      error,
+      {
+        step: 'password_validation_session_cleanup',
+        userId: user.id,
+      }
+    ),
   })
-
-  if (!error) {
-    await validationClient.auth.signOut()
-  }
-
-  return !error
 }
 
 async function assertUsernameMatches(
@@ -455,10 +463,16 @@ Deno.serve(async request => {
     return respond(500, { error: 'server_misconfigured' })
   }
 
+  const accessToken = extractBearerToken(request.headers.get('Authorization'))
+
+  if (!accessToken) {
+    return respond(401, { error: 'not_authenticated' })
+  }
+
   const { user, error: authError } = await getAuthenticatedUser(
     supabaseUrl,
     anonKey,
-    request.headers.get('Authorization')
+    accessToken
   )
 
   if (authError || !user) {
@@ -537,6 +551,19 @@ Deno.serve(async request => {
     }
 
     return respond(500, { error: 'data_cleanup_failed' })
+  }
+
+  const sessionRevocationResult = await revokeGlobalSessions(
+    accessToken,
+    (token, scope) => adminClient.auth.admin.signOut(token, scope)
+  )
+
+  if (!sessionRevocationResult.ok) {
+    logEdgeError('delete-own-account auth session revocation error', sessionRevocationResult.error, {
+      step: 'auth_session_revocation',
+      userId: user.id,
+    })
+    return respond(500, { error: 'auth_delete_failed' })
   }
 
   const { error: deleteUserError } = await adminClient.auth.admin.deleteUser(user.id)

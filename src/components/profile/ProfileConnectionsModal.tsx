@@ -4,7 +4,7 @@ import { UserAvatar } from '../UserAvatar'
 import { useI18n } from '../../i18n/I18nContext'
 import {
   followUser,
-  getProfileFollowList,
+  getProfileFollowListPage,
   unfollowUser,
   type FollowListKind,
   type FollowListUser,
@@ -31,8 +31,13 @@ interface FollowTabState {
   items: FollowListUser[]
   errorMessage: string | null
   isLoading: boolean
+  isLoadingMore: boolean
   hasLoaded: boolean
+  hasMore: boolean
+  nextOffset: number
 }
+
+const PROFILE_CONNECTIONS_PAGE_SIZE = 20
 
 const CONNECTION_TABS: Array<{
   kind: FollowListKind
@@ -47,15 +52,30 @@ function createEmptyTabState(): Record<FollowListKind, FollowTabState> {
       items: [],
       errorMessage: null,
       isLoading: false,
+      isLoadingMore: false,
       hasLoaded: false,
+      hasMore: false,
+      nextOffset: 0,
     },
     following: {
       items: [],
       errorMessage: null,
       isLoading: false,
+      isLoadingMore: false,
       hasLoaded: false,
+      hasMore: false,
+      nextOffset: 0,
     },
   }
+}
+
+function mergeFollowListUsers(
+  currentItems: FollowListUser[],
+  incomingItems: FollowListUser[]
+) {
+  return Array.from(
+    new Map([...currentItems, ...incomingItems].map(user => [user.id, user])).values()
+  )
 }
 
 function getFollowListErrorMessage(
@@ -205,8 +225,9 @@ export function ProfileConnectionsModal({
   )
 
   const loadTab = useCallback(
-    async (kind: FollowListKind, options?: { force?: boolean }) => {
+    async (kind: FollowListKind, options?: { append?: boolean; force?: boolean }) => {
       const totalItems = kind === 'followers' ? followersCount : followingCount
+      const shouldAppend = Boolean(options?.append)
 
       if (totalItems <= 0) {
         requestIdsRef.current[kind] += 1
@@ -217,7 +238,10 @@ export function ProfileConnectionsModal({
             items: [],
             errorMessage: null,
             isLoading: false,
+            isLoadingMore: false,
             hasLoaded: true,
+            hasMore: false,
+            nextOffset: 0,
           },
         }))
         return
@@ -225,13 +249,20 @@ export function ProfileConnectionsModal({
 
       const currentTabState = tabStateRef.current[kind]
 
-      if (currentTabState.isLoading || (!options?.force && currentTabState.hasLoaded)) return
+      if (
+        (!options?.force && (currentTabState.isLoading || currentTabState.isLoadingMore)) ||
+        (!options?.force && !shouldAppend && currentTabState.hasLoaded) ||
+        (shouldAppend && !currentTabState.hasMore)
+      ) return
+
+      const offset = shouldAppend ? currentTabState.nextOffset : 0
 
       updateTabState(currentState => ({
         ...currentState,
         [kind]: {
           ...currentState[kind],
-          isLoading: true,
+          isLoading: !shouldAppend,
+          isLoadingMore: shouldAppend,
           errorMessage: null,
         },
       }))
@@ -239,7 +270,10 @@ export function ProfileConnectionsModal({
       const requestId = requestIdsRef.current[kind] + 1
       requestIdsRef.current[kind] = requestId
 
-      const result = await getProfileFollowList(profileId, kind, viewerId)
+      const result = await getProfileFollowListPage(profileId, kind, viewerId, {
+        limit: PROFILE_CONNECTIONS_PAGE_SIZE,
+        offset,
+      })
 
       if (requestIdsRef.current[kind] !== requestId) return
 
@@ -247,10 +281,19 @@ export function ProfileConnectionsModal({
       updateTabState(currentState => ({
         ...currentState,
         [kind]: {
-          items: result.data,
+          items: result.error
+            ? shouldAppend
+              ? currentState[kind].items
+              : []
+            : shouldAppend
+              ? mergeFollowListUsers(currentState[kind].items, result.data.items)
+              : result.data.items,
           errorMessage: result.error ? getFollowListErrorMessage(result.error, kind, t) : null,
           isLoading: false,
+          isLoadingMore: false,
           hasLoaded: true,
+          hasMore: result.error ? currentState[kind].hasMore : result.data.hasMore,
+          nextOffset: result.error ? currentState[kind].nextOffset : result.data.nextOffset,
         },
       }))
     },
@@ -557,6 +600,19 @@ export function ProfileConnectionsModal({
                     )
                   })}
                 </div>
+
+                {currentTabState.hasMore ? (
+                  <button
+                    type="button"
+                    className="profile-secondary-button profile-connections-load-more-button"
+                    onClick={() => void loadTab(activeTab, { append: true })}
+                    disabled={currentTabState.isLoadingMore}
+                  >
+                    {currentTabState.isLoadingMore
+                      ? t('connections.loadingMore')
+                      : t('connections.loadMore')}
+                  </button>
+                ) : null}
               </div>
             )}
           </section>

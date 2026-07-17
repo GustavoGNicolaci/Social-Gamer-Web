@@ -1,10 +1,12 @@
 import { supabase } from '../supabase-client'
 import type {
+  Database,
   GameStatusValue as SupabaseGameStatusValue,
   StatusJogoRow,
 } from '../types/supabase'
 import { getPerformanceNow, logPerformanceTiming } from '../utils/performanceDiagnostics'
 import type { CatalogGamePreview } from './gameCatalogService'
+import { normalizeGamePreview } from './gameAdapter'
 
 export type GameStatusValue = SupabaseGameStatusValue
 export type GameStatusSortValue = 'recent' | 'oldest' | 'favorites' | 'title'
@@ -75,6 +77,9 @@ type StatusGameRelation = StatusGame | StatusGame[] | null
 interface GameStatusRelationRow extends GameStatusEntry {
   jogo: StatusGameRelation
 }
+
+type ProfileGameStatusPageRow =
+  Database['public']['Functions']['get_profile_game_status_page']['Returns'][number]
 
 export const STATUS_VALUES: GameStatusValue[] = [
   'jogando',
@@ -210,6 +215,30 @@ function normalizeStatusRelationRow(row: GameStatusRelationRow): GameStatusItem 
     ...normalizeStatusRow(row),
     jogo: resolveStatusGame(row.jogo),
   }
+}
+
+function normalizeProfileGameStatusPageRow(row: ProfileGameStatusPageRow): GameStatusItem {
+  return {
+    id: row.id,
+    usuario_id: row.usuario_id,
+    jogo_id: row.jogo_id,
+    status: normalizeStatusValue(row.status),
+    created_at: row.created_at,
+    favorito: Boolean(row.favorito),
+    jogo: normalizeGamePreview({
+      id: row.jogo_id,
+      titulo: row.game_title,
+      capa_url: row.game_cover_url,
+      desenvolvedora: row.game_developer,
+      generos: row.game_genres,
+      data_lancamento: row.game_release_date,
+      plataformas: row.game_platforms,
+    }),
+  }
+}
+
+function isMissingProfileGameStatusPageRpc(error: GameStatusError) {
+  return error.code === 'PGRST202' || error.code === '42883'
 }
 
 function sortStatusItemsByDisplayOrder(items: GameStatusItem[], sort: GameStatusSortValue) {
@@ -405,6 +434,65 @@ async function getGameStatusesPageWithFallback(
   }
 }
 
+async function getGameStatusesPageFromLegacyQuery(
+  userId: string,
+  options: ReturnType<typeof normalizePageOptions>,
+  timings: ProfileQueryTimings
+): Promise<PaginatedServiceResult<GameStatusItem[]>> {
+  let query = supabase
+    .from('status_jogo')
+    .select(STATUS_RELATION_SELECT, { count: 'exact' })
+    .eq('usuario_id', userId)
+
+  if (options.statuses.length > 0) {
+    query = query.in('status', options.statuses)
+  }
+
+  if (options.sort === 'oldest') {
+    query = query.order('created_at', { ascending: true, nullsFirst: false })
+  } else if (options.sort === 'favorites') {
+    query = query
+      .order('favorito', { ascending: false })
+      .order('created_at', { ascending: false, nullsFirst: false })
+  } else {
+    query = query.order('created_at', { ascending: false, nullsFirst: false })
+  }
+
+  const queryStartedAt = getPerformanceNow()
+  // This path is retained only while the remote project may not have the RPC.
+  // PostgREST cannot sort parent rows globally by a nested title, so the title
+  // fallback still loads the authorized set before slicing it in the client.
+  const response = options.sort === 'title'
+    ? await query
+    : await query.range(options.from, options.to)
+  const { data, error, count } = response
+  timings.requestCount += 1
+  timings.queryMs += getPerformanceNow() - queryStartedAt
+
+  if (error) {
+    return getGameStatusesPageWithFallback(userId, options, timings)
+  }
+
+  const normalizeStartedAt = getPerformanceNow()
+  const sortedItems = sortStatusItemsByDisplayOrder(
+    ((data || []) as GameStatusRelationRow[])
+      .filter(isCompleteStatusRow)
+      .map(normalizeStatusRelationRow),
+    options.sort
+  )
+  const items = options.sort === 'title'
+    ? sortedItems.slice(options.from, options.to + 1)
+    : sortedItems
+  timings.normalizeMs += getPerformanceNow() - normalizeStartedAt
+
+  return {
+    data: items,
+    error: null,
+    ...buildPageMetadata(count, options.page, options.pageSize, items.length),
+    timings,
+  }
+}
+
 export async function getGameStatusesPageByUserId(
   userId: string,
   pageOptions: GameStatusPageOptions = {}
@@ -419,73 +507,70 @@ export async function getGameStatusesPageByUserId(
   }
 
   try {
-    let query = supabase
-      .from('status_jogo')
-      .select(STATUS_RELATION_SELECT, { count: 'exact' })
-      .eq('usuario_id', userId)
-
-    if (options.statuses.length > 0) {
-      query = query.in('status', options.statuses)
-    }
-
-    if (options.sort === 'oldest') {
-      query = query.order('created_at', { ascending: true, nullsFirst: false })
-    } else if (options.sort === 'favorites') {
-      query = query
-        .order('favorito', { ascending: false })
-        .order('created_at', { ascending: false, nullsFirst: false })
-    } else {
-      query = query.order('created_at', { ascending: false, nullsFirst: false })
-    }
-
     const queryStartedAt = getPerformanceNow()
-    // PostgREST cannot order parent rows globally by a nested game title. For the
-    // title option, load the authorized status set first, sort it, and only then
-    // slice the requested page. Other sort modes remain paginated in Postgres.
-    const response = options.sort === 'title'
-      ? await query
-      : await query.range(options.from, options.to)
-    const { data, error, count } = response
+    const { data, error } = await supabase.rpc('get_profile_game_status_page', {
+      p_user_id: userId,
+      p_statuses: options.statuses.length > 0 ? options.statuses : null,
+      p_sort: options.sort,
+      p_limit: options.pageSize,
+      p_offset: options.from,
+    })
     timings.requestCount += 1
     timings.queryMs += getPerformanceNow() - queryStartedAt
 
     if (error) {
-      const fallbackTimings: ProfileQueryTimings = {
-        ...timings,
-        fallbackUsed: true,
+      const normalizedError = normalizeGameStatusError(
+        error,
+        'Nao foi possivel carregar os status dos jogos.'
+      )
+
+      if (isMissingProfileGameStatusPageRpc(normalizedError)) {
+        timings.fallbackUsed = true
+        const fallbackResult = await getGameStatusesPageFromLegacyQuery(
+          userId,
+          options,
+          timings
+        )
+        fallbackResult.timings.totalMs = getPerformanceNow() - startedAt
+        logPerformanceTiming('profile.status.page', fallbackResult.timings.totalMs, {
+          userId,
+          page: options.page,
+          pageSize: options.pageSize,
+          sort: options.sort,
+          statuses: options.statuses.join(',') || 'all',
+          requestCount: fallbackResult.timings.requestCount,
+          fallbackUsed: true,
+          hasError: Boolean(fallbackResult.error),
+        })
+        return fallbackResult
       }
-      const fallbackResult = await getGameStatusesPageWithFallback(userId, options, fallbackTimings)
-      fallbackResult.timings.totalMs = getPerformanceNow() - startedAt
-      logPerformanceTiming('profile.status.page', fallbackResult.timings.totalMs, {
+
+      timings.totalMs = getPerformanceNow() - startedAt
+      const result = createEmptyStatusPageResult(timings, normalizedError)
+      logPerformanceTiming('profile.status.page', timings.totalMs, {
         userId,
         page: options.page,
         pageSize: options.pageSize,
         sort: options.sort,
         statuses: options.statuses.join(',') || 'all',
-        requestCount: fallbackResult.timings.requestCount,
-        fallbackUsed: true,
-        hasError: Boolean(fallbackResult.error),
+        requestCount: timings.requestCount,
+        fallbackUsed: false,
+        hasError: true,
       })
-      return fallbackResult
+      return result
     }
 
     const normalizeStartedAt = getPerformanceNow()
-    const sortedItems = sortStatusItemsByDisplayOrder(
-      ((data || []) as GameStatusRelationRow[])
-        .filter(isCompleteStatusRow)
-        .map(normalizeStatusRelationRow),
-      options.sort
-    )
-    const items = options.sort === 'title'
-      ? sortedItems.slice(options.from, options.to + 1)
-      : sortedItems
+    const rows = (data || []) as ProfileGameStatusPageRow[]
+    const items = rows.map(normalizeProfileGameStatusPageRow)
+    const totalCount = rows[0]?.total_count ?? (options.page === 0 ? 0 : null)
     timings.normalizeMs += getPerformanceNow() - normalizeStartedAt
     timings.totalMs = getPerformanceNow() - startedAt
 
     const result: PaginatedServiceResult<GameStatusItem[]> = {
       data: items,
       error: null,
-      ...buildPageMetadata(count, options.page, options.pageSize, items.length),
+      ...buildPageMetadata(totalCount, options.page, options.pageSize, items.length),
       timings,
     }
 

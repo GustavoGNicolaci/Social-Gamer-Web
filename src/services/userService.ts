@@ -30,6 +30,17 @@ export interface FollowListUser {
   isFollowing: boolean
 }
 
+export interface ProfileFollowListPage {
+  items: FollowListUser[]
+  hasMore: boolean
+  nextOffset: number
+}
+
+export interface ProfileFollowListPageOptions {
+  limit?: number
+  offset?: number
+}
+
 export interface PublicUserProfile {
   id: string
   username: string
@@ -102,6 +113,8 @@ interface FollowStateRpcRow {
 }
 
 const DEFAULT_USER_SEARCH_LIMIT = 5
+const DEFAULT_PROFILE_CONNECTIONS_PAGE_SIZE = 20
+const MAX_PROFILE_CONNECTIONS_PAGE_SIZE = 99
 
 function normalizeUserServiceError(error: unknown, fallbackMessage: string): UserServiceError {
   if (error && typeof error === 'object') {
@@ -299,6 +312,94 @@ function buildSearchUsersResult(
   }))
 }
 
+function mapProfileConnectionRows(
+  rows: ProfileConnectionRpcRow[],
+  viewerId: string | null | undefined
+): FollowListUser[] {
+  return rows.map(row => ({
+    id: row.id,
+    username: row.username,
+    nome_completo: row.nome_completo,
+    avatar_path: row.avatar_path,
+    isFollowing: Boolean(viewerId && viewerId !== row.id && row.is_following),
+  }))
+}
+
+function normalizeProfileConnectionsPageOptions(options: ProfileFollowListPageOptions) {
+  const requestedLimit = Math.trunc(options.limit ?? DEFAULT_PROFILE_CONNECTIONS_PAGE_SIZE)
+  const requestedOffset = Math.trunc(options.offset ?? 0)
+
+  return {
+    limit: Math.min(Math.max(requestedLimit, 1), MAX_PROFILE_CONNECTIONS_PAGE_SIZE),
+    offset: Math.max(requestedOffset, 0),
+  }
+}
+
+export async function getProfileFollowListPage(
+  profileId: string,
+  kind: FollowListKind,
+  viewerId?: string | null,
+  options: ProfileFollowListPageOptions = {}
+): Promise<ServiceResult<ProfileFollowListPage>> {
+  const { limit, offset } = normalizeProfileConnectionsPageOptions(options)
+  const emptyPage: ProfileFollowListPage = {
+    items: [],
+    hasMore: false,
+    nextOffset: offset,
+  }
+
+  if (!profileId) {
+    return {
+      data: emptyPage,
+      error: null,
+    }
+  }
+
+  try {
+    // Fetch one extra row so the caller knows whether another page exists without
+    // issuing an additional count query or relying on a potentially stale UI count.
+    const { data, error } = await supabase.rpc('get_profile_connections', {
+      p_profile_id: profileId,
+      p_kind: kind,
+      p_limit: limit + 1,
+      p_offset: offset,
+    })
+
+    if (error) {
+      return {
+        data: emptyPage,
+        error: normalizeUserServiceError(
+          error,
+          kind === 'followers'
+            ? 'Nao foi possivel carregar a lista de seguidores deste perfil.'
+            : 'Nao foi possivel carregar a lista de perfis seguidos deste perfil.'
+        ),
+      }
+    }
+
+    const rows = ((data || []) as ProfileConnectionRpcRow[]).slice(0, limit)
+
+    return {
+      data: {
+        items: mapProfileConnectionRows(rows, viewerId),
+        hasMore: (data || []).length > limit,
+        nextOffset: offset + rows.length,
+      },
+      error: null,
+    }
+  } catch (error) {
+    return {
+      data: emptyPage,
+      error: normalizeUserServiceError(
+        error,
+        kind === 'followers'
+          ? 'Erro inesperado ao carregar os seguidores deste perfil.'
+          : 'Erro inesperado ao carregar os perfis seguidos por este perfil.'
+      ),
+    }
+  }
+}
+
 export async function getProfileFollowList(
   profileId: string,
   kind: FollowListKind,
@@ -347,13 +448,7 @@ export async function getProfileFollowList(
     }
 
     return {
-      data: connectionRows.map(row => ({
-        id: row.id,
-        username: row.username,
-        nome_completo: row.nome_completo,
-        avatar_path: row.avatar_path,
-        isFollowing: Boolean(viewerId && viewerId !== row.id && row.is_following),
-      })),
+      data: mapProfileConnectionRows(connectionRows, viewerId),
       error: null,
     }
   } catch (error) {

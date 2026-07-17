@@ -1,16 +1,38 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
 import { createStatelessSupabaseClient, supabase } from '../supabase-client'
-import { getPasswordValidationError } from '../utils/passwordValidation'
 import {
-  isValidEmailAddress,
+  fetchOrCreateProfile,
+  fetchOwnProfile,
+  updateOwnProfileRecord,
+} from '../features/auth/data/profileRepository'
+import { loginWithPassword } from '../features/auth/data/loginOperations'
+import {
+  requestAuthenticatedPasswordReset as requestAuthenticatedPasswordResetOperation,
+  requestPasswordReset as requestPasswordResetOperation,
+  updatePassword as updatePasswordOperation,
+} from '../features/auth/data/passwordOperations'
+import { registerAccount } from '../features/auth/data/registrationOperations'
+import {
+  getCurrentSession,
+  subscribeToAuthSession,
+} from '../features/auth/data/sessionRepository'
+import type {
+  AuthContextValue,
+  DeleteOwnAccountInput,
+  ProfileUpdateError,
+  RegisterInput,
+  RegisterResult,
+  UserProfile,
+  UserProfileUpdates,
+} from '../features/auth/domain/types'
+import {
   logUnexpectedAuthError,
   mapFriendlyAuthError,
 } from '../utils/authErrorMessages'
 import { logClientError } from '../utils/clientLogging'
 import { translate } from '../i18n'
 
-const getUsernameTakenMessage = () => translate('auth.usernameTaken')
 const getCurrentPasswordRequiredMessage = () => translate('auth.currentPasswordRequired')
 const getCurrentPasswordInvalidMessage = () => translate('auth.currentPasswordInvalid')
 const getDeleteAccountErrorMessageFallback = () => translate('auth.deleteAccountError')
@@ -18,127 +40,17 @@ interface FunctionErrorPayload {
   error?: string
 }
 
-export interface UserProfile {
-  id: string
-  username: string
-  nome_completo: string | null
-  avatar_path: string | null
-  avatar_url: string | null
-  bio: string | null
-  data_cadastro: string
-  configuracoes_privacidade: Record<string, unknown> | null
-}
-
-export interface RegisterInput {
-  username: string
-  name?: string | null
-  email: string
-  password: string
-}
-
-export interface RegisterFieldErrors {
-  username?: string
-  name?: string
-  email?: string
-  password?: string
-  confirmPassword?: string
-  submit?: string
-}
-
-export interface DeleteOwnAccountInput {
-  username: string
-  currentPassword: string
-}
-
-export type RegisterResult =
-  | {
-      status: 'validation_error'
-      fieldErrors: RegisterFieldErrors
-    }
-  | {
-      status: 'email_confirmation_required'
-    }
-  | {
-      status: 'authenticated'
-    }
-  | {
-      status: 'system_error'
-      message: string
-    }
-
-export type UserProfileUpdates = Partial<
-  Pick<
-    UserProfile,
-    'nome_completo' | 'username' | 'bio' | 'avatar_path' | 'avatar_url' | 'configuracoes_privacidade'
-  >
->
-
-export interface ProfileUpdateError {
-  code?: string
-  message: string
-  details?: string | null
-  hint?: string | null
-}
-
-interface AuthContextValue {
-  session: Session | null
-  user: User | null
-  profile: UserProfile | null
-  loading: boolean
-  login: (email: string, password: string) => Promise<{ error: string | null }>
-  logout: () => Promise<void>
-  register: (input: RegisterInput) => Promise<RegisterResult>
-  requestPasswordReset: (email: string) => Promise<{ error: string | null }>
-  requestAuthenticatedPasswordReset: (currentPassword: string) => Promise<{ error: string | null }>
-  updatePassword: (password: string) => Promise<{ error: string | null }>
-  deleteOwnAccount: (input: DeleteOwnAccountInput) => Promise<{ error: string | null }>
-  refreshProfile: () => Promise<UserProfile | null>
-  updateOwnProfile: (
-    updates: UserProfileUpdates
-  ) => Promise<{ data: UserProfile | null; error: ProfileUpdateError | null }>
-}
+export type {
+  DeleteOwnAccountInput,
+  ProfileUpdateError,
+  RegisterFieldErrors,
+  RegisterInput,
+  RegisterResult,
+  UserProfile,
+  UserProfileUpdates,
+} from '../features/auth/domain/types'
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
-
-const normalizeWhitespace = (value: string) => value.trim().replace(/\s+/g, ' ')
-
-interface NormalizedRegisterInput {
-  username: string
-  name: string | null
-  email: string
-  password: string
-}
-
-const normalizeOptionalName = (value?: string | null) => {
-  const normalizedValue = typeof value === 'string' ? normalizeWhitespace(value) : ''
-  return normalizedValue || null
-}
-
-const getMetadataProfile = (user: User) => {
-  const metadata = user.user_metadata as Record<string, unknown> | undefined
-
-  return {
-    username: typeof metadata?.username === 'string' ? metadata.username.trim() : '',
-    nome_completo:
-      typeof metadata?.nome_completo === 'string'
-        ? normalizeOptionalName(metadata.nome_completo)
-        : null,
-  }
-}
-
-const getEmailLocalPart = (email?: string) => {
-  if (!email) return ''
-
-  const [localPart] = email.split('@')
-  return localPart?.trim().toLowerCase() || ''
-}
-
-const normalizeRegisterInput = (input: RegisterInput): NormalizedRegisterInput => ({
-  username: input.username.trim(),
-  name: normalizeOptionalName(input.name),
-  email: input.email.trim().toLowerCase(),
-  password: input.password,
-})
 
 const normalizeProfileUpdateError = (
   error: unknown,
@@ -207,55 +119,6 @@ function getDeleteAccountErrorMessage(errorCode: string | null | undefined) {
   }
 }
 
-const buildValidationErrorResult = (fieldErrors: RegisterFieldErrors): RegisterResult => ({
-  status: 'validation_error',
-  fieldErrors,
-})
-
-const getRegisterAuthErrorResult = (error: unknown): RegisterResult => {
-  const friendlyError = mapFriendlyAuthError(error, 'register')
-
-  if (friendlyError.shouldLog) {
-    logUnexpectedAuthError('register', error)
-  }
-
-  if (
-    friendlyError.reason === 'invalid_email' ||
-    friendlyError.reason === 'email_already_registered'
-  ) {
-    return buildValidationErrorResult({
-      email: friendlyError.message,
-    })
-  }
-
-  if (friendlyError.reason === 'weak_password') {
-    return buildValidationErrorResult({
-      password: friendlyError.message,
-    })
-  }
-
-  return {
-    status: 'system_error',
-    message: friendlyError.message,
-  }
-}
-
-const isEmailConfirmationPending = (user: User | null, session: Session | null) => {
-  if (!user || session) {
-    return false
-  }
-
-  if (!user.confirmation_sent_at) {
-    return false
-  }
-
-  if (Array.isArray(user.identities) && user.identities.length === 0) {
-    return false
-  }
-
-  return true
-}
-
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null)
   const [user, setUser] = useState<User | null>(null)
@@ -268,131 +131,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setProfile(null)
   }, [])
 
-  const fetchProfile = useCallback(async (userId: string) => {
-    try {
-      const { data, error } = await supabase.rpc('get_my_profile').maybeSingle()
-
-      if (error || !data || data.id !== userId) {
-        return null
-      }
-
-      return data as UserProfile
-    } catch {
-      return null
-    }
-  }, [])
-
-  const createProfileFromMetadata = useCallback(
-    async (nextUser: User) => {
-      try {
-        const { username, nome_completo } = getMetadataProfile(nextUser)
-
-        if (!username) {
-          return null
-        }
-
-        const profileData = {
-          id: nextUser.id,
-          username,
-          nome_completo,
-          avatar_path: null,
-          avatar_url: null,
-          bio: null,
-          data_cadastro: new Date().toISOString(),
-          configuracoes_privacidade: {},
-        }
-
-        // The auth listener and the register flow can race to create the same profile.
-        const { error } = await supabase
-          .from('usuarios')
-          .insert(profileData)
-
-        if (error) {
-          if (error.code === '23505') {
-            return await fetchProfile(nextUser.id)
-          }
-
-          return null
-        }
-
-        return await fetchProfile(nextUser.id)
-      } catch {
-        return null
-      }
-    },
-    [fetchProfile]
-  )
-
-  const repairLegacyProfile = useCallback(async (nextUser: User, currentProfile: UserProfile) => {
-    try {
-      const { username: metadataUsername, nome_completo: metadataNomeCompleto } =
-        getMetadataProfile(nextUser)
-
-      if (!metadataUsername) {
-        return currentProfile
-      }
-
-      const normalizedEmail = nextUser.email?.trim().toLowerCase() || ''
-      const emailLocalPart = getEmailLocalPart(nextUser.email)
-      const normalizedProfileUsername = currentProfile.username?.trim().toLowerCase() || ''
-      const normalizedProfileNomeCompleto = currentProfile.nome_completo?.trim().toLowerCase() || ''
-
-      const shouldRepairUsername =
-        normalizedProfileUsername === emailLocalPart && currentProfile.username !== metadataUsername
-
-      const shouldRepairNomeCompleto =
-        Boolean(metadataNomeCompleto) &&
-        normalizedProfileNomeCompleto === normalizedEmail &&
-        currentProfile.nome_completo !== metadataNomeCompleto
-
-      if (!shouldRepairUsername && !shouldRepairNomeCompleto) {
-        return currentProfile
-      }
-
-      const updates: Partial<UserProfile> = {}
-
-      if (shouldRepairUsername) {
-        updates.username = metadataUsername
-      }
-
-      if (shouldRepairNomeCompleto) {
-        updates.nome_completo = metadataNomeCompleto
-      }
-
-      const { error } = await supabase
-        .from('usuarios')
-        .update(updates)
-        .eq('id', nextUser.id)
-
-      if (error) {
-        return currentProfile
-      }
-
-      return await fetchProfile(nextUser.id) || currentProfile
-    } catch {
-      return currentProfile
-    }
-  }, [fetchProfile])
-
-  const fetchOrCreateProfile = useCallback(
-    async (nextUser: User) => {
-      const existingProfile = await fetchProfile(nextUser.id)
-
-      if (existingProfile) {
-        return await repairLegacyProfile(nextUser, existingProfile)
-      }
-
-      const createdProfile = await createProfileFromMetadata(nextUser)
-
-      if (createdProfile) {
-        return createdProfile
-      }
-
-      return await fetchProfile(nextUser.id)
-    },
-    [createProfileFromMetadata, fetchProfile, repairLegacyProfile]
-  )
-
   const loadProfile = useCallback(
     async (targetUser: User | null) => {
       if (!targetUser) {
@@ -404,7 +142,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setProfile(nextProfile)
       return nextProfile
     },
-    [fetchOrCreateProfile]
+    []
   )
 
   const syncAuthState = useCallback(
@@ -430,123 +168,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const register = useCallback(
     async (input: RegisterInput): Promise<RegisterResult> => {
-      const normalizedInput = normalizeRegisterInput(input)
+      const operation = await registerAccount(input)
 
-      if (!normalizedInput.username) {
-        return buildValidationErrorResult({
-          username: translate('auth.usernameRequired'),
-        })
+      if ('session' in operation) {
+        setSession(operation.session)
+        setUser(operation.user)
+        setProfile(operation.profile)
+      } else if (operation.shouldClearAuthState) {
+        clearAuthState()
       }
 
-      if (!normalizedInput.email) {
-        return buildValidationErrorResult({
-          email: translate('auth.emailRequired'),
-        })
-      }
-
-      if (!isValidEmailAddress(normalizedInput.email)) {
-        return buildValidationErrorResult({
-          email: translate('auth.invalidEmail'),
-        })
-      }
-
-      const passwordError = getPasswordValidationError(normalizedInput.password, translate)
-
-      if (passwordError) {
-        return buildValidationErrorResult({
-          password: passwordError,
-        })
-      }
-
-      try {
-        const { data: usernameRows, error: usernameLookupError } = await supabase
-          .from('usuarios')
-          .select('id')
-          .eq('username', normalizedInput.username)
-          .limit(1)
-
-        if (usernameLookupError) {
-          logClientError('auth.register.usernameLookup', usernameLookupError)
-          return {
-            status: 'system_error',
-            message: translate('auth.registerGenericError'),
-          }
-        }
-
-        if (usernameRows && usernameRows.length > 0) {
-          return buildValidationErrorResult({
-            username: getUsernameTakenMessage(),
-          })
-        }
-
-        const { data, error } = await supabase.auth.signUp({
-          email: normalizedInput.email,
-          password: normalizedInput.password,
-          options: {
-            data: {
-              username: normalizedInput.username,
-              ...(normalizedInput.name ? { nome_completo: normalizedInput.name } : {}),
-            },
-          },
-        })
-
-        if (error) {
-          return getRegisterAuthErrorResult(error)
-        }
-
-        const nextUser = data.user
-
-        if (!nextUser) {
-          logClientError('auth.register.missingUser', null, { hasEmail: Boolean(normalizedInput.email) })
-
-          return {
-            status: 'system_error',
-            message: translate('auth.registerGenericError'),
-          }
-        }
-
-        if (data.session) {
-          const nextProfile = await fetchOrCreateProfile(nextUser)
-
-          if (!nextProfile) {
-            await supabase.auth.signOut()
-            clearAuthState()
-
-            return {
-              status: 'system_error',
-              message: translate('auth.registerGenericError'),
-            }
-          }
-
-          setSession(data.session)
-          setUser(nextUser)
-          setProfile(nextProfile)
-
-          return {
-            status: 'authenticated',
-          }
-        }
-
-        if (isEmailConfirmationPending(nextUser, data.session)) {
-          return {
-            status: 'email_confirmation_required',
-          }
-        }
-
-        return {
-          status: 'system_error',
-          message: translate('auth.registerGenericError'),
-        }
-      } catch (error) {
-        logClientError('auth.register.unexpected', error)
-
-        return {
-          status: 'system_error',
-          message: translate('auth.registerGenericError'),
-        }
-      }
+      return operation.result
     },
-    [clearAuthState, fetchOrCreateProfile]
+    [clearAuthState]
   )
 
   const updateOwnProfile = useCallback(
@@ -559,10 +193,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
 
       try {
-        const { error } = await supabase
-          .from('usuarios')
-          .update(updates)
-          .eq('id', user.id)
+        const { error } = await updateOwnProfileRecord(user.id, updates)
 
         if (error) {
           const normalizedError = normalizeProfileUpdateError(
@@ -575,7 +206,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           return { data: null, error: normalizedError }
         }
 
-        const nextProfile = await fetchProfile(user.id)
+        const nextProfile = await fetchOwnProfile(user.id)
 
         if (!nextProfile) {
           const normalizedError = normalizeProfileUpdateError(
@@ -601,7 +232,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return { data: null, error: normalizedError }
       }
     },
-    [fetchProfile, user]
+    [user]
   )
 
   useEffect(() => {
@@ -609,9 +240,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     const init = async () => {
       try {
-        const {
-          data: { session: currentSession },
-        } = await supabase.auth.getSession()
+        const currentSession = await getCurrentSession()
 
         if (!isMounted) {
           return
@@ -627,7 +256,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     void init()
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const unsubscribe = subscribeToAuthSession(nextSession => {
       if (!isMounted) {
         return
       }
@@ -637,195 +266,30 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     return () => {
       isMounted = false
-      listener.subscription.unsubscribe()
+      unsubscribe()
     }
   }, [syncAuthState])
 
-  const login = useCallback(async (email: string, password: string) => {
-    const normalizedEmail = email.trim().toLowerCase()
-
-    if (!normalizedEmail) {
-      return { error: translate('auth.emailRequired') }
-    }
-
-    if (!isValidEmailAddress(normalizedEmail)) {
-      return { error: translate('auth.invalidEmail') }
-    }
-
-    if (!password) {
-      return { error: translate('auth.loginPasswordRequired') }
-    }
-
-    try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email: normalizedEmail,
-        password,
-      })
-
-      if (error) {
-        const friendlyError = mapFriendlyAuthError(error, 'login')
-
-        if (friendlyError.shouldLog) {
-          logUnexpectedAuthError('login', error)
-        }
-
-        return { error: friendlyError.message }
-      }
-
-      return { error: null }
-    } catch (error) {
-      const friendlyError = mapFriendlyAuthError(error, 'login')
-
-      if (friendlyError.shouldLog) {
-        logUnexpectedAuthError('login', error)
-      }
-
-      return { error: friendlyError.message }
-    }
-  }, [])
-
-  const requestPasswordReset = useCallback(async (email: string) => {
-    const normalizedEmail = email.trim().toLowerCase()
-
-    if (!normalizedEmail) {
-      return {
-        error: translate('auth.emailRequired'),
-      }
-    }
-
-    if (!isValidEmailAddress(normalizedEmail)) {
-      return {
-        error: translate('auth.invalidEmail'),
-      }
-    }
-
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
-        redirectTo: `${window.location.origin}/resetar-senha`,
-      })
-
-      if (error) {
-        const friendlyError = mapFriendlyAuthError(error, 'password_reset_request')
-
-        if (friendlyError.shouldLog) {
-          logUnexpectedAuthError('password_reset_request', error)
-        }
-
-        return {
-          error: friendlyError.message,
-        }
-      }
-
-      return { error: null }
-    } catch (error) {
-      const friendlyError = mapFriendlyAuthError(error, 'password_reset_request')
-
-      if (friendlyError.shouldLog) {
-        logUnexpectedAuthError('password_reset_request', error)
-      }
-
-      return {
-        error: friendlyError.message,
-      }
-    }
-  }, [])
-
-  const requestAuthenticatedPasswordReset = useCallback(
-    async (currentPassword: string) => {
-      if (!user?.email) {
-        return {
-          error: translate('auth.passwordChangeLoginRequired'),
-        }
-      }
-
-      if (!currentPassword) {
-        return {
-          error: getCurrentPasswordRequiredMessage(),
-        }
-      }
-
-      const validationClient = createStatelessSupabaseClient()
-
-      try {
-        const { error: validationError } = await validationClient.auth.signInWithPassword({
-          email: user.email.trim().toLowerCase(),
-          password: currentPassword,
-        })
-
-        if (validationError) {
-          const friendlyError = mapFriendlyAuthError(validationError, 'login')
-
-          if (friendlyError.shouldLog) {
-            logUnexpectedAuthError('login', validationError)
-          }
-
-          return {
-            error:
-              friendlyError.reason === 'invalid_credentials'
-                ? getCurrentPasswordInvalidMessage()
-                : friendlyError.message,
-          }
-        }
-
-        const resetResult = await requestPasswordReset(user.email)
-
-        if (resetResult.error) {
-          return resetResult
-        }
-
-        return {
-          error: null,
-        }
-      } catch (error) {
-        const friendlyError = mapFriendlyAuthError(error, 'login')
-
-        if (friendlyError.shouldLog) {
-          logUnexpectedAuthError('login', error)
-        }
-
-        return {
-          error: friendlyError.message,
-        }
-      }
-    },
-    [requestPasswordReset, user]
+  const login = useCallback(
+    async (email: string, password: string) => await loginWithPassword(email, password),
+    []
   )
 
-  const updatePassword = useCallback(async (password: string) => {
-    const passwordError = getPasswordValidationError(password, translate)
+  const requestPasswordReset = useCallback(
+    async (email: string) => await requestPasswordResetOperation(email),
+    []
+  )
 
-    if (passwordError) {
-      return {
-        error: passwordError,
-      }
-    }
+  const requestAuthenticatedPasswordReset = useCallback(
+    async (currentPassword: string) =>
+      await requestAuthenticatedPasswordResetOperation(user, currentPassword),
+    [user]
+  )
 
-    try {
-      const { error } = await supabase.auth.updateUser({
-        password,
-      })
-
-      if (error) {
-        const friendlyError = mapFriendlyAuthError(error, 'password_update')
-
-        return {
-          error: friendlyError.message,
-        }
-      }
-
-      return { error: null }
-    } catch (error) {
-      const friendlyError = mapFriendlyAuthError(error, 'password_update')
-
-      if (friendlyError.shouldLog) {
-        logUnexpectedAuthError('password_update', error)
-      }
-
-      return {
-        error: friendlyError.message,
-      }
-    }
-  }, [])
+  const updatePassword = useCallback(
+    async (password: string) => await updatePasswordOperation(password),
+    []
+  )
 
   const deleteOwnAccount = useCallback(async ({ username, currentPassword }: DeleteOwnAccountInput) => {
     if (!user?.email || !profile) {
@@ -906,6 +370,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       logClientError('auth.deleteOwnAccount.unexpected', error)
       return {
         error: getDeleteAccountErrorMessageFallback(),
+      }
+    } finally {
+      try {
+        const { error: cleanupError } = await validationClient.auth.signOut()
+
+        if (cleanupError) {
+          logClientError('auth.deleteOwnAccount.validationSignOut', cleanupError)
+        }
+      } catch (cleanupError) {
+        logClientError('auth.deleteOwnAccount.validationSignOut', cleanupError)
       }
     }
   }, [clearAuthState, profile, user])

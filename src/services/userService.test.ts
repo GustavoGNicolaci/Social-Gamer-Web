@@ -15,6 +15,7 @@ vi.mock('../supabase-client', () => ({
 import {
   followUser,
   getMutualFriendMap,
+  getProfileFollowListPage,
   getPublicProfileByUsername,
 } from './userService'
 
@@ -140,6 +141,90 @@ describe('userService profile projections', () => {
       isFollowing: true,
       followersCount: 4,
       followingCount: 2,
+    })
+  })
+
+  it('carrega somente uma página de conexões e usa a linha extra para indicar continuação', async () => {
+    supabaseMocks.rpc.mockResolvedValue({
+      data: [
+        {
+          id: 'follower-1',
+          username: 'follower-one',
+          nome_completo: 'Follower One',
+          avatar_path: null,
+          is_following: true,
+          relationship_started_at: '2026-07-14T12:00:00.000Z',
+        },
+        {
+          id: 'viewer-1',
+          username: 'viewer',
+          nome_completo: null,
+          avatar_path: null,
+          is_following: true,
+          relationship_started_at: '2026-07-13T12:00:00.000Z',
+        },
+        {
+          id: 'follower-3',
+          username: 'follower-three',
+          nome_completo: null,
+          avatar_path: null,
+          is_following: false,
+          relationship_started_at: '2026-07-12T12:00:00.000Z',
+        },
+      ],
+      error: null,
+    })
+
+    const result = await getProfileFollowListPage(
+      'profile-1',
+      'followers',
+      'viewer-1',
+      { limit: 2, offset: 20 }
+    )
+
+    expect(supabaseMocks.rpc).toHaveBeenCalledTimes(1)
+    expect(supabaseMocks.rpc).toHaveBeenCalledWith('get_profile_connections', {
+      p_profile_id: 'profile-1',
+      p_kind: 'followers',
+      p_limit: 3,
+      p_offset: 20,
+    })
+    expect(result).toEqual({
+      data: {
+        items: [
+          {
+            id: 'follower-1',
+            username: 'follower-one',
+            nome_completo: 'Follower One',
+            avatar_path: null,
+            isFollowing: true,
+          },
+          {
+            id: 'viewer-1',
+            username: 'viewer',
+            nome_completo: null,
+            avatar_path: null,
+            isFollowing: false,
+          },
+        ],
+        hasMore: true,
+        nextOffset: 22,
+      },
+      error: null,
+    })
+  })
+
+  it('não consulta conexões quando o perfil não foi informado', async () => {
+    const result = await getProfileFollowListPage('', 'following', 'viewer-1')
+
+    expect(supabaseMocks.rpc).not.toHaveBeenCalled()
+    expect(result).toEqual({
+      data: {
+        items: [],
+        hasMore: false,
+        nextOffset: 0,
+      },
+      error: null,
     })
   })
 })

@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "check:bundle": "node scripts/check-bundle-budget.mjs",
+    "check:supabase-static": "node scripts/check-supabase-contracts.mjs",
     "igdb:catalog:cleanup": "node scripts/igdb-catalog-cleanup.mjs",
     "igdb:match:dry-run": "node scripts/igdb-match-dry-run.mjs",
     "igdb:hydrate:pending": "node scripts/igdb-hydrate-pending.mjs",
@@ -16,8 +18,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.110.3",
-    "dotenv": "^17.4.2",
+    "@supabase/supabase-js": "2.110.5",
     "lucide-react": "^1.24.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
@@ -31,6 +32,7 @@
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.2.0",
+    "dotenv": "^17.4.2",
     "eslint": "^9.39.5",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.4.24",

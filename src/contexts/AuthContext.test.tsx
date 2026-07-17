@@ -1,25 +1,39 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import type { AuthChangeEvent, Session, User } from '@supabase/supabase-js'
 import type { PropsWithChildren } from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
+import type {
+  DeleteOwnAccountInput as DomainDeleteOwnAccountInput,
+  ProfileUpdateError as DomainProfileUpdateError,
+  RegisterFieldErrors as DomainRegisterFieldErrors,
+  RegisterInput as DomainRegisterInput,
+  RegisterResult as DomainRegisterResult,
+  UserProfile as DomainUserProfile,
+  UserProfileUpdates as DomainUserProfileUpdates,
+} from '../features/auth/domain/types'
 
 const supabaseMocks = vi.hoisted(() => {
   const profileMaybeSingle = vi.fn()
   const rpc = vi.fn(() => ({ maybeSingle: profileMaybeSingle }))
 
   return {
+    createStatelessSupabaseClient: vi.fn(),
     from: vi.fn(),
     getSession: vi.fn(),
+    invoke: vi.fn(),
+    logClientError: vi.fn(),
     onAuthStateChange: vi.fn(),
     profileMaybeSingle,
     rpc,
     signOut: vi.fn(),
+    temporarySignIn: vi.fn(),
+    temporarySignOut: vi.fn(),
     unsubscribe: vi.fn(),
   }
 })
 
 vi.mock('../supabase-client', () => ({
-  createStatelessSupabaseClient: vi.fn(),
+  createStatelessSupabaseClient: supabaseMocks.createStatelessSupabaseClient,
   supabase: {
     auth: {
       getSession: supabaseMocks.getSession,
@@ -27,11 +41,28 @@ vi.mock('../supabase-client', () => ({
       signOut: supabaseMocks.signOut,
     },
     from: supabaseMocks.from,
+    functions: {
+      invoke: supabaseMocks.invoke,
+    },
     rpc: supabaseMocks.rpc,
   },
 }))
 
-import { AuthProvider, useAuth, type UserProfile } from './AuthContext'
+vi.mock('../utils/clientLogging', () => ({
+  logClientError: supabaseMocks.logClientError,
+}))
+
+import {
+  AuthProvider,
+  useAuth,
+  type DeleteOwnAccountInput,
+  type ProfileUpdateError,
+  type RegisterFieldErrors,
+  type RegisterInput,
+  type RegisterResult,
+  type UserProfile,
+  type UserProfileUpdates,
+} from './AuthContext'
 
 type AuthStateChangeCallback = (
   event: AuthChangeEvent,
@@ -79,16 +110,45 @@ function getRegisteredAuthCallback() {
   return callback
 }
 
+describe('AuthContext type facade', () => {
+  it('preserva os tipos publicos nos caminhos atuais', () => {
+    expectTypeOf<UserProfile>().toEqualTypeOf<DomainUserProfile>()
+    expectTypeOf<UserProfileUpdates>().toEqualTypeOf<DomainUserProfileUpdates>()
+    expectTypeOf<ProfileUpdateError>().toEqualTypeOf<DomainProfileUpdateError>()
+    expectTypeOf<RegisterInput>().toEqualTypeOf<DomainRegisterInput>()
+    expectTypeOf<RegisterFieldErrors>().toEqualTypeOf<DomainRegisterFieldErrors>()
+    expectTypeOf<RegisterResult>().toEqualTypeOf<DomainRegisterResult>()
+    expectTypeOf<DeleteOwnAccountInput>().toEqualTypeOf<DomainDeleteOwnAccountInput>()
+  })
+})
+
 describe('AuthProvider', () => {
   beforeEach(() => {
+    supabaseMocks.createStatelessSupabaseClient.mockReset()
     supabaseMocks.from.mockReset()
+    supabaseMocks.invoke.mockReset()
+    supabaseMocks.logClientError.mockReset()
     supabaseMocks.profileMaybeSingle.mockReset()
     supabaseMocks.rpc.mockClear()
+    supabaseMocks.signOut.mockReset()
+    supabaseMocks.temporarySignIn.mockReset()
+    supabaseMocks.temporarySignOut.mockReset()
+    supabaseMocks.unsubscribe.mockReset()
+    supabaseMocks.createStatelessSupabaseClient.mockReturnValue({
+      auth: {
+        signInWithPassword: supabaseMocks.temporarySignIn,
+        signOut: supabaseMocks.temporarySignOut,
+      },
+    })
     supabaseMocks.getSession.mockResolvedValue({
       data: { session },
       error: null,
     })
+    supabaseMocks.invoke.mockResolvedValue({ data: null, error: null })
     supabaseMocks.profileMaybeSingle.mockResolvedValue({ data: profile, error: null })
+    supabaseMocks.signOut.mockResolvedValue({ error: null })
+    supabaseMocks.temporarySignIn.mockResolvedValue({ error: null })
+    supabaseMocks.temporarySignOut.mockResolvedValue({ error: null })
     supabaseMocks.onAuthStateChange.mockReturnValue({
       data: {
         subscription: {
@@ -157,6 +217,63 @@ describe('AuthProvider', () => {
     expect(supabaseMocks.rpc).toHaveBeenLastCalledWith('get_my_profile')
     expect(updateResult).toEqual({ data: updatedProfile, error: null })
     expect(result.current.profile).toEqual(updatedProfile)
+  })
+  it('encerra o cliente temporario depois de excluir a propria conta', async () => {
+    const { result } = renderHook(() => useAuth(), { wrapper: AuthWrapper })
+    await waitFor(() => expect(result.current.profile).toEqual(profile))
+
+    let deleteResult: Awaited<ReturnType<typeof result.current.deleteOwnAccount>> | undefined
+    await act(async () => {
+      deleteResult = await result.current.deleteOwnAccount({
+        username: profile.username,
+        currentPassword: 'current-password',
+      })
+    })
+
+    expect(supabaseMocks.temporarySignIn).toHaveBeenCalledWith({
+      email: user.email,
+      password: 'current-password',
+    })
+    expect(supabaseMocks.invoke).toHaveBeenCalledWith('delete-own-account', {
+      body: {
+        username: profile.username,
+        currentPassword: 'current-password',
+      },
+    })
+    expect(supabaseMocks.signOut).toHaveBeenCalledWith({ scope: 'local' })
+    expect(supabaseMocks.temporarySignOut).toHaveBeenCalledOnce()
+    expect(deleteResult).toEqual({ error: null })
+    expect(result.current.profile).toBeNull()
+  })
+
+  it('nao mascara erro de validacao quando o cleanup temporario falha', async () => {
+    const cleanupError = new Error('temporary cleanup failed')
+    supabaseMocks.temporarySignIn.mockResolvedValue({
+      error: {
+        code: 'invalid_credentials',
+        message: 'Invalid login credentials',
+        status: 400,
+      },
+    })
+    supabaseMocks.temporarySignOut.mockRejectedValue(cleanupError)
+    const { result } = renderHook(() => useAuth(), { wrapper: AuthWrapper })
+    await waitFor(() => expect(result.current.profile).toEqual(profile))
+
+    let deleteResult: Awaited<ReturnType<typeof result.current.deleteOwnAccount>> | undefined
+    await act(async () => {
+      deleteResult = await result.current.deleteOwnAccount({
+        username: profile.username,
+        currentPassword: 'wrong-password',
+      })
+    })
+
+    expect(deleteResult?.error).toBeTruthy()
+    expect(supabaseMocks.invoke).not.toHaveBeenCalled()
+    expect(supabaseMocks.temporarySignOut).toHaveBeenCalledOnce()
+    expect(supabaseMocks.logClientError).toHaveBeenCalledWith(
+      'auth.deleteOwnAccount.validationSignOut',
+      cleanupError
+    )
   })
 })
 

@@ -11,13 +11,13 @@ import {
   type MouseEvent,
 } from 'react'
 import { Link } from 'react-router-dom'
-import { GameCoverImage } from '../GameCoverImage'
 import { useI18n } from '../../i18n/I18nContext'
 import {
   type WishlistError,
   type WishlistGameItem,
   updateWishlistPriorities,
 } from '../../services/wishlistService'
+import { ProfileWishlistGrid } from './ProfileWishlistGrid'
 import './ProfileWishlistSection.css'
 
 type OrderStatusTone = 'saving' | 'error'
@@ -47,11 +47,6 @@ interface ProfileWishlistSectionProps {
 const HORIZONTAL_LAYOUT_THRESHOLD = 6
 const DRAG_EDGE_THRESHOLD = 72
 const DRAG_PAGE_ADVANCE_DELAY = 220
-
-function getInitial(value: string) {
-  const firstCharacter = value.trim().charAt(0)
-  return firstCharacter ? firstCharacter.toUpperCase() : 'J'
-}
 
 function getItemsPerPage(viewportWidth: number) {
   if (viewportWidth <= 480) return 1
@@ -141,7 +136,7 @@ export const ProfileWishlistSection = memo(function ProfileWishlistSection({
   onLoadMore,
   onLoadFullWishlistForReorder,
 }: ProfileWishlistSectionProps) {
-  const { t, formatDate } = useI18n()
+  const { t } = useI18n()
   const [orderedItemIds, setOrderedItemIds] = useState<string[] | null>(null)
   const [draggedItemId, setDraggedItemId] = useState<string | null>(null)
   const [dropTargetId, setDropTargetId] = useState<string | null>(null)
@@ -206,14 +201,6 @@ export const ProfileWishlistSection = memo(function ProfileWishlistSection({
   const wishlistColumnsStyle = {
     '--wishlist-columns': String(itemsPerPage),
   } as CSSProperties
-  const formatWishlistDate = (value: string | null | undefined) =>
-    formatDate(value, {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      fallback: t('profile.dateFallback'),
-    })
-
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return
 
@@ -592,230 +579,37 @@ export const ProfileWishlistSection = memo(function ProfileWishlistSection({
               ) : null}
             </div>
 
-            <div
-              className={`profile-wishlist-shell${isPaginatedLayout ? ' is-horizontal' : ''}`}
-              style={wishlistColumnsStyle}
-            >
-              {isPaginatedLayout && canGoPrevPage ? (
-                <button
-                  type="button"
-                  className="profile-wishlist-arrow profile-wishlist-arrow--prev"
-                  onClick={() => setCurrentPage(previousPage => Math.max(previousPage - 1, 0))}
-                  aria-label={t('profileWishlist.previousGroup')}
-                >
-                  <span aria-hidden="true">&lsaquo;</span>
-                </button>
-              ) : null}
-
-              {isPaginatedLayout ? (
-                <div
-                  className="profile-wishlist-viewport"
-                  onDragOver={handleViewportDragOver}
-                  onDragLeave={handleViewportDragLeave}
-                  onDrop={() => {
-                    clearAutoPageSchedule()
-                  }}
-                >
-                  <div className="profile-wishlist-track">
-                    <div key={`wishlist-page-${safeCurrentPage}`} className="profile-wishlist-page">
-                        {visiblePageItems.map(item => {
-                          const game = item.jogo
-                          const visibleTitle = game?.titulo || t('common.gameUnavailable')
-                          const isDraggedItem = draggedItemId === item.id
-                          const isDropTarget = dropTargetId === item.id && draggedItemId !== item.id
-                          const isRemovingItem = removingItemIds.includes(item.id)
-                          const canShowDragHandle = canReorder && visibleItemIds.has(item.id)
-
-                          return (
-                            <article
-                              key={item.id}
-                              ref={node => {
-                                registerItemRef(itemRefs, item.id, node)
-                              }}
-                              className={`profile-wishlist-card${isDraggedItem ? ' is-dragging' : ''}${isDropTarget ? ' is-drop-target' : ''}${isSavingOrder ? ' is-saving-order' : ''}${isRemovingItem ? ' is-removing' : ''}`}
-                              onDragOver={event => handleDragOver(item.id, event)}
-                              onDrop={event => {
-                                void handleDrop(item.id, event)
-                              }}
-                            >
-                              <Link to={`/games/${item.jogo_id}`} className="profile-wishlist-card-link">
-                                <div className="profile-wishlist-card-meta">
-                                  <span className="profile-wishlist-date">
-                                    {t('profileWishlist.addedAt', {
-                                      date: formatWishlistDate(item.adicionado_em),
-                                    })}
-                                  </span>
-                                </div>
-
-                                <div className="profile-wishlist-cover">
-                                  {game?.capa_url ? (
-                                    <GameCoverImage
-                                      src={game.capa_url}
-                                      alt={t('catalog.coverAlt', { title: visibleTitle })}
-                                      width={520}
-                                      height={200}
-                                      sizes="(max-width: 768px) 100vw, 17vw"
-                                    />
-                                  ) : (
-                                    <div className="profile-wishlist-fallback">
-                                      {getInitial(visibleTitle)}
-                                    </div>
-                                  )}
-                                </div>
-
-                                <div className="profile-wishlist-body">
-                                  <h3>{visibleTitle}</h3>
-                                  <span className="profile-wishlist-cta">{t('common.viewDetails')}</span>
-                                </div>
-                              </Link>
-
-                              {isOwnerView ? (
-                                <div className="profile-wishlist-card-actions">
-                                  <button
-                                    type="button"
-                                    className="profile-secondary-button profile-item-remove-button"
-                                    onClick={() => void handleDeleteItem(item.id)}
-                                    disabled={isSavingOrder || isRemovingItem}
-                                  >
-                                    {t('common.remove')}
-                                  </button>
-                                </div>
-                              ) : null}
-
-                              {canShowDragHandle ? (
-                                <button
-                                  type="button"
-                                  className="profile-wishlist-drag-handle"
-                                  draggable
-                                  onMouseDown={handleDragHandlePointerDown}
-                                  onClick={handleDragHandleClick}
-                                  onDragStart={event => handleDragStart(item.id, event)}
-                                  onDragEnd={handleDragEnd}
-                                  aria-label={t('profileWishlist.reorderAria', { title: visibleTitle })}
-                                  title={t('profileWishlist.dragTitle')}
-                                  disabled={isSavingOrder || isRemovingItem}
-                                >
-                                  <svg viewBox="0 0 16 16" aria-hidden="true">
-                                    <circle cx="5" cy="4" r="1.1"></circle>
-                                    <circle cx="11" cy="4" r="1.1"></circle>
-                                    <circle cx="5" cy="8" r="1.1"></circle>
-                                    <circle cx="11" cy="8" r="1.1"></circle>
-                                    <circle cx="5" cy="12" r="1.1"></circle>
-                                    <circle cx="11" cy="12" r="1.1"></circle>
-                                  </svg>
-                                </button>
-                              ) : null}
-                            </article>
-                          )
-                        })}
-                      </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="profile-wishlist-grid">
-                  {orderedItems.map(item => {
-                    const game = item.jogo
-                    const visibleTitle = game?.titulo || t('common.gameUnavailable')
-                    const isDraggedItem = draggedItemId === item.id
-                    const isDropTarget = dropTargetId === item.id && draggedItemId !== item.id
-                    const isRemovingItem = removingItemIds.includes(item.id)
-
-                    return (
-                      <article
-                        key={item.id}
-                        ref={node => {
-                          registerItemRef(itemRefs, item.id, node)
-                        }}
-                        className={`profile-wishlist-card${isDraggedItem ? ' is-dragging' : ''}${isDropTarget ? ' is-drop-target' : ''}${isSavingOrder ? ' is-saving-order' : ''}${isRemovingItem ? ' is-removing' : ''}`}
-                        onDragOver={event => handleDragOver(item.id, event)}
-                        onDrop={event => {
-                          void handleDrop(item.id, event)
-                        }}
-                      >
-                        <Link to={`/games/${item.jogo_id}`} className="profile-wishlist-card-link">
-                          <div className="profile-wishlist-card-meta">
-                            <span className="profile-wishlist-date">
-                              {t('profileWishlist.addedAt', {
-                                date: formatWishlistDate(item.adicionado_em),
-                              })}
-                            </span>
-                          </div>
-
-                          <div className="profile-wishlist-cover">
-                            {game?.capa_url ? (
-                              <GameCoverImage
-                                src={game.capa_url}
-                                alt={t('catalog.coverAlt', { title: visibleTitle })}
-                                width={520}
-                                height={200}
-                                sizes="(max-width: 768px) 100vw, 20vw"
-                              />
-                            ) : (
-                              <div className="profile-wishlist-fallback">{getInitial(visibleTitle)}</div>
-                            )}
-                          </div>
-
-                          <div className="profile-wishlist-body">
-                            <h3>{visibleTitle}</h3>
-                          <span className="profile-wishlist-cta">{t('common.viewDetails')}</span>
-                        </div>
-                      </Link>
-
-                      {isOwnerView ? (
-                        <div className="profile-wishlist-card-actions">
-                          <button
-                            type="button"
-                            className="profile-secondary-button profile-item-remove-button"
-                            onClick={() => void handleDeleteItem(item.id)}
-                            disabled={isSavingOrder || isRemovingItem}
-                          >
-                            {t('common.remove')}
-                          </button>
-                        </div>
-                      ) : null}
-
-                      {canReorder ? (
-                        <button
-                          type="button"
-                          className="profile-wishlist-drag-handle"
-                            draggable
-                            onMouseDown={handleDragHandlePointerDown}
-                          onClick={handleDragHandleClick}
-                          onDragStart={event => handleDragStart(item.id, event)}
-                          onDragEnd={handleDragEnd}
-                          aria-label={t('profileWishlist.reorderAria', { title: visibleTitle })}
-                          title={t('profileWishlist.dragTitle')}
-                          disabled={isSavingOrder || isRemovingItem}
-                        >
-                            <svg viewBox="0 0 16 16" aria-hidden="true">
-                              <circle cx="5" cy="4" r="1.1"></circle>
-                              <circle cx="11" cy="4" r="1.1"></circle>
-                              <circle cx="5" cy="8" r="1.1"></circle>
-                              <circle cx="11" cy="8" r="1.1"></circle>
-                              <circle cx="5" cy="12" r="1.1"></circle>
-                              <circle cx="11" cy="12" r="1.1"></circle>
-                            </svg>
-                          </button>
-                        ) : null}
-                      </article>
-                    )
-                  })}
-                </div>
-              )}
-
-              {isPaginatedLayout && canGoNextPage ? (
-                <button
-                  type="button"
-                  className="profile-wishlist-arrow profile-wishlist-arrow--next"
-                  onClick={() =>
-                    setCurrentPage(previousPage => Math.min(previousPage + 1, totalPages - 1))
-                  }
-                  aria-label={t('profileWishlist.nextGroup')}
-                >
-                  <span aria-hidden="true">&rsaquo;</span>
-                </button>
-              ) : null}
-            </div>
+            <ProfileWishlistGrid
+              items={isPaginatedLayout ? visiblePageItems : orderedItems}
+              isPaginatedLayout={isPaginatedLayout}
+              currentPage={safeCurrentPage}
+              canGoPreviousPage={canGoPrevPage}
+              canGoNextPage={canGoNextPage}
+              columnsStyle={wishlistColumnsStyle}
+              isOwnerView={isOwnerView}
+              canReorder={canReorder}
+              draggedItemId={draggedItemId}
+              dropTargetId={dropTargetId}
+              isSavingOrder={isSavingOrder}
+              removingItemIds={removingItemIds}
+              onRegisterItem={(itemId, node) => registerItemRef(itemRefs, itemId, node)}
+              onDragOverItem={handleDragOver}
+              onDropItem={handleDrop}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+              onDragHandlePointerDown={handleDragHandlePointerDown}
+              onDragHandleClick={handleDragHandleClick}
+              onViewportDragOver={handleViewportDragOver}
+              onViewportDragLeave={handleViewportDragLeave}
+              onViewportDrop={clearAutoPageSchedule}
+              onPreviousPage={() =>
+                setCurrentPage(previousPage => Math.max(previousPage - 1, 0))
+              }
+              onNextPage={() =>
+                setCurrentPage(previousPage => Math.min(previousPage + 1, totalPages - 1))
+              }
+              onDeleteItem={handleDeleteItem}
+            />
 
             {orderStatus ? (
               <p className={`profile-wishlist-order-status is-${orderStatus.tone}`}>

@@ -13,8 +13,10 @@ interface GameReviewCardProps {
   review: ReviewItem
   currentUserId: string | null
   visibleCommentCount: number
+  totalCommentCount: number
   commentText: string
   isSubmittingComment: boolean
+  isLoadingComments: boolean
   isReviewReactionPending: boolean
   isReviewDeletePending: boolean
   pendingCommentReactionIds: readonly string[]
@@ -29,7 +31,7 @@ interface GameReviewCardProps {
     targetId: string,
     reviewId: string
   ) => void
-  onExpandComments: (reviewId: string, totalComments: number) => void
+  onExpandComments: (reviewId: string, totalComments: number) => void | Promise<void>
   onSubmitComment: (reviewId: string, event: FormEvent<HTMLFormElement>) => void | Promise<void>
   onCommentTextChange: (reviewId: string, value: string) => void
 }
@@ -91,8 +93,10 @@ export function GameReviewCard({
   review,
   currentUserId,
   visibleCommentCount,
+  totalCommentCount,
   commentText,
   isSubmittingComment,
+  isLoadingComments,
   isReviewReactionPending,
   isReviewDeletePending,
   pendingCommentReactionIds,
@@ -112,7 +116,7 @@ export function GameReviewCard({
   const avaliadorProfilePath = getOptionalPublicProfilePath(review.usuario?.username)
   const isOwnerReview = review.usuario_id === currentUserId
   const visibleComments = review.comentarios.slice(0, visibleCommentCount)
-  const hiddenCommentsCount = review.comentarios.length - visibleComments.length
+  const hiddenCommentsCount = Math.max(totalCommentCount - visibleComments.length, 0)
   const likeButtonLabel = !currentUserId
     ? t('game.details.loginToLike')
     : review.canLike
@@ -261,9 +265,9 @@ export function GameReviewCard({
         </div>
 
         <span>
-          {review.comentarios.length === 1
+          {totalCommentCount === 1
             ? t('game.details.comments.one')
-            : t('game.details.comments.many', { count: formatNumber(review.comentarios.length) })}
+            : t('game.details.comments.many', { count: formatNumber(totalCommentCount) })}
         </span>
         {isOwnerReview ? (
           <button
@@ -427,7 +431,8 @@ export function GameReviewCard({
           <button
             type="button"
             className="game-review-comments-expand-button"
-            onClick={() => onExpandComments(review.id, review.comentarios.length)}
+            onClick={() => void onExpandComments(review.id, totalCommentCount)}
+            disabled={isLoadingComments}
             aria-label={t('game.details.moreCommentsAria', { count: formatNumber(hiddenCommentsCount) })}
           >
             {t('game.details.moreComments')}
