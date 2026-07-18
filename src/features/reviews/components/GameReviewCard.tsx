@@ -1,13 +1,22 @@
 import type { FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { UserAvatar } from '../../../components/UserAvatar'
-import { formatLocalizedDate, formatLocalizedNumber, translate } from '../../../i18n'
 import { useI18n } from '../../../i18n/I18nContext'
-import type { ReviewComment, ReviewItem } from '../../../services/reviewService'
-import type { ReportTargetType } from '../../../services/reviewInteractionsService'
 import { getOptionalPublicProfilePath } from '../../../utils/profileRoutes'
-
-const REVIEW_SCORE_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+import { REVIEW_SCORE_OPTIONS } from '../domain/reviewConstants'
+import type { ReviewComment, ReviewItem } from '../domain/reviewModels'
+import type { ReportTargetType } from '../domain/reviewInteractions'
+import { GameReviewComments } from './GameReviewComments'
+import {
+  formatReviewDate,
+  formatReviewScore,
+  getReviewUserName,
+} from './gameReviewFormatters'
+import {
+  ReviewFlagIcon,
+  ReviewHeartIcon,
+  ReviewThumbDownIcon,
+} from './gameReviewPresentation'
 
 interface GameReviewCardProps {
   review: ReviewItem
@@ -36,59 +45,6 @@ interface GameReviewCardProps {
   onCommentTextChange: (reviewId: string, value: string) => void
 }
 
-function formatDate(value: string | null | undefined, fallback?: string) {
-  return formatLocalizedDate(value, { fallback })
-}
-
-function formatReviewScore(score: number) {
-  return formatLocalizedNumber(score, {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 1,
-  })
-}
-
-function getUserName(usuario: { username?: string | null } | null | undefined) {
-  const username = usuario?.username?.trim()
-  return username || translate('common.username')
-}
-
-function iconHeart(isFilled: boolean) {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path
-        d="M12 20.4L10.55 19.08C5.4 14.36 2 11.27 2 7.5C2 4.41 4.42 2 7.5 2C9.24 2 10.91 2.81 12 4.09C13.09 2.81 14.76 2 16.5 2C19.58 2 22 4.41 22 7.5C22 11.27 18.6 14.36 13.45 19.09L12 20.4Z"
-        fill={isFilled ? '⚑' : '⚐'}
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
-
-function iconThumbDown(isFilled: boolean) {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path
-        d="M14 4H6.5C5.67 4 4.95 4.5 4.64 5.22L2.08 11.18C2.03 11.31 2 11.45 2 11.6V13.5C2 14.33 2.67 15 3.5 15H8.24L7.52 18.46C7.5 18.56 7.49 18.66 7.49 18.76C7.49 19.17 7.66 19.56 7.93 19.84L8.72 20.62L13.64 15.71C13.88 15.47 14 15.15 14 14.81V4ZM18 4H22V14H18V4Z"
-        fill={isFilled ? 'currentColor' : 'none'}
-        stroke="currentColor"
-        strokeWidth="1.7"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
-
-function iconFlag(isFilled: boolean) {
-  return (
-    <span className={`game-review-report-emoji${isFilled ? ' is-filled' : ''}`} aria-hidden="true">
-      {isFilled ? '⚑' : '⚐'}
-    </span>
-  )
-}
-
 export function GameReviewCard({
   review,
   currentUserId,
@@ -112,11 +68,9 @@ export function GameReviewCard({
   onCommentTextChange,
 }: GameReviewCardProps) {
   const { t, formatNumber } = useI18n()
-  const avaliadorNome = getUserName(review.usuario)
+  const avaliadorNome = getReviewUserName(review.usuario, t('common.username'))
   const avaliadorProfilePath = getOptionalPublicProfilePath(review.usuario?.username)
   const isOwnerReview = review.usuario_id === currentUserId
-  const visibleComments = review.comentarios.slice(0, visibleCommentCount)
-  const hiddenCommentsCount = Math.max(totalCommentCount - visibleComments.length, 0)
   const likeButtonLabel = !currentUserId
     ? t('game.details.loginToLike')
     : review.canLike
@@ -153,7 +107,7 @@ export function GameReviewCard({
 
             <div className="game-review-user-copy">
               <strong>{avaliadorNome}</strong>
-              <span>{formatDate(review.data_publicacao)}</span>
+              <span>{formatReviewDate(review.data_publicacao)}</span>
             </div>
           </Link>
         ) : (
@@ -167,7 +121,7 @@ export function GameReviewCard({
 
             <div className="game-review-user-copy">
               <strong>{avaliadorNome}</strong>
-              <span>{formatDate(review.data_publicacao)}</span>
+              <span>{formatReviewDate(review.data_publicacao)}</span>
             </div>
           </div>
         )}
@@ -181,7 +135,7 @@ export function GameReviewCard({
               aria-label={reportButtonLabel}
               title={reportButtonLabel}
             >
-              {iconFlag(Boolean(review.currentUserReport))}
+              <ReviewFlagIcon filled={Boolean(review.currentUserReport)} />
             </button>
           ) : null}
 
@@ -222,7 +176,7 @@ export function GameReviewCard({
             title={likeButtonLabel}
           >
             <span className="game-review-reaction-icon">
-              {iconHeart(review.likedByCurrentUser)}
+              <ReviewHeartIcon filled={review.likedByCurrentUser} />
             </span>
             <span>
               {isReviewReactionPending
@@ -247,7 +201,7 @@ export function GameReviewCard({
             title={dislikeButtonLabel}
           >
             <span className="game-review-reaction-icon">
-              {iconThumbDown(review.dislikedByCurrentUser)}
+              <ReviewThumbDownIcon filled={review.dislikedByCurrentUser} />
             </span>
             <span>
               {isReviewReactionPending
@@ -281,187 +235,23 @@ export function GameReviewCard({
         ) : null}
       </div>
 
-      <div className="game-review-comments">
-        {review.comentarios.length > 0 ? (
-          <div className="game-review-comments-list">
-            {visibleComments.map(comentario => {
-              const autorComentario = getUserName(comentario.usuario)
-              const autorComentarioProfilePath = getOptionalPublicProfilePath(
-                comentario.usuario?.username
-              )
-              const isOwnerComment = comentario.usuario_id === currentUserId
-              const isCommentReactionPending = pendingCommentReactionIds.includes(comentario.id)
-              const canReportComment = Boolean(currentUserId && !isOwnerComment)
-              const commentLikeButtonLabel = !currentUserId
-                ? t('game.details.loginToLike')
-                : comentario.canLike
-                  ? comentario.likedByCurrentUser
-                    ? t('game.details.unlikeComment')
-                    : t('game.details.likeComment')
-                  : t('game.details.ownComment')
-              const commentDislikeButtonLabel = !currentUserId
-                ? t('game.details.loginToDislike')
-                : comentario.canDislike
-                  ? comentario.dislikedByCurrentUser
-                    ? t('game.details.removeDislikeComment')
-                    : t('game.details.dislikeComment')
-                  : t('game.details.ownComment')
-              const commentReportButtonLabel = comentario.currentUserReport
-                ? t('game.details.viewReportComment')
-                : t('game.details.reportComment')
-
-              return (
-                <div key={comentario.id} id={`comment-${comentario.id}`} className="game-review-comment-card">
-                  <div className="game-review-comment-header">
-                    {autorComentarioProfilePath ? (
-                      <Link
-                        to={autorComentarioProfilePath}
-                        className="game-review-comment-author-link"
-                        aria-label={t('game.details.openProfileAria', { name: autorComentario })}
-                      >
-                        <UserAvatar
-                          name={autorComentario}
-                          avatarPath={comentario.usuario?.avatar_path}
-                          imageClassName="game-review-comment-avatar"
-                          fallbackClassName="game-review-comment-avatar-fallback"
-                        />
-
-                        <strong>{autorComentario}</strong>
-                      </Link>
-                    ) : (
-                      <div className="game-review-comment-author">
-                        <UserAvatar
-                          name={autorComentario}
-                          avatarPath={comentario.usuario?.avatar_path}
-                          imageClassName="game-review-comment-avatar"
-                          fallbackClassName="game-review-comment-avatar-fallback"
-                        />
-
-                        <strong>{autorComentario}</strong>
-                      </div>
-                    )}
-
-                    <div className="game-review-comment-meta">
-                      <span className="game-review-comment-date">
-                        {formatDate(comentario.data_comentario)}
-                      </span>
-
-                      <div className="game-review-comment-meta-actions">
-                        <button
-                          type="button"
-                          className={`game-review-comment-reaction-button is-like${comentario.likedByCurrentUser ? ' is-liked' : ''}`}
-                          onClick={() => void onToggleCommentLike(review.id, comentario)}
-                          disabled={
-                            !currentUserId ||
-                            !comentario.canLike ||
-                            isCommentReactionPending
-                          }
-                          aria-label={commentLikeButtonLabel}
-                          title={commentLikeButtonLabel}
-                        >
-                          <span className="game-review-reaction-icon">
-                            {iconHeart(comentario.likedByCurrentUser)}
-                          </span>
-                          <span>
-                            {isCommentReactionPending
-                              ? t('common.updating')
-                              : t('game.details.likeWithCount', { count: formatNumber(comentario.curtidas) })}
-                          </span>
-                        </button>
-
-                        <button
-                          type="button"
-                          className={`game-review-comment-reaction-button${comentario.dislikedByCurrentUser ? ' is-disliked' : ''}`}
-                          onClick={() => void onToggleCommentDislike(review.id, comentario)}
-                          disabled={
-                            !currentUserId ||
-                            !comentario.canDislike ||
-                            isCommentReactionPending
-                          }
-                          aria-label={commentDislikeButtonLabel}
-                          title={commentDislikeButtonLabel}
-                        >
-                          <span className="game-review-reaction-icon">
-                            {iconThumbDown(comentario.dislikedByCurrentUser)}
-                          </span>
-                          <span>
-                            {isCommentReactionPending
-                              ? t('common.updating')
-                              : comentario.dislikedByCurrentUser
-                                ? t('game.details.dislikeWithCount', { count: formatNumber(comentario.dislikes) })
-                                : t('game.details.dislikeWithCount', { count: formatNumber(comentario.dislikes) })}
-                          </span>
-                        </button>
-
-                        {canReportComment ? (
-                          <button
-                            type="button"
-                            className={`game-review-report-button is-comment${comentario.currentUserReport ? ' is-reported' : ''}`}
-                            onClick={() =>
-                              onOpenReportModal('comment', comentario.id, review.id)
-                            }
-                            aria-label={commentReportButtonLabel}
-                            title={commentReportButtonLabel}
-                          >
-                            {iconFlag(Boolean(comentario.currentUserReport))}
-                          </button>
-                        ) : null}
-
-                        {isOwnerComment ? (
-                          <button
-                            type="button"
-                            className="game-review-comment-delete-button"
-                            onClick={() => void onDeleteComment(review.id, comentario)}
-                          >
-                            {t('game.details.deleteComment')}
-                          </button>
-                        ) : null}
-                      </div>
-                    </div>
-                  </div>
-
-                  <p className="game-review-comment-body">{comentario.texto}</p>
-                </div>
-              )
-            })}
-          </div>
-        ) : null}
-
-        {hiddenCommentsCount > 0 ? (
-          <button
-            type="button"
-            className="game-review-comments-expand-button"
-            onClick={() => void onExpandComments(review.id, totalCommentCount)}
-            disabled={isLoadingComments}
-            aria-label={t('game.details.moreCommentsAria', { count: formatNumber(hiddenCommentsCount) })}
-          >
-            {t('game.details.moreComments')}
-          </button>
-        ) : null}
-
-        {currentUserId ? (
-          <form
-            onSubmit={event => onSubmitComment(review.id, event)}
-            className="game-review-comment-form"
-          >
-            <textarea
-              className="game-review-comment-input"
-              value={commentText}
-              onChange={event => onCommentTextChange(review.id, event.target.value)}
-              placeholder={t('game.details.commentPlaceholder')}
-              required
-            />
-
-            <button
-              type="submit"
-              disabled={isSubmittingComment}
-              className="game-review-comment-button"
-            >
-              {isSubmittingComment ? t('common.sending') : t('game.details.commentSubmit')}
-            </button>
-          </form>
-        ) : null}
-      </div>
+      <GameReviewComments
+        review={review}
+        currentUserId={currentUserId}
+        visibleCommentCount={visibleCommentCount}
+        totalCommentCount={totalCommentCount}
+        commentText={commentText}
+        isSubmittingComment={isSubmittingComment}
+        isLoadingComments={isLoadingComments}
+        pendingCommentReactionIds={pendingCommentReactionIds}
+        onToggleCommentLike={onToggleCommentLike}
+        onToggleCommentDislike={onToggleCommentDislike}
+        onDeleteComment={onDeleteComment}
+        onOpenReportModal={onOpenReportModal}
+        onExpandComments={onExpandComments}
+        onSubmitComment={onSubmitComment}
+        onCommentTextChange={onCommentTextChange}
+      />
     </article>
   )
 }

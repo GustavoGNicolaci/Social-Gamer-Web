@@ -26,3 +26,13 @@ Capturas registradas:
 Os estados completos de perfil e comunidade nao puderam ser capturados porque o ambiente remoto
 nao possui registros publicos disponiveis para essas rotas. Esses contratos estao congelados nos
 testes `ProfilePage.test.tsx` e `CommunityDetailsPage.test.tsx`.
+
+## Verificacao final desta rodada
+
+Em 17/07/2026, as rotas de home, catalogo, detalhes do jogo, perfil inexistente e
+comunidade inexistente foram conferidas no servidor local em 1440x900 e 390x844.
+Nao foram encontrados overlays, erros de console ou overflow horizontal. A
+paginacao do catalogo foi validada de `1 2 3 4` para `2 3 4 5`, e os temas claro
+e escuro foram alternados pela propria interface. A paridade PT/EN e os estados
+autenticados permanecem cobertos pelos testes automatizados, pois o ambiente
+publico nao oferece uma sessao/fixture autenticada para a matriz visual completa.

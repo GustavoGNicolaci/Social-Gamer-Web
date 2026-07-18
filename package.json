@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "check:architecture": "node scripts/check-architecture.mjs",
     "check:bundle": "node scripts/check-bundle-budget.mjs",
     "check:supabase-static": "node scripts/check-supabase-contracts.mjs",
     "igdb:catalog:cleanup": "node scripts/igdb-catalog-cleanup.mjs",

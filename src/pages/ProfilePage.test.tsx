@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { User } from '@supabase/supabase-js'
 import {
   createMemoryRouter,
@@ -259,6 +259,39 @@ describe('ProfilePage', () => {
     expect(mocks.getPublicProfileByUsername).not.toHaveBeenCalled()
   })
 
+  it('preserva ids, relacionamentos ARIA e montagem sob demanda das abas de conteudo', async () => {
+    renderProfile('/profile')
+
+    const statusTab = screen.getByRole('tab', { name: 'profile.tab.status' })
+    const wishlistTab = screen.getByRole('tab', { name: 'profile.tab.wishlist' })
+    const savedPostsTab = screen.getByRole('tab', {
+      name: 'profileCommunities.saved.title',
+    })
+    const statusPanel = document.getElementById('profile-panel-status')
+    const wishlistPanel = document.getElementById('profile-panel-wishlist')
+
+    expect(statusTab).toHaveAttribute('id', 'profile-tab-status')
+    expect(statusTab).toHaveAttribute('aria-controls', 'profile-panel-status')
+    expect(statusPanel).toHaveAttribute('aria-labelledby', 'profile-tab-status')
+    expect(statusPanel).not.toHaveAttribute('hidden')
+    expect(wishlistTab).toHaveAttribute('id', 'profile-tab-wishlist')
+    expect(wishlistTab).toHaveAttribute('aria-controls', 'profile-panel-wishlist')
+    expect(wishlistPanel).toHaveAttribute('hidden')
+    expect(savedPostsTab).toHaveAttribute('id', 'profile-tab-saved-community-posts')
+    expect(document.getElementById('profile-panel-saved-community-posts')).toHaveAttribute(
+      'aria-labelledby',
+      'profile-tab-saved-community-posts'
+    )
+    expect(await screen.findByTestId('profile-status-section')).toBeInTheDocument()
+
+    fireEvent.click(wishlistTab)
+
+    expect(statusPanel).toHaveAttribute('hidden')
+    expect(wishlistPanel).not.toHaveAttribute('hidden')
+    expect(screen.queryByTestId('profile-status-section')).not.toBeInTheDocument()
+    expect(screen.getByTestId('profile-wishlist-section')).toBeInTheDocument()
+  })
+
   it('mantem um perfil publico anonimo somente leitura e com conteudo visivel', async () => {
     setAuthState({ user: null, profile: null })
     mocks.getPublicProfileByUsername.mockResolvedValue({ data: publicProfile, error: null })
@@ -310,6 +343,7 @@ describe('ProfilePage', () => {
     const view = renderProfile('/profile/loading-player')
 
     expect(screen.getByRole('heading', { name: 'profile.loadingTitle' })).toBeInTheDocument()
+    expect(document.querySelector('.profile-state-card')).toHaveTextContent('profile.loadingText')
 
     setAuthState({ user: null, profile: null })
     mocks.getPublicProfileByUsername.mockResolvedValue({

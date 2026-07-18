@@ -125,6 +125,32 @@ await checkPolicyMigration(
   '20260715015816_optimize_community_rls_initplans.sql',
   3,
 )
+await checkPolicyMigration(
+  '20260718001827_optimize_remaining_report_select_rls_initplans.sql',
+  2,
+)
+const remainingReportPolicyMigration = await read(
+  path.join(
+    'supabase',
+    'migrations',
+    '20260718001827_optimize_remaining_report_select_rls_initplans.sql',
+  ),
+)
+for (const [policyName, tableName] of [
+  ['denuncias_conteudo_select_own', 'denuncias_conteudo'],
+  ['denuncias_perfil_select_own', 'denuncias_perfil'],
+]) {
+  const policyPattern = new RegExp(
+    `alter\\s+policy\\s+${policyName}\\s+on\\s+public\\.${tableName}`
+      + `\\s+to\\s+authenticated\\s+using\\s*\\(\\s*\\(\\s*select\\s+auth\\.uid\\(\\)\\s*\\)`
+      + `\\s*=\\s*denunciante_id\\s*\\)\\s*;`,
+    'i',
+  )
+  assertContract(
+    policyPattern.test(remainingReportPolicyMigration),
+    `${policyName}: deve preservar TO authenticated e a comparação de proprietário.`,
+  )
+}
 
 const pgTrgmMigration = await read(
   path.join('supabase', 'migrations', '20260715015823_relocate_pg_trgm_to_extensions.sql'),
@@ -164,6 +190,73 @@ await checkReadModelMigration({
   testFile: 'profile_game_status_page.sql',
   testPlan: 21,
 })
+await checkReadModelMigration({
+  fileName: '20260718001830_add_game_review_overview_summary.sql',
+  functions: ['get_game_review_overview'],
+  security: 'invoker',
+  testFile: 'game_review_overview_summary.sql',
+  testPlan: 15,
+})
+
+const gameReviewOverviewMigration = await read(
+  path.join(
+    'supabase',
+    'migrations',
+    '20260718001830_add_game_review_overview_summary.sql',
+  ),
+)
+assertContract(
+  /\breturns\s+table\s*\(\s*game_id\s+integer\s*,\s*review_count\s+bigint\s*,\s*average_rating\s+numeric\s*,\s*comment_count\s+bigint\s*\)/i
+    .test(gameReviewOverviewMigration),
+  'get_game_review_overview: DTO público divergente do contrato.',
+)
+assertContract(
+  /\bgrant\s+execute\s+on\s+function\s+public\.get_game_review_overview\s*\(\s*integer\s*\)\s+to\s+anon\s*,\s*authenticated\s*,\s*service_role\s*;/i
+    .test(gameReviewOverviewMigration),
+  'get_game_review_overview: grants explícitos devem incluir anon, authenticated e service_role.',
+)
+assertContract(
+  /\bp_game_id\s+is\s+null\s+or\s+p_game_id\s*<=\s*0\b/i
+    .test(gameReviewOverviewMigration)
+    && /\berrcode\s*=\s*'22023'/i.test(gameReviewOverviewMigration),
+  'get_game_review_overview: IDs nulos ou não positivos devem falhar com SQLSTATE 22023.',
+)
+assertContract(
+  /\breview\.data_publicacao\s+is\s+not\s+null\b/i
+    .test(gameReviewOverviewMigration)
+    && /\bjoin\s+public\.comentarios\b/i.test(gameReviewOverviewMigration),
+  'get_game_review_overview: o resumo deve contar somente reviews publicadas e seus comentários.',
+)
+
+const gameReviewOverviewTest = await read(
+  path.join('supabase', 'tests', 'game_review_overview_summary.sql'),
+)
+const gameReviewFixtureInsert = gameReviewOverviewTest.match(
+  /\binsert\s+into\s+public\.avaliacoes\b[\s\S]*?;/i,
+)?.[0] ?? ''
+const gameReviewFixtureUserIds = new Set(
+  [...gameReviewFixtureInsert.matchAll(
+    /'24000000-0000-0000-0000-00000000000[1-3]'/g,
+  )].map((match) => match[0]),
+)
+
+assertContract(
+  gameReviewFixtureUserIds.size === 3,
+  'game_review_overview_summary.sql: reviews da fixture devem respeitar a unicidade por usuário/jogo.',
+)
+assertContract(
+  /\bdisable\s+trigger\s+avaliacoes_normalize_metadata\s*;/i
+    .test(gameReviewOverviewTest)
+    && /\bdisable\s+trigger\s+avaliacoes_normalize_write\s*;/i
+      .test(gameReviewOverviewTest)
+    && /\bupdate\s+public\.avaliacoes\s+set\s+data_publicacao\s*=\s*null\b/i
+      .test(gameReviewOverviewTest)
+    && /\benable\s+trigger\s+avaliacoes_normalize_metadata\s*;/i
+      .test(gameReviewOverviewTest)
+    && /\benable\s+trigger\s+avaliacoes_normalize_write\s*;/i
+      .test(gameReviewOverviewTest),
+  'game_review_overview_summary.sql: a linha não publicada deve contornar e restaurar somente os normalizadores da fixture.',
+)
 
 await checkHardeningMigration(
   '20260715015856_harden_community_membership_functions.sql',

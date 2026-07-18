@@ -694,6 +694,15 @@ export type Database = {
           comment_offset: number | null
         }[]
       }
+      get_game_review_overview: {
+        Args: { p_game_id: number }
+        Returns: {
+          game_id: number
+          review_count: number
+          average_rating: number | null
+          comment_count: number
+        }[]
+      }
       get_game_reviews_page: {
         Args: {
           p_game_id: number

@@ -1,81 +1,49 @@
 import {
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
-  useRef,
   useState,
-  type FormEvent,
 } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { CommunityAboutCard } from '../components/communities/CommunityAboutCard'
 import { CommunityConfirmModal } from '../components/communities/CommunityConfirmModal'
 import { CommunityReportModal } from '../components/communities/CommunityReportModal'
 import { useAuth } from '../contexts/AuthContext'
-import {
-  CommunityFeedSection,
-  type CommunityFeedReportTarget,
-} from '../features/communities/components/CommunityFeedSection'
+import { CommunityFeedSection } from '../features/communities/components/CommunityFeedSection'
 import { CommunityMembersSection } from '../features/communities/components/CommunityMembersSection'
 import { CommunityModerationSection } from '../features/communities/components/CommunityModerationSection'
 import { CommunityParticipationSection } from '../features/communities/components/CommunityParticipationSection'
 import { CommunitySettingsSection } from '../features/communities/components/CommunitySettingsSection'
 import type {
-  ConfirmState,
   FeedbackState,
 } from '../features/communities/domain/communityDetailsTypes'
+import { useCommunityCommentReader } from '../features/communities/hooks/useCommunityCommentReader'
+import { useCommunityConfirmationController } from '../features/communities/hooks/useCommunityConfirmationController'
+import { useCommunityFeedActions } from '../features/communities/hooks/useCommunityFeedActions'
 import { useCommunityFeedController } from '../features/communities/hooks/useCommunityFeedController'
 import { useCommunityMembershipActions } from '../features/communities/hooks/useCommunityMembershipActions'
 import { useCommunityMembersController } from '../features/communities/hooks/useCommunityMembersController'
 import { useCommunityModerationController } from '../features/communities/hooks/useCommunityModerationController'
+import { useCommunityPostComposer } from '../features/communities/hooks/useCommunityPostComposer'
 import { useCommunitySettingsController } from '../features/communities/hooks/useCommunitySettingsController'
 import { useCommunitySummaryController } from '../features/communities/hooks/useCommunitySummaryController'
 import { useI18n } from '../i18n/I18nContext'
 import {
   COMMUNITY_CATEGORY_VALUES,
-  createCommunityComment,
-  createCommunityPost,
-  deleteCommunity,
-  deleteCommunityComment,
-  deleteCommunityPost,
-  getCommunityCommentAnchor,
-  getCommunityCommentTarget,
-  getCommunityPostById,
-  getCommunityPostCommentsPage,
-  mergeCommunityComments,
-  submitCommunityReport,
-  toggleCommunityPostPinned,
-  toggleCommunityPostReaction,
-  toggleCommunityPostSave,
-  updateCommunityPostingPermission,
-  updateCommunityReportStatus,
   type CommunityCategoryValue,
   type CommunityMember,
-  type CommunityPost,
   type CommunityPostingPermission,
-  type CommunityReactionType,
-  type CommunityReport,
-  type CommunityReportReason,
   type CommunityReportStatus,
   type CommunitySummary,
 } from '../services/communityService'
-import {
-  resolvePublicFileUrl,
-  uploadCommunityPostImage,
-} from '../services/storageService'
+import { resolvePublicFileUrl } from '../services/storageService'
 import './CommunitiesPage.css'
 
 type CommunityTab = 'posts' | 'members' | 'about' | 'moderation' | 'settings' | 'memberSettings'
 type RequestFilter = 'pendente' | 'all'
 type ReportFilter = CommunityReportStatus | 'all'
 
-interface LightboxState {
-  url: string
-  alt: string
-}
-
 const POST_PAGE_SIZE = 8
-const COMMENT_PAGE_SIZE = 3
 
 function getMemberName(member: CommunityMember) {
   return member.usuario?.username || member.usuario?.nome_completo || 'usuario'
@@ -116,23 +84,13 @@ function CommunityDetailsPage() {
   })
   const [feedback, setFeedback] = useState<FeedbackState | null>(null)
   const [activeTab, setActiveTab] = useState<CommunityTab>('posts')
-  const [postText, setPostText] = useState('')
-  const [postImageFile, setPostImageFile] = useState<File | null>(null)
-  const [postImagePreviewUrl, setPostImagePreviewUrl] = useState<string | null>(null)
-  const postImagePreviewUrlRef = useRef<string | null>(null)
-  const [postSubmitting, setPostSubmitting] = useState(false)
   const [postingPermissionDraft, setPostingPermissionDraft] =
     useState<CommunityPostingPermission>('todos_membros')
-  const [confirmState, setConfirmState] = useState<ConfirmState | null>(null)
-  const [confirmSubmitting, setConfirmSubmitting] = useState(false)
   const [memberSearch, setMemberSearch] = useState('')
   const [debouncedMemberSearch, setDebouncedMemberSearch] = useState('')
   const [postsPage, setPostsPage] = useState(1)
   const [requestFilter, setRequestFilter] = useState<RequestFilter>('pendente')
   const [reportFilter, setReportFilter] = useState<ReportFilter>('all')
-  const [reportTarget, setReportTarget] = useState<CommunityFeedReportTarget | null>(null)
-  const [reportSubmitting, setReportSubmitting] = useState(false)
-  const [lightbox, setLightbox] = useState<LightboxState | null>(null)
 
   const currentUserRole = community?.currentUserRole ?? null
   const isLeader = currentUserRole === 'lider'
@@ -194,23 +152,6 @@ function CommunityDetailsPage() {
   })
   const totalPostPages = postsTotalCount ? Math.max(1, Math.ceil(postsTotalCount / POST_PAGE_SIZE)) : 1
   const activeAnchorId = decodeCommunityAnchor(location.hash)
-  const commentReadScopeKey = [
-    communityId || 'route-none',
-    community?.id || 'none',
-    user?.id || 'anonymous',
-    currentUserRole || 'no-role',
-    canViewContent ? 'visible' : 'restricted',
-    postsPage,
-  ].join(':')
-  const postsRef = useRef(posts)
-  const commentReadScopeKeyRef = useRef(commentReadScopeKey)
-  const commentPageRequestsRef = useRef(new Map<string, symbol>())
-  const anchorRequestVersionRef = useRef(0)
-
-  useLayoutEffect(() => {
-    postsRef.current = posts
-    commentReadScopeKeyRef.current = commentReadScopeKey
-  }, [commentReadScopeKey, posts])
 
   const visibleTabs = useMemo<CommunityTab[]>(() => {
     if (!canViewContent) return ['about', 'memberSettings']
@@ -233,42 +174,10 @@ function CommunityDetailsPage() {
     })
   }, [members])
 
-  const handlePostImageFileChange = useCallback((file: File | null) => {
-    if (postImagePreviewUrlRef.current) {
-      URL.revokeObjectURL(postImagePreviewUrlRef.current)
-    }
-
-    const nextPreviewUrl = file ? URL.createObjectURL(file) : null
-    postImagePreviewUrlRef.current = nextPreviewUrl
-    setPostImageFile(file)
-    setPostImagePreviewUrl(nextPreviewUrl)
-  }, [])
-
   useEffect(() => {
     const timeoutId = window.setTimeout(() => setDebouncedMemberSearch(memberSearch), 220)
     return () => window.clearTimeout(timeoutId)
   }, [memberSearch])
-
-  useEffect(() => () => {
-    if (postImagePreviewUrlRef.current) {
-      URL.revokeObjectURL(postImagePreviewUrlRef.current)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!lightbox) return
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setLightbox(null)
-    }
-
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [lightbox])
-
-  useEffect(() => {
-    commentPageRequestsRef.current.clear()
-    anchorRequestVersionRef.current += 1
-  }, [commentReadScopeKey])
 
   const visibleActiveTab = visibleTabs.includes(activeTab) ? activeTab : visibleTabs[0]
 
@@ -293,94 +202,6 @@ function CommunityDetailsPage() {
       if (permission === 'somente_admins') return t('communities.post.noPermissionAdmins')
       if (permission === 'somente_lider') return t('communities.post.noPermissionLeader')
       return t('communities.post.joinToPost')
-    },
-    [t]
-  )
-
-  const getConfirmCopy = useCallback(
-    (state: ConfirmState | null) => {
-      if (!state) return null
-
-      if (state.kind === 'delete-community') {
-        return {
-          title: t('communities.confirm.deleteCommunity.title'),
-          description: t('communities.confirm.deleteCommunity.description'),
-          confirmLabel: t('communities.confirm.deleteCommunity.confirm'),
-          tone: 'danger' as const,
-        }
-      }
-
-      if (state.kind === 'leave-community') {
-        return {
-          title: t('communities.confirm.leave.title'),
-          description: t('communities.confirm.leave.description'),
-          confirmLabel: t('communities.confirm.leave.confirm'),
-          tone: 'default' as const,
-        }
-      }
-
-      if (state.kind === 'delete-post') {
-        return {
-          title: t('communities.confirm.deletePost.title'),
-          description: t('communities.confirm.deletePost.description'),
-          confirmLabel: t('communities.confirm.deletePost.confirm'),
-          tone: 'danger' as const,
-        }
-      }
-
-      if (state.kind === 'delete-comment') {
-        return {
-          title: t('communities.confirm.deleteComment.title'),
-          description: t('communities.confirm.deleteComment.description'),
-          confirmLabel: t('communities.confirm.deleteComment.confirm'),
-          tone: 'danger' as const,
-        }
-      }
-
-      if (state.kind === 'kick-member') {
-        return {
-          title: t('communities.confirm.kick.title'),
-          description: t('communities.confirm.kick.description', { user: `@${getMemberName(state.member)}` }),
-          confirmLabel: t('communities.confirm.kick.confirm'),
-          tone: 'danger' as const,
-        }
-      }
-
-      if (state.kind === 'transfer-leadership') {
-        return {
-          title: t('communities.confirm.transfer.title'),
-          description: t('communities.confirm.transfer.description', { user: `@${getMemberName(state.member)}` }),
-          confirmLabel: t('communities.confirm.transfer.confirm'),
-          tone: 'danger' as const,
-        }
-      }
-
-      if (state.kind === 'posting-permission') {
-        return {
-          title: t('communities.confirm.posting.title'),
-          description: t('communities.confirm.posting.description', {
-            permission: t(`communities.permission.${state.permission}`),
-          }),
-          confirmLabel: t('communities.confirm.posting.confirm'),
-          tone: 'default' as const,
-        }
-      }
-
-      if (state.kind === 'promote-member') {
-        return {
-          title: t('communities.confirm.promote.title'),
-          description: t('communities.confirm.promote.description', { user: `@${getMemberName(state.member)}` }),
-          confirmLabel: t('communities.confirm.promote.confirm'),
-          tone: 'default' as const,
-        }
-      }
-
-      return {
-        title: t('communities.confirm.demote.title'),
-        description: t('communities.confirm.demote.description', { user: `@${getMemberName(state.member)}` }),
-        confirmLabel: t('communities.confirm.demote.confirm'),
-        tone: 'danger' as const,
-      }
     },
     [t]
   )
@@ -442,396 +263,63 @@ function CommunityDetailsPage() {
     await reloadModeration()
   }, [reloadCommunity, reloadMembers, reloadModeration, reloadPosts])
 
+  const navigateToCommunities = useCallback(() => {
+    navigate('/comunidades')
+  }, [navigate])
+  const resetPostsPage = useCallback(() => {
+    setPostsPage(1)
+  }, [])
+  const showPostsTab = useCallback(() => {
+    setActiveTab('posts')
+  }, [])
+  const confirmation = useCommunityConfirmationController({
+    communityId: community?.id ?? null,
+    reloadAll,
+    navigateToCommunities,
+    publishFeedback: setFeedback,
+    t,
+  })
   const membershipActions = useCommunityMembershipActions({
     communityId: community?.id ?? null,
     currentUserId: user?.id ?? null,
     reloadAll,
     reloadModeration,
     publishFeedback: setFeedback,
-    closeConfirmation: () => setConfirmState(null),
+    closeConfirmation: confirmation.close,
     t,
   })
-
-  const handleCreatePost = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    if (!user || !community || postSubmitting) return
-
-    const normalizedText = postText.trim()
-    if (!normalizedText && !postImageFile) {
-      setFeedback({ tone: 'error', message: t('communities.post.emptyError') })
-      return
-    }
-
-    setPostSubmitting(true)
-    setFeedback(null)
-
-    try {
-      let imagePath: string | null = null
-      if (postImageFile) {
-        const uploadResult = await uploadCommunityPostImage(postImageFile, user.id)
-        if (!uploadResult) {
-          setFeedback({ tone: 'error', message: t('communities.post.imageUploadError') })
-          return
-        }
-        imagePath = uploadResult.path
-      }
-
-      const result = await createCommunityPost(community.id, normalizedText, imagePath)
-      if (result.error) {
-        setFeedback({ tone: 'error', message: result.error.message })
-        return
-      }
-
-      setPostText('')
-      handlePostImageFileChange(null)
-      setPostsPage(1)
-      setFeedback({ tone: 'success', message: t('communities.post.published') })
-      await reloadAll()
-    } finally {
-      setPostSubmitting(false)
-    }
-  }
-
-  const handleToggleReaction = async (post: CommunityPost, reaction: CommunityReactionType) => {
-    const result = await toggleCommunityPostReaction(post.id, reaction)
-    if (result.error) {
-      setFeedback({ tone: 'error', message: result.error.message })
-      return
-    }
-
-    if (result.data) {
-      updatePosts(currentPosts =>
-        currentPosts.map(currentPost =>
-          currentPost.id === post.id
-            ? {
-                ...currentPost,
-                curtidas_count: result.data?.curtidas_count ?? currentPost.curtidas_count,
-                dislikes_count: result.data?.dislikes_count ?? currentPost.dislikes_count,
-                currentUserReaction: result.data?.reacao_atual ?? null,
-              }
-            : currentPost
-        )
-      )
-    }
-  }
-
-  const handleToggleSave = async (post: CommunityPost) => {
-    const result = await toggleCommunityPostSave(post.id)
-    if (result.error) {
-      setFeedback({ tone: 'error', message: result.error.message })
-      return
-    }
-
-    updatePosts(currentPosts =>
-      currentPosts.map(currentPost =>
-        currentPost.id === post.id
-          ? { ...currentPost, savedByCurrentUser: result.data }
-          : currentPost
-      )
-    )
-  }
-
-  const handleTogglePinned = async (post: CommunityPost) => {
-    const nextPinned = !post.fixado
-    const result = await toggleCommunityPostPinned(post.id, nextPinned)
-    if (result.error) {
-      setFeedback({ tone: 'error', message: result.error.message })
-      return
-    }
-
-    setFeedback({
-      tone: 'success',
-      message: nextPinned ? t('communities.post.pinned') : t('communities.post.unpinned'),
-    })
-
-    if (postsPage !== 1) {
-      setPostsPage(1)
-      return
-    }
-
-    await reloadPosts()
-  }
-
-  const handleCreateComment = async (post: CommunityPost, text: string) => {
-    const result = await createCommunityComment(post.id, text)
-    if (result.error) {
-      setFeedback({ tone: 'error', message: result.error.message })
-      return
-    }
-
-    await reloadPosts()
-  }
-
-  const handleLoadMoreComments = useCallback(async (post: CommunityPost) => {
-    const expectedScopeKey = commentReadScopeKey
-    const currentPost = postsRef.current.find(candidate => candidate.id === post.id)
-    if (!currentPost) return false
-
-    const offset = currentPost.commentsNextOffset ?? currentPost.comentarios.length
-    if (offset >= currentPost.comentarios_count) return false
-    if (commentPageRequestsRef.current.has(post.id)) return false
-
-    const requestToken = Symbol(post.id)
-    commentPageRequestsRef.current.set(post.id, requestToken)
-
-    try {
-      const result = await getCommunityPostCommentsPage(post.id, {
-        limit: COMMENT_PAGE_SIZE,
-        offset,
-      })
-
-      if (
-        commentReadScopeKeyRef.current !== expectedScopeKey ||
-        commentPageRequestsRef.current.get(post.id) !== requestToken
-      ) {
-        return false
-      }
-
-      if (result.error) {
-        setFeedback({ tone: 'error', message: result.error.message })
-        return false
-      }
-
-      let applied = false
-      updatePosts(currentPosts => {
-        const nextPosts = currentPosts.map(candidate => {
-          if (candidate.id !== post.id) return candidate
-
-          const currentOffset = candidate.commentsNextOffset ?? candidate.comentarios.length
-          if (currentOffset !== offset) return candidate
-
-          const totalCount = result.data.totalCount ?? candidate.comentarios_count
-          const nextOffset = result.data.comments.length > 0
-            ? Math.max(currentOffset, result.data.nextOffset)
-            : totalCount
-          applied = result.data.comments.length > 0
-
-          return {
-            ...candidate,
-            comentarios: mergeCommunityComments(
-              candidate.comentarios,
-              result.data.comments
-            ),
-            comentarios_count: totalCount,
-            commentsNextOffset: nextOffset,
-          }
-        })
-        postsRef.current = nextPosts
-        return nextPosts
-      })
-
-      return applied
-    } finally {
-      if (commentPageRequestsRef.current.get(post.id) === requestToken) {
-        commentPageRequestsRef.current.delete(post.id)
-      }
-    }
-  }, [commentReadScopeKey, updatePosts])
-
-  useEffect(() => {
-    const commentPrefix = 'community-comment-'
-    if (
-      !activeAnchorId.startsWith(commentPrefix) ||
-      !community?.id ||
-      community.id !== communityId ||
-      !canViewContent ||
-      postsLoading
-    ) {
-      return
-    }
-
-    const commentId = activeAnchorId.slice(commentPrefix.length)
-    if (!commentId) return
-
-    const expectedScopeKey = commentReadScopeKey
-    const requestVersion = ++anchorRequestVersionRef.current
-    let cancelled = false
-    const isRequestActive = () => (
-      !cancelled &&
-      commentReadScopeKeyRef.current === expectedScopeKey &&
-      anchorRequestVersionRef.current === requestVersion
-    )
-
-    const resolveAnchor = async () => {
-      const targetResult = await getCommunityCommentTarget(commentId)
-      if (!isRequestActive()) return
-      if (targetResult.error) {
-        setFeedback({ tone: 'error', message: targetResult.error.message })
-        return
-      }
-
-      const target = targetResult.data
-      if (!target || target.communityId !== community.id) return
-
-      let targetPost = postsRef.current.find(post => post.id === target.postId) || null
-      if (!targetPost) {
-        const postResult = await getCommunityPostById(
-          target.postId,
-          user?.id,
-          currentUserRole
-        )
-        if (!isRequestActive()) return
-        if (postResult.error) {
-          setFeedback({ tone: 'error', message: postResult.error.message })
-          return
-        }
-        if (!postResult.data || postResult.data.comunidade_id !== community.id) return
-
-        targetPost = postResult.data
-        updatePosts(currentPosts => {
-          if (currentPosts.some(post => post.id === targetPost?.id)) return currentPosts
-          const nextPosts = [targetPost as CommunityPost, ...currentPosts]
-          postsRef.current = nextPosts
-          return nextPosts
-        })
-      }
-
-      const anchorResult = await getCommunityCommentAnchor(
-        target.postId,
-        commentId,
-        COMMENT_PAGE_SIZE
-      )
-      if (!isRequestActive()) return
-      if (anchorResult.error) {
-        setFeedback({ tone: 'error', message: anchorResult.error.message })
-        return
-      }
-      if (!anchorResult.data.found || anchorResult.data.pageOffset === null) return
-
-      const pageResult = await getCommunityPostCommentsPage(target.postId, {
-        limit: COMMENT_PAGE_SIZE,
-        offset: anchorResult.data.pageOffset,
-      })
-      if (!isRequestActive()) return
-      if (pageResult.error) {
-        setFeedback({ tone: 'error', message: pageResult.error.message })
-        return
-      }
-
-      updatePosts(currentPosts => {
-        const nextPosts = currentPosts.map(post => {
-          if (post.id !== target.postId) return post
-          const currentOffset = post.commentsNextOffset ?? post.comentarios.length
-          const commentsNextOffset = currentOffset === anchorResult.data.pageOffset
-            ? Math.max(currentOffset, pageResult.data.nextOffset)
-            : currentOffset
-          return {
-            ...post,
-            comentarios: mergeCommunityComments(post.comentarios, pageResult.data.comments),
-            comentarios_count: pageResult.data.totalCount
-              ?? anchorResult.data.totalCount
-              ?? post.comentarios_count,
-            commentsNextOffset,
-          }
-        })
-        postsRef.current = nextPosts
-        return nextPosts
-      })
-      setActiveTab('posts')
-    }
-
-    void resolveAnchor()
-    return () => {
-      cancelled = true
-    }
-  }, [
-    activeAnchorId,
-    canViewContent,
-    commentReadScopeKey,
-    community?.id,
-    communityId,
-    currentUserRole,
-    postsLoading,
+  const composer = useCommunityPostComposer({
+    communityId: community?.id ?? null,
+    currentUserId: user?.id ?? null,
+    reloadAll,
+    resetPostsPage,
+    publishFeedback: setFeedback,
+    t,
+  })
+  const feedActions = useCommunityFeedActions({
+    communityId: community?.id ?? null,
+    postsPage,
+    setPostsPage,
+    reloadPosts,
+    reloadModeration,
     updatePosts,
-    user?.id,
-  ])
-
-  const executeConfirmAction = async () => {
-    if (!confirmState || !community) return
-
-    setConfirmSubmitting(true)
-
-    try {
-      if (await membershipActions.executeConfirmation(confirmState)) {
-        return
-      }
-
-      if (confirmState.kind === 'delete-community') {
-        const result = await deleteCommunity(community.id)
-        if (result.error) throw result.error
-        navigate('/comunidades')
-        return
-      }
-
-      if (confirmState.kind === 'delete-post') {
-        const result = await deleteCommunityPost(confirmState.post.id)
-        if (result.error) throw result.error
-        setFeedback({
-          tone: result.data.failedPaths.length > 0 ? 'info' : 'success',
-          message:
-            result.data.failedPaths.length > 0
-              ? t('communities.post.deletedWithCleanupWarnings')
-              : t('communities.post.deleted'),
-        })
-      }
-
-      if (confirmState.kind === 'delete-comment') {
-        const result = await deleteCommunityComment(confirmState.commentId)
-        if (result.error) throw result.error
-        setFeedback({ tone: 'success', message: t('communities.comment.deleted') })
-      }
-
-      if (confirmState.kind === 'posting-permission') {
-        const result = await updateCommunityPostingPermission(community.id, confirmState.permission)
-        if (result.error) throw result.error
-        setFeedback({ tone: 'success', message: t('communities.settings.postingSaved') })
-      }
-
-      setConfirmState(null)
-      await reloadAll()
-    } catch (error) {
-      const message = error && typeof error === 'object' && 'message' in error
-        ? String(error.message)
-        : t('communities.actionError')
-      setFeedback({ tone: 'error', message })
-    } finally {
-      setConfirmSubmitting(false)
-    }
-  }
-
-  const handleReportSubmit = async (payload: { reason: CommunityReportReason; description: string }) => {
-    if (!community || !reportTarget) return
-    setReportSubmitting(true)
-    const result = await submitCommunityReport({
-      communityId: community.id,
-      targetType: reportTarget.type,
-      targetId: reportTarget.id,
-      reason: payload.reason,
-      description: payload.description,
-    })
-    setReportSubmitting(false)
-
-    if (result.error) {
-      setFeedback({ tone: 'error', message: result.error.message })
-      return
-    }
-
-    setReportTarget(null)
-    setFeedback({ tone: 'success', message: t('communities.report.sent') })
-    await reloadModeration()
-  }
-
-  const handleReportStatusChange = async (report: CommunityReport, status: CommunityReportStatus) => {
-    const result = await updateCommunityReportStatus(report.id, status)
-    if (result.error) {
-      setFeedback({ tone: 'error', message: result.error.message })
-      return
-    }
-    setFeedback({ tone: 'success', message: t('communities.moderation.reportUpdated') })
-    await reloadModeration()
-  }
-
-  const confirmCopy = getConfirmCopy(confirmState)
+    publishFeedback: setFeedback,
+    t,
+  })
+  const commentReader = useCommunityCommentReader({
+    activeAnchorId,
+    routeCommunityId: communityId,
+    communityId: community?.id ?? null,
+    currentUserId: user?.id ?? null,
+    currentUserRole,
+    canViewContent,
+    postsLoading,
+    postsPage,
+    posts,
+    updatePosts,
+    showPostsTab,
+    publishFeedback: setFeedback,
+  })
 
   if (loading) {
     return (
@@ -887,9 +375,11 @@ function CommunityDetailsPage() {
       settings={settings}
       onPostingPermissionDraftChange={setPostingPermissionDraft}
       onConfirmPostingPermission={permission =>
-        setConfirmState({ kind: 'posting-permission', permission })
+        confirmation.open({ kind: 'posting-permission', permission })
       }
-      onDeleteCommunity={() => setConfirmState({ kind: 'delete-community' })}
+      onDeleteCommunity={() =>
+        confirmation.open({ kind: 'delete-community' })
+      }
     />
   )
   return (
@@ -978,10 +468,10 @@ function CommunityDetailsPage() {
                         user && !canPost
                           ? getNoPostPermissionMessage(community.permissao_postagem)
                           : '',
-                      text: postText,
-                      imageFile: postImageFile,
-                      imagePreviewUrl: postImagePreviewUrl,
-                      submitting: postSubmitting,
+                      text: composer.text,
+                      imageFile: composer.imageFile,
+                      imagePreviewUrl: composer.imagePreviewUrl,
+                      submitting: composer.submitting,
                     }}
                     list={{
                       posts,
@@ -993,20 +483,24 @@ function CommunityDetailsPage() {
                       totalPages: totalPostPages,
                     }}
                     actions={{
-                      onCreatePost: handleCreatePost,
-                      onPostTextChange: setPostText,
-                      onPostImageFileChange: handlePostImageFileChange,
-                      onToggleReaction: handleToggleReaction,
-                      onToggleSave: handleToggleSave,
-                      onTogglePin: handleTogglePinned,
-                      onCreateComment: handleCreateComment,
-                      onLoadMoreComments: handleLoadMoreComments,
+                      onCreatePost: composer.submit,
+                      onPostTextChange: composer.setText,
+                      onPostImageFileChange: composer.setImage,
+                      onToggleReaction: feedActions.toggleReaction,
+                      onToggleSave: feedActions.toggleSave,
+                      onTogglePin: feedActions.togglePinned,
+                      onCreateComment: feedActions.createComment,
+                      onLoadMoreComments: commentReader.loadMoreComments,
                       onDeletePost: post =>
-                        setConfirmState({ kind: 'delete-post', post }),
+                        confirmation.open({ kind: 'delete-post', post }),
                       onDeleteComment: (post, commentId) =>
-                        setConfirmState({ kind: 'delete-comment', post, commentId }),
-                      onReport: setReportTarget,
-                      onOpenImage: (url, alt) => setLightbox({ url, alt }),
+                        confirmation.open({
+                          kind: 'delete-comment',
+                          post,
+                          commentId,
+                        }),
+                      onReport: feedActions.report.open,
+                      onOpenImage: feedActions.lightbox.open,
                       onPageChange: setPostsPage,
                     }}
                   />
@@ -1038,13 +532,16 @@ function CommunityDetailsPage() {
                     }}
                     actions={{
                       onRequestPromote: member =>
-                        setConfirmState({ kind: 'promote-member', member }),
+                        confirmation.open({ kind: 'promote-member', member }),
                       onRequestDemote: member =>
-                        setConfirmState({ kind: 'demote-admin', member }),
+                        confirmation.open({ kind: 'demote-admin', member }),
                       onRequestTransferLeadership: member =>
-                        setConfirmState({ kind: 'transfer-leadership', member }),
+                        confirmation.open({
+                          kind: 'transfer-leadership',
+                          member,
+                        }),
                       onRequestKick: member =>
-                        setConfirmState({ kind: 'kick-member', member }),
+                        confirmation.open({ kind: 'kick-member', member }),
                     }}
                   />
                 ) : null}
@@ -1063,7 +560,7 @@ function CommunityDetailsPage() {
                       items: reports,
                       filter: reportFilter,
                       onFilterChange: setReportFilter,
-                      onStatusChange: handleReportStatusChange,
+                      onStatusChange: feedActions.report.changeStatus,
                     }}
                   />
                 ) : null}
@@ -1073,49 +570,62 @@ function CommunityDetailsPage() {
                     community={community}
                     isAuthenticated={Boolean(user)}
                     onJoin={membershipActions.join}
-                    onRequestLeave={() => setConfirmState({ kind: 'leave-community' })}
+                    onRequestLeave={() =>
+                      confirmation.open({ kind: 'leave-community' })
+                    }
                   />
                 ) : null}
               </section>
             </>
           )}
 
-          {confirmCopy && confirmState ? (
+          {confirmation.copy && confirmation.state ? (
             <CommunityConfirmModal
-              title={confirmCopy.title}
-              description={confirmCopy.description}
-              confirmLabel={confirmCopy.confirmLabel}
+              title={confirmation.copy.title}
+              description={confirmation.copy.description}
+              confirmLabel={confirmation.copy.confirmLabel}
               cancelLabel={t('common.cancel')}
               submittingLabel={t('common.updating')}
-              tone={confirmCopy.tone}
-              isSubmitting={confirmSubmitting}
-              onClose={() => setConfirmState(null)}
-              onConfirm={() => void executeConfirmAction()}
+              tone={confirmation.copy.tone}
+              isSubmitting={confirmation.submitting}
+              onClose={confirmation.close}
+              onConfirm={() =>
+                void confirmation.execute(
+                  membershipActions.executeConfirmation,
+                )
+              }
             />
           ) : null}
 
-          {reportTarget ? (
+          {feedActions.report.target ? (
             <CommunityReportModal
-              targetType={reportTarget.type}
-              targetLabel={reportTarget.label}
-              isSubmitting={reportSubmitting}
-              onClose={() => setReportTarget(null)}
-              onSubmit={handleReportSubmit}
+              targetType={feedActions.report.target.type}
+              targetLabel={feedActions.report.target.label}
+              isSubmitting={feedActions.report.submitting}
+              onClose={feedActions.report.close}
+              onSubmit={feedActions.report.submit}
             />
           ) : null}
 
-          {lightbox ? (
-            <div className="community-lightbox" role="presentation" onMouseDown={() => setLightbox(null)}>
+          {feedActions.lightbox.state ? (
+            <div
+              className="community-lightbox"
+              role="presentation"
+              onMouseDown={feedActions.lightbox.close}
+            >
               <div className="community-lightbox-content" onMouseDown={event => event.stopPropagation()}>
                 <button
                   type="button"
                   className="community-lightbox-close"
-                  onClick={() => setLightbox(null)}
+                  onClick={feedActions.lightbox.close}
                   aria-label={t('common.close')}
                 >
                   X
                 </button>
-                <img src={lightbox.url} alt={lightbox.alt} />
+                <img
+                  src={feedActions.lightbox.state.url}
+                  alt={feedActions.lightbox.state.alt}
+                />
               </div>
             </div>
           ) : null}

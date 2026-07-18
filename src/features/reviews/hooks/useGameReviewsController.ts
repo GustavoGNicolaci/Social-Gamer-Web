@@ -2,184 +2,65 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
-  useMemo,
   useRef,
-  useState,
-  type Dispatch,
-  type FormEvent,
-  type SetStateAction,
 } from 'react'
-import type { TranslationParams } from '../../../i18n'
 import {
-  createReviewComment,
-  deleteReview,
-  deleteReviewComment,
-  getGameRatingSummaries,
+  getGameReviewOverview,
   getGameReviewsPage,
   getReviewByGameAndUserId,
   getReviewCommentsPage,
   resolveGameReviewAnchor,
-  saveReview,
-  toggleReviewLike,
   type GameRatingSummary,
-  type ReviewComment,
   type ReviewError,
   type ReviewItem,
 } from '../../../services/reviewService'
 import {
-  deleteContentReport,
-  submitContentReport,
-  toggleCommentDislike,
-  toggleCommentLike,
-  toggleReviewDislike,
-  type CurrentUserReportSummary,
-  type ReportReason,
-  type ReportTargetType,
-} from '../../../services/reviewInteractionsService'
-import {
-  isSupabaseDuplicateError,
-  isSupabasePermissionError,
-  isSupabaseStructureError,
-} from '../../../utils/supabaseErrors'
-import {
-  applyCommentReactionState,
-  applyContentReportState,
-  applyReviewReactionState,
-  createOptimisticDislikeTransition,
-  createOptimisticLikeTransition,
   mergeCommentPagePreservingClientState,
   mergeRefreshedReviews,
   mergeReviewPagePreservingClientState,
-  removeCommentForRollback,
-  restoreCommentFromRollback,
 } from '../domain/gameReviewState'
+import {
+  INITIAL_VISIBLE_COMMENT_COUNT,
+  INITIAL_VISIBLE_REVIEW_COUNT,
+  type GameReviewsController,
+  type UseGameReviewsControllerOptions,
+} from './gameReviewControllerContracts'
+import {
+  useGameReviewCommentsState,
+  useGameReviewEditorState,
+  useGameReviewFeedState,
+  useGameReviewReactionState,
+  useGameReviewReportState,
+} from './useGameReviewControllerState'
+import {
+  getReviewErrorMessage,
+  getReviewHashTargetId,
+} from './reviewControllerHelpers'
+import { useGameReviewReports } from './useGameReviewReports'
+import { useGameReviewReactions } from './useGameReviewReactions'
+import { useGameReviewEditor } from './useGameReviewEditor'
+import { useGameReviewComments } from './useGameReviewComments'
+import { useGameReviewFeedActions } from './useGameReviewFeedActions'
 
-type FeedbackTone = 'success' | 'error' | 'info'
-
-export interface ReviewFeedbackState {
-  tone: FeedbackTone
-  message: string
-}
-
-export interface GameReviewsOverviewController {
-  reviews: ReviewItem[]
-  ratingSummary: GameRatingSummary | null
-  totalComments: number
-  loading: boolean
-}
-
-export interface GameReviewsFormController {
-  authenticated: boolean
-  score: number
-  setScore: (score: number) => void
-  text: string
-  setText: (text: string) => void
-  submitting: boolean
-  feedback: ReviewFeedbackState | null
-  editing: boolean
-  submit: (event: FormEvent<HTMLFormElement>) => void | Promise<void>
-}
-
-export interface GameReviewsListController {
-  userId: string | null
-  total: number
-  visible: ReviewItem[]
-  error: string | null
-  commentCounts: Record<string, number>
-  commentTotals: Record<string, number>
-  commentText: Record<string, string>
-  submittingComments: Record<string, boolean>
-  pendingReviews: readonly string[]
-  pendingComments: readonly string[]
-  deletingReviews: readonly string[]
-  loadingMoreReviews: boolean
-  loadingComments: Record<string, boolean>
-  hidden: number
-}
-
-export interface GameReviewReportTarget {
-  targetType: ReportTargetType
-  targetId: string
-  authorName: string
-  currentReport: CurrentUserReportSummary | null
-}
-
-export interface GameReviewsReportController {
-  target: GameReviewReportTarget | null
-  feedback: ReviewFeedbackState | null
-  submitting: boolean
-  removing: boolean
-}
-
-export interface GameReviewsActionsController {
-  refreshReviews: () => Promise<unknown>
-  reviewLike: (review: ReviewItem) => Promise<void>
-  reviewDislike: (review: ReviewItem) => Promise<void>
-  reviewDelete: (review: ReviewItem) => Promise<void>
-  commentLike: (reviewId: string, comment: ReviewComment) => Promise<void>
-  commentDislike: (reviewId: string, comment: ReviewComment) => Promise<void>
-  commentDelete: (reviewId: string, comment: ReviewComment) => Promise<void>
-  openReport: (targetType: ReportTargetType, targetId: string, reviewId: string) => void
-  expandComments: (reviewId: string, totalComments: number) => Promise<void>
-  submitComment: (
-    reviewId: string,
-    event: FormEvent<HTMLFormElement>
-  ) => Promise<void>
-  setCommentText: Dispatch<SetStateAction<Record<string, string>>>
-  expandReviews: () => Promise<void>
-  closeReport: () => void
-  submitReport: (payload: { reason: ReportReason; description: string }) => Promise<void>
-  removeReport: () => Promise<void>
-}
-
-export interface GameReviewsSectionController {
-  form: GameReviewsFormController
-  list: GameReviewsListController
-  report: GameReviewsReportController
-  actions: GameReviewsActionsController
-}
-
-export interface GameReviewsController {
-  overview: GameReviewsOverviewController
-  section: GameReviewsSectionController
-}
-
-export interface ReportModalTargetState {
-  targetType: ReportTargetType
-  targetId: string
-  reviewId: string
-}
-
-interface UseGameReviewsControllerOptions {
-  gameId: number | null
-  currentUserId: string | null
-  locationHash: string
-  t: (key: string, params?: TranslationParams) => string
-}
-
-type Translate = UseGameReviewsControllerOptions['t']
-
-type ReviewAction =
-  | 'load'
-  | 'save'
-  | 'comment'
-  | 'comment_delete'
-  | 'review_like'
-  | 'review_dislike'
-  | 'comment_like'
-  | 'comment_dislike'
-  | 'report'
-  | 'report_delete'
-  | 'delete'
-
-export const INITIAL_VISIBLE_REVIEW_COUNT = 3
-export const VISIBLE_REVIEW_BATCH_SIZE = 4
-export const INITIAL_VISIBLE_COMMENT_COUNT = 2
-export const VISIBLE_COMMENT_BATCH_SIZE = 4
-
-export function getInitialVisibleCommentCount(totalComments: number) {
-  return Math.min(Math.max(totalComments, 0), INITIAL_VISIBLE_COMMENT_COUNT)
-}
+export {
+  INITIAL_VISIBLE_COMMENT_COUNT,
+  INITIAL_VISIBLE_REVIEW_COUNT,
+  VISIBLE_COMMENT_BATCH_SIZE,
+  VISIBLE_REVIEW_BATCH_SIZE,
+  getInitialVisibleCommentCount,
+} from './gameReviewControllerContracts'
+export type {
+  GameReviewReportTarget,
+  GameReviewsActionsController,
+  GameReviewsController,
+  GameReviewsFormController,
+  GameReviewsListController,
+  GameReviewsOverviewController,
+  GameReviewsReportController,
+  GameReviewsSectionController,
+  ReportModalTargetState,
+  ReviewFeedbackState,
+} from './gameReviewControllerContracts'
 
 function getEmptyRatingSummary(gameId: number): GameRatingSummary {
   return {
@@ -189,79 +70,76 @@ function getEmptyRatingSummary(gameId: number): GameRatingSummary {
   }
 }
 
-function getReviewErrorMessage(t: Translate, error: ReviewError | null, action: ReviewAction) {
-  if (!error) {
-    return t(`game.details.reviewError.${action}.default`)
-  }
-
-  if (isSupabasePermissionError(error)) {
-    return t(`game.details.reviewError.${action}.permission`)
-  }
-
-  if (isSupabaseDuplicateError(error)) {
-    if (action === 'review_like' || action === 'comment_like' || action === 'report') {
-      return t(`game.details.reviewError.${action}.duplicate`)
-    }
-    if (action === 'review_dislike' || action === 'comment_dislike') {
-      return t('game.details.reviewError.dislike.duplicate')
-    }
-    return t('game.details.reviewError.save.duplicate')
-  }
-
-  if (isSupabaseStructureError(error)) {
-    return t('game.details.reviewError.structure')
-  }
-
-  return error.message
-}
-
-function removeMapKey<T>(map: Record<string, T>, key: string) {
-  const nextMap = { ...map }
-  delete nextMap[key]
-  return nextMap
-}
-
-function getTargetId(locationHash: string) {
-  if (!locationHash) return ''
-
-  try {
-    return decodeURIComponent(locationHash.startsWith('#') ? locationHash.slice(1) : locationHash)
-  } catch {
-    return locationHash.startsWith('#') ? locationHash.slice(1) : locationHash
-  }
-}
-
 export function useGameReviewsController({
   gameId,
   currentUserId,
   locationHash,
   t,
 }: UseGameReviewsControllerOptions): GameReviewsController {
-  const [reviews, setReviews] = useState<ReviewItem[]>([])
-  const [ownReviewForForm, setOwnReviewForForm] = useState<ReviewItem | null>(null)
-  const [ratingSummary, setRatingSummary] = useState<GameRatingSummary | null>(null)
-  const [totalReviewCount, setTotalReviewCount] = useState(0)
-  const [nextReviewOffset, setNextReviewOffset] = useState(0)
-  const [reviewsLoading, setReviewsLoading] = useState(Boolean(gameId))
-  const [reviewsError, setReviewsError] = useState<string | null>(null)
-  const [nota, setNota] = useState(5)
-  const [textoReview, setTextoReview] = useState('')
-  const [submitting, setSubmitting] = useState(false)
-  const [reviewFeedback, setReviewFeedback] = useState<ReviewFeedbackState | null>(null)
-  const [comentarioTexto, setComentarioTexto] = useState<Record<string, string>>({})
-  const [visibleCommentsByReviewId, setVisibleCommentsByReviewId] = useState<Record<string, number>>({})
-  const [commentTotalsByReviewId, setCommentTotalsByReviewId] = useState<Record<string, number>>({})
-  const [nextCommentOffsetByReviewId, setNextCommentOffsetByReviewId] = useState<Record<string, number>>({})
-  const [loadingMoreReviews, setLoadingMoreReviews] = useState(false)
-  const [loadingCommentsByReviewId, setLoadingCommentsByReviewId] = useState<Record<string, boolean>>({})
-  const [submittingComentario, setSubmittingComentario] = useState<Record<string, boolean>>({})
-  const [pendingReviewReactionIds, setPendingReviewReactionIds] = useState<string[]>([])
-  const [pendingCommentReactionIds, setPendingCommentReactionIds] = useState<string[]>([])
-  const [deletingReviewIds, setDeletingReviewIds] = useState<string[]>([])
-  const [reportModalTarget, setReportModalTarget] = useState<ReportModalTargetState | null>(null)
-  const [reportModalFeedback, setReportModalFeedback] = useState<ReviewFeedbackState | null>(null)
-  const [submittingReport, setSubmittingReport] = useState(false)
-  const [removingReport, setRemovingReport] = useState(false)
+  const {
+    reviews,
+    setReviews,
+    ownReviewForForm,
+    setOwnReviewForForm,
+    ratingSummary,
+    setRatingSummary,
+    reviewOverview,
+    setReviewOverview,
+    reviewOverviewFallbackUsed,
+    setReviewOverviewFallbackUsed,
+    totalReviewCount,
+    setTotalReviewCount,
+    nextReviewOffset,
+    setNextReviewOffset,
+    reviewsLoading,
+    setReviewsLoading,
+    reviewsError,
+    setReviewsError,
+    loadingMoreReviews,
+    setLoadingMoreReviews,
+  } = useGameReviewFeedState(gameId)
+  const {
+    nota,
+    setNota,
+    textoReview,
+    setTextoReview,
+    submitting,
+    setSubmitting,
+    reviewFeedback,
+    setReviewFeedback,
+  } = useGameReviewEditorState()
+  const {
+    comentarioTexto,
+    setComentarioTexto,
+    visibleCommentsByReviewId,
+    setVisibleCommentsByReviewId,
+    commentTotalsByReviewId,
+    setCommentTotalsByReviewId,
+    nextCommentOffsetByReviewId,
+    setNextCommentOffsetByReviewId,
+    loadingCommentsByReviewId,
+    setLoadingCommentsByReviewId,
+    submittingComentario,
+    setSubmittingComentario,
+  } = useGameReviewCommentsState()
+  const {
+    pendingReviewReactionIds,
+    setPendingReviewReactionIds,
+    pendingCommentReactionIds,
+    setPendingCommentReactionIds,
+    deletingReviewIds,
+    setDeletingReviewIds,
+  } = useGameReviewReactionState()
+  const {
+    reportModalTarget,
+    setReportModalTarget,
+    reportModalFeedback,
+    setReportModalFeedback,
+    submittingReport,
+    setSubmittingReport,
+    removingReport,
+    setRemovingReport,
+  } = useGameReviewReportState()
 
   const scopeKey = `${gameId ?? 'none'}:${currentUserId ?? 'anonymous'}`
   const scopeKeyRef = useRef(scopeKey)
@@ -297,6 +175,47 @@ export function useGameReviewsController({
   const isScopeActive = useCallback((expectedScopeKey: string) => (
     mountedRef.current && scopeKeyRef.current === expectedScopeKey
   ), [])
+  const reportController = useGameReviewReports({
+    currentUserId,
+    scopeKey,
+    isScopeActive,
+    reviews,
+    setReviews,
+    target: reportModalTarget,
+    setTarget: setReportModalTarget,
+    feedback: reportModalFeedback,
+    setFeedback: setReportModalFeedback,
+    submitting: submittingReport,
+    setSubmitting: setSubmittingReport,
+    removing: removingReport,
+    setRemoving: setRemovingReport,
+    t,
+  })
+  const commentsController = useGameReviewComments({
+    currentUserId,
+    gameId,
+    scopeKey,
+    isScopeActive,
+    reviews,
+    setReviews,
+    commentText: comentarioTexto,
+    setCommentText: setComentarioTexto,
+    commentTotals: commentTotalsByReviewId,
+    setCommentTotals: setCommentTotalsByReviewId,
+    nextCommentOffsets: nextCommentOffsetByReviewId,
+    setNextCommentOffsets: setNextCommentOffsetByReviewId,
+    setVisibleCommentCounts: setVisibleCommentsByReviewId,
+    setLoadingComments: setLoadingCommentsByReviewId,
+    setSubmittingComments: setSubmittingComentario,
+    setPendingCommentIds: setPendingCommentReactionIds,
+    setReportTarget: setReportModalTarget,
+    setReportFeedback: setReportModalFeedback,
+    setReviewFeedback,
+    setOverview: setReviewOverview,
+    loadingCommentIdsRef,
+    paginationRequestVersionRef,
+    t,
+  })
 
   const refreshReviews = useCallback(async (requestedGameId = gameId) => {
     if (!requestedGameId || requestedGameId !== gameId) {
@@ -358,14 +277,43 @@ export function useGameReviewsController({
     )
 
     return result
-  }, [currentUserId, gameId, isScopeActive, reviews.length, scopeKey, t])
+  }, [
+    currentUserId,
+    gameId,
+    isScopeActive,
+    reviews.length,
+    scopeKey,
+    setCommentTotalsByReviewId,
+    setNextCommentOffsetByReviewId,
+    setNextReviewOffset,
+    setOwnReviewForForm,
+    setReviews,
+    setReviewsError,
+    setTotalReviewCount,
+    setVisibleCommentsByReviewId,
+    t,
+  ])
+  const reactionController = useGameReviewReactions({
+    currentUserId,
+    gameId,
+    scopeKey,
+    isScopeActive,
+    pendingReviewIds: pendingReviewReactionIds,
+    setPendingReviewIds: setPendingReviewReactionIds,
+    pendingCommentIds: pendingCommentReactionIds,
+    setPendingCommentIds: setPendingCommentReactionIds,
+    setReviews,
+    setFeedback: setReviewFeedback,
+    refreshReviews,
+    t,
+  })
 
   const refreshRatingSummary = useCallback(async (requestedGameId = gameId) => {
     if (!requestedGameId || requestedGameId !== gameId) return null
 
     const expectedScopeKey = scopeKey
     const requestVersion = ++ratingRequestVersionRef.current
-    const result = await getGameRatingSummaries([requestedGameId])
+    const result = await getGameReviewOverview(requestedGameId)
 
     if (
       !isScopeActive(expectedScopeKey) ||
@@ -377,15 +325,80 @@ export function useGameReviewsController({
     if (result.error) {
       console.error(t('game.details.reviewFeedback.ratingSummaryLoadLog'), result.error)
       setRatingSummary(null)
+      setReviewOverview(null)
+      setReviewOverviewFallbackUsed(false)
       return result
     }
 
-    setRatingSummary(
-      result.data.find(summary => summary.gameId === requestedGameId) ||
-        getEmptyRatingSummary(requestedGameId)
+    const overview = result.data
+    setReviewOverview(overview)
+    setReviewOverviewFallbackUsed(Boolean(result.fallbackUsed))
+    setRatingSummary(overview
+      ? {
+          gameId: overview.gameId,
+          averageRating: overview.averageRating,
+          reviewCount: overview.reviewCount,
+        }
+      : getEmptyRatingSummary(requestedGameId)
     )
     return result
-  }, [gameId, isScopeActive, scopeKey, t])
+  }, [
+    gameId,
+    isScopeActive,
+    scopeKey,
+    setRatingSummary,
+    setReviewOverview,
+    setReviewOverviewFallbackUsed,
+    t,
+  ])
+  const editorController = useGameReviewEditor({
+    currentUserId,
+    gameId,
+    scopeKey,
+    isScopeActive,
+    reviews,
+    ownReview: ownReviewForForm,
+    score: nota,
+    setScore: setNota,
+    text: textoReview,
+    setText: setTextoReview,
+    setSubmitting,
+    setFeedback: setReviewFeedback,
+    refreshReviews,
+    refreshOverview: refreshRatingSummary,
+    t,
+  })
+  const feedActions = useGameReviewFeedActions({
+    currentUserId,
+    gameId,
+    scopeKey,
+    isScopeActive,
+    nextReviewOffset,
+    totalReviewCount,
+    deletingReviewIds,
+    setReviews,
+    setOwnReview: setOwnReviewForForm,
+    setTotalReviewCount,
+    setNextReviewOffset,
+    setLoadingMoreReviews,
+    setCommentText: setComentarioTexto,
+    setSubmittingComments: setSubmittingComentario,
+    setVisibleCommentCounts: setVisibleCommentsByReviewId,
+    setCommentTotals: setCommentTotalsByReviewId,
+    setNextCommentOffsets: setNextCommentOffsetByReviewId,
+    setLoadingComments: setLoadingCommentsByReviewId,
+    setPendingReviewIds: setPendingReviewReactionIds,
+    setPendingCommentIds: setPendingCommentReactionIds,
+    setDeletingReviewIds,
+    setReportTarget: setReportModalTarget,
+    setReportFeedback: setReportModalFeedback,
+    setFeedback: setReviewFeedback,
+    loadingMoreReviewsRef,
+    paginationRequestVersionRef,
+    refreshReviews,
+    refreshOverview: refreshRatingSummary,
+    t,
+  })
 
   useEffect(() => {
     const expectedScopeKey = scopeKey
@@ -396,6 +409,8 @@ export function useGameReviewsController({
       setReviews([])
       setOwnReviewForForm(null)
       setRatingSummary(null)
+      setReviewOverview(null)
+      setReviewOverviewFallbackUsed(false)
       setTotalReviewCount(0)
       setNextReviewOffset(0)
       setReviewsError(null)
@@ -436,7 +451,7 @@ export function useGameReviewsController({
           offset: 0,
           initialCommentsLimit: INITIAL_VISIBLE_COMMENT_COUNT,
         }),
-        getGameRatingSummaries([gameId]),
+        getGameReviewOverview(gameId),
         currentUserId
           ? getReviewByGameAndUserId(gameId, currentUserId)
           : Promise.resolve({ data: null, error: null }),
@@ -473,10 +488,18 @@ export function useGameReviewsController({
       if (ratingResult.error) {
         console.error(t('game.details.reviewFeedback.ratingSummaryLoadLog'), ratingResult.error)
         setRatingSummary(null)
+        setReviewOverview(null)
+        setReviewOverviewFallbackUsed(false)
       } else {
-        setRatingSummary(
-          ratingResult.data.find(summary => summary.gameId === gameId) ||
-            getEmptyRatingSummary(gameId)
+        setReviewOverview(ratingResult.data)
+        setReviewOverviewFallbackUsed(Boolean(ratingResult.fallbackUsed))
+        setRatingSummary(ratingResult.data
+          ? {
+              gameId: ratingResult.data.gameId,
+              averageRating: ratingResult.data.averageRating,
+              reviewCount: ratingResult.data.reviewCount,
+            }
+          : getEmptyRatingSummary(gameId)
         )
       }
 
@@ -484,72 +507,44 @@ export function useGameReviewsController({
     }
 
     void loadReviews()
-  }, [currentUserId, gameId, isScopeActive, scopeKey, t])
+  }, [
+    currentUserId,
+    gameId,
+    isScopeActive,
+    scopeKey,
+    setComentarioTexto,
+    setCommentTotalsByReviewId,
+    setDeletingReviewIds,
+    setLoadingCommentsByReviewId,
+    setLoadingMoreReviews,
+    setNextCommentOffsetByReviewId,
+    setNextReviewOffset,
+    setOwnReviewForForm,
+    setPendingCommentReactionIds,
+    setPendingReviewReactionIds,
+    setRatingSummary,
+    setRemovingReport,
+    setReportModalFeedback,
+    setReportModalTarget,
+    setReviewFeedback,
+    setReviewOverview,
+    setReviewOverviewFallbackUsed,
+    setReviews,
+    setReviewsError,
+    setReviewsLoading,
+    setSubmitting,
+    setSubmittingComentario,
+    setSubmittingReport,
+    setTotalReviewCount,
+    setVisibleCommentsByReviewId,
+    t,
+  ])
 
   const visibleReviews = reviews
   const hiddenReviewsCount = Math.max(totalReviewCount - reviews.length, 0)
 
-  const currentUserReview = useMemo(() => {
-    if (!currentUserId) return null
-    return reviews.find(review => review.usuario_id === currentUserId) || ownReviewForForm
-  }, [currentUserId, ownReviewForForm, reviews])
-
-  const activeReportTarget = useMemo(() => {
-    if (!reportModalTarget) return null
-
-    if (reportModalTarget.targetType === 'review') {
-      const review = reviews.find(item => item.id === reportModalTarget.targetId)
-      if (!review) return null
-
-      return {
-        targetType: 'review' as const,
-        targetId: review.id,
-        reviewId: review.id,
-        authorId: review.usuario_id,
-        authorName: review.usuario?.username?.trim() || t('common.username'),
-        currentReport: review.currentUserReport,
-      }
-    }
-
-    const parentReview = reviews.find(item => item.id === reportModalTarget.reviewId)
-    const comment = parentReview?.comentarios.find(item => item.id === reportModalTarget.targetId)
-    if (!parentReview || !comment) return null
-
-    return {
-      targetType: 'comment' as const,
-      targetId: comment.id,
-      reviewId: parentReview.id,
-      authorId: comment.usuario_id,
-      authorName: comment.usuario?.username?.trim() || t('common.username'),
-      currentReport: comment.currentUserReport,
-    }
-  }, [reportModalTarget, reviews, t])
-
   useEffect(() => {
-    const timeoutId = window.setTimeout(() => {
-      setReviewFeedback(null)
-
-      if (!currentUserId || !gameId) {
-        setNota(5)
-        setTextoReview('')
-        return
-      }
-
-      if (currentUserReview) {
-        setNota(currentUserReview.nota)
-        setTextoReview(currentUserReview.texto_review || '')
-        return
-      }
-
-      setNota(5)
-      setTextoReview('')
-    }, 0)
-
-    return () => window.clearTimeout(timeoutId)
-  }, [currentUserId, currentUserReview, gameId])
-
-  useEffect(() => {
-    const targetId = getTargetId(locationHash)
+    const targetId = getReviewHashTargetId(locationHash)
     if (!targetId || !gameId || reviewsLoading) return
 
     const targetReviewId = targetId.startsWith('review-')
@@ -700,714 +695,26 @@ export function useGameReviewsController({
     reviews,
     reviewsLoading,
     scopeKey,
-  ])
-
-  const handleSubmitAvaliacao = useCallback(async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    if (!currentUserId || !gameId) return
-
-    const expectedScopeKey = scopeKey
-    setSubmitting(true)
-    setReviewFeedback(null)
-
-    const saveResult = await saveReview({
-      userId: currentUserId,
-      gameId,
-      nota,
-      textoReview,
-    })
-
-    if (!isScopeActive(expectedScopeKey)) return
-
-    if (saveResult.error) {
-      setReviewFeedback({
-        tone: 'error',
-        message: getReviewErrorMessage(t, saveResult.error, 'save'),
-      })
-      setSubmitting(false)
-      return
-    }
-
-    const [refreshResult] = await Promise.all([
-      refreshReviews(gameId),
-      refreshRatingSummary(gameId),
-    ])
-
-    if (!isScopeActive(expectedScopeKey)) return
-
-    if (refreshResult.error && refreshResult.data.length === 0) {
-      setReviewFeedback({
-        tone: 'info',
-        message: t('game.details.reviewFeedback.saveRefreshFailed'),
-      })
-    } else {
-      setReviewFeedback({
-        tone: 'success',
-        message:
-          saveResult.status === 'updated'
-            ? t('game.details.reviewFeedback.updated')
-            : t('game.details.reviewFeedback.created'),
-      })
-    }
-
-    setSubmitting(false)
-  }, [
-    currentUserId,
-    gameId,
-    isScopeActive,
-    nota,
-    refreshRatingSummary,
-    refreshReviews,
-    scopeKey,
-    t,
-    textoReview,
-  ])
-
-  const handleSubmitComentario = useCallback(async (
-    reviewId: string,
-    event: FormEvent<HTMLFormElement>
-  ) => {
-    event.preventDefault()
-    if (!currentUserId || !gameId) return
-
-    const texto = comentarioTexto[reviewId]?.trim()
-    if (!texto) return
-
-    const expectedScopeKey = scopeKey
-    setSubmittingComentario(current => ({ ...current, [reviewId]: true }))
-    setReviewFeedback(null)
-
-    const commentResult = await createReviewComment({
-      userId: currentUserId,
-      reviewId,
-      texto,
-    })
-
-    if (!isScopeActive(expectedScopeKey)) return
-
-    if (commentResult.error) {
-      setReviewFeedback({
-        tone: 'error',
-        message: getReviewErrorMessage(t, commentResult.error, 'comment'),
-      })
-      setSubmittingComentario(current => ({ ...current, [reviewId]: false }))
-      return
-    }
-
-    setComentarioTexto(current => ({ ...current, [reviewId]: '' }))
-    const loadedCommentCount = reviews.find(review => review.id === reviewId)?.comentarios.length || 0
-    const refreshResult = await getReviewCommentsPage(reviewId, {
-      currentUserId,
-      limit: Math.min(Math.max(loadedCommentCount + 1, INITIAL_VISIBLE_COMMENT_COUNT), 20),
-      offset: 0,
-    })
-
-    if (!isScopeActive(expectedScopeKey)) return
-
-    setReviews(current => current.map(review => (
-      review.id === reviewId
-        ? {
-            ...review,
-            comentarios: mergeCommentPagePreservingClientState(
-              review.comentarios,
-              refreshResult.data
-            ),
-          }
-        : review
-    )))
-    setCommentTotalsByReviewId(current => ({
-      ...current,
-      [reviewId]: refreshResult.totalCount ?? current[reviewId] ?? loadedCommentCount + 1,
-    }))
-    setNextCommentOffsetByReviewId(current => ({
-      ...current,
-      [reviewId]: refreshResult.nextOffset ?? refreshResult.data.length,
-    }))
-    setVisibleCommentsByReviewId(current => ({
-      ...current,
-      [reviewId]: Math.max(current[reviewId] ?? 0, refreshResult.data.length),
-    }))
-
-    if (refreshResult.error && refreshResult.data.length === 0) {
-      setReviewFeedback({
-        tone: 'info',
-        message: t('game.details.reviewFeedback.commentRefreshFailed'),
-      })
-    }
-
-    setSubmittingComentario(current => ({ ...current, [reviewId]: false }))
-  }, [comentarioTexto, currentUserId, gameId, isScopeActive, reviews, scopeKey, t])
-
-  const handleToggleReviewReaction = useCallback(async (
-    review: ReviewItem,
-    reactionType: 'like' | 'dislike'
-  ) => {
-    const isLike = reactionType === 'like'
-    const canReact = isLike ? review.canLike : review.canDislike
-
-    if (
-      !currentUserId ||
-      !gameId ||
-      !canReact ||
-      pendingReviewReactionIds.includes(review.id)
-    ) return
-
-    const expectedScopeKey = scopeKey
-    const transition = isLike
-      ? createOptimisticLikeTransition(review)
-      : createOptimisticDislikeTransition(review)
-
-    setPendingReviewReactionIds(current => (
-      current.includes(review.id) ? current : [...current, review.id]
-    ))
-    setReviewFeedback(null)
-    setReviews(current => applyReviewReactionState(current, review.id, transition.next))
-
-    const toggleParams = {
-      reviewId: review.id,
-      userId: currentUserId,
-      reviewAuthorId: review.usuario_id,
-      likedByCurrentUser: review.likedByCurrentUser,
-      dislikedByCurrentUser: review.dislikedByCurrentUser,
-      currentLikeCount: review.curtidas,
-      currentDislikeCount: review.dislikes,
-    }
-    const toggleResult = isLike
-      ? await toggleReviewLike(toggleParams)
-      : await toggleReviewDislike(toggleParams)
-
-    if (!isScopeActive(expectedScopeKey)) return
-
-    if (toggleResult.error) {
-      setReviews(current => applyReviewReactionState(current, review.id, transition.previous))
-      setReviewFeedback({
-        tone: 'error',
-        message: getReviewErrorMessage(
-          t,
-          toggleResult.error,
-          isLike ? 'review_like' : 'review_dislike'
-        ),
-      })
-      setPendingReviewReactionIds(current => current.filter(id => id !== review.id))
-      return
-    }
-
-    if (toggleResult.data) {
-      const nextReactionState = toggleResult.data
-      setReviews(current => applyReviewReactionState(current, review.id, nextReactionState))
-    }
-
-    const refreshResult = await refreshReviews(gameId)
-    if (!isScopeActive(expectedScopeKey)) return
-
-    if (refreshResult.error && refreshResult.data.length === 0) {
-      setReviewFeedback({
-        tone: 'info',
-        message: t(`game.details.reviewFeedback.${reactionType}RefreshFailed`),
-      })
-    }
-
-    setPendingReviewReactionIds(current => current.filter(id => id !== review.id))
-  }, [
-    currentUserId,
-    gameId,
-    isScopeActive,
-    pendingReviewReactionIds,
-    refreshReviews,
-    scopeKey,
-    t,
-  ])
-
-  const handleToggleReviewLike = useCallback(
-    (review: ReviewItem) => handleToggleReviewReaction(review, 'like'),
-    [handleToggleReviewReaction]
-  )
-  const handleToggleReviewDislike = useCallback(
-    (review: ReviewItem) => handleToggleReviewReaction(review, 'dislike'),
-    [handleToggleReviewReaction]
-  )
-
-  const handleToggleCommentReaction = useCallback(async (
-    reviewId: string,
-    comment: ReviewComment,
-    reactionType: 'like' | 'dislike'
-  ) => {
-    const isLike = reactionType === 'like'
-    const canReact = isLike ? comment.canLike : comment.canDislike
-
-    if (
-      !currentUserId ||
-      pendingCommentReactionIds.includes(comment.id) ||
-      !canReact
-    ) return
-
-    const expectedScopeKey = scopeKey
-    const transition = isLike
-      ? createOptimisticLikeTransition(comment)
-      : createOptimisticDislikeTransition(comment)
-
-    setPendingCommentReactionIds(current => (
-      current.includes(comment.id) ? current : [...current, comment.id]
-    ))
-    setReviewFeedback(null)
-    setReviews(current => (
-      applyCommentReactionState(current, reviewId, comment.id, transition.next)
-    ))
-
-    const toggleParams = {
-      commentId: comment.id,
-      userId: currentUserId,
-      commentAuthorId: comment.usuario_id,
-      likedByCurrentUser: comment.likedByCurrentUser,
-      dislikedByCurrentUser: comment.dislikedByCurrentUser,
-      currentLikeCount: comment.curtidas,
-      currentDislikeCount: comment.dislikes,
-    }
-    const toggleResult = isLike
-      ? await toggleCommentLike(toggleParams)
-      : await toggleCommentDislike(toggleParams)
-
-    if (!isScopeActive(expectedScopeKey)) return
-
-    if (toggleResult.error) {
-      setReviews(current => (
-        applyCommentReactionState(current, reviewId, comment.id, transition.previous)
-      ))
-      setReviewFeedback({
-        tone: 'error',
-        message: getReviewErrorMessage(
-          t,
-          toggleResult.error,
-          isLike ? 'comment_like' : 'comment_dislike'
-        ),
-      })
-      setPendingCommentReactionIds(current => current.filter(id => id !== comment.id))
-      return
-    }
-
-    if (toggleResult.data) {
-      const nextReactionState = toggleResult.data
-      setReviews(current => (
-        applyCommentReactionState(current, reviewId, comment.id, nextReactionState)
-      ))
-    }
-
-    setPendingCommentReactionIds(current => current.filter(id => id !== comment.id))
-  }, [currentUserId, isScopeActive, pendingCommentReactionIds, scopeKey, t])
-
-  const handleToggleCommentLike = useCallback(
-    (reviewId: string, comment: ReviewComment) => (
-      handleToggleCommentReaction(reviewId, comment, 'like')
-    ),
-    [handleToggleCommentReaction]
-  )
-  const handleToggleCommentDislike = useCallback(
-    (reviewId: string, comment: ReviewComment) => (
-      handleToggleCommentReaction(reviewId, comment, 'dislike')
-    ),
-    [handleToggleCommentReaction]
-  )
-
-  const handleOpenReportModal = useCallback((
-    targetType: ReportTargetType,
-    targetId: string,
-    reviewId: string
-  ) => {
-    setReportModalTarget({ targetType, targetId, reviewId })
-    setReportModalFeedback(null)
-  }, [])
-
-  const handleCloseReportModal = useCallback(() => {
-    if (submittingReport || removingReport) return
-    setReportModalTarget(null)
-    setReportModalFeedback(null)
-  }, [removingReport, submittingReport])
-
-  const handleSubmitReport = useCallback(async ({
-    reason,
-    description,
-  }: {
-    reason: ReportReason
-    description: string
-  }) => {
-    if (!currentUserId || !activeReportTarget) return
-
-    const expectedScopeKey = scopeKey
-    const submittedTarget = activeReportTarget
-    setSubmittingReport(true)
-    setReportModalFeedback(null)
-
-    const reportResult = await submitContentReport({
-      userId: currentUserId,
-      targetType: submittedTarget.targetType,
-      targetId: submittedTarget.targetId,
-      targetAuthorId: submittedTarget.authorId,
-      reason,
-      description,
-    })
-
-    if (!isScopeActive(expectedScopeKey)) return
-
-    if (reportResult.error) {
-      setReportModalFeedback({
-        tone: 'error',
-        message: getReviewErrorMessage(t, reportResult.error, 'report'),
-      })
-      setSubmittingReport(false)
-      return
-    }
-
-    if (reportResult.data) {
-      setReviews(current => applyContentReportState(
-        current,
-        submittedTarget.reviewId,
-        submittedTarget.targetType,
-        submittedTarget.targetId,
-        reportResult.data
-      ))
-    }
-
-    setReportModalFeedback({
-      tone: reportResult.status === 'already_exists' ? 'info' : 'success',
-      message:
-        reportResult.status === 'already_exists'
-          ? t('game.details.reportAlreadyExists')
-          : t('game.details.reportCreated'),
-    })
-    setSubmittingReport(false)
-  }, [activeReportTarget, currentUserId, isScopeActive, scopeKey, t])
-
-  const handleRemoveReport = useCallback(async () => {
-    if (!currentUserId || !activeReportTarget?.currentReport) return
-
-    const expectedScopeKey = scopeKey
-    const removedTarget = activeReportTarget
-    const reportId = activeReportTarget.currentReport.id
-    setRemovingReport(true)
-    setReportModalFeedback(null)
-
-    const reportResult = await deleteContentReport({
-      userId: currentUserId,
-      reportId,
-    })
-
-    if (!isScopeActive(expectedScopeKey)) return
-
-    if (reportResult.error) {
-      setReportModalFeedback({
-        tone: 'error',
-        message: getReviewErrorMessage(t, reportResult.error, 'report_delete'),
-      })
-      setRemovingReport(false)
-      return
-    }
-
-    setReviews(current => applyContentReportState(
-      current,
-      removedTarget.reviewId,
-      removedTarget.targetType,
-      removedTarget.targetId,
-      null
-    ))
-    setReportModalFeedback({
-      tone: 'success',
-      message: t('game.details.reportRemoved'),
-    })
-    setRemovingReport(false)
-  }, [activeReportTarget, currentUserId, isScopeActive, scopeKey, t])
-
-  const handleExpandComments = useCallback(async (
-    reviewId: string,
-    totalComments: number
-  ) => {
-    const requestKey = `${scopeKey}:${reviewId}`
-    if (loadingCommentIdsRef.current.has(requestKey)) return
-
-    const review = reviews.find(item => item.id === reviewId)
-    if (!review) return
-
-    const expectedScopeKey = scopeKey
-    const requestVersion = paginationRequestVersionRef.current
-    const offset = nextCommentOffsetByReviewId[reviewId] ?? review.comentarios.length
-    const knownTotal = commentTotalsByReviewId[reviewId] ?? totalComments
-    if (offset >= knownTotal) return
-
-    loadingCommentIdsRef.current.add(requestKey)
-    setLoadingCommentsByReviewId(current => ({ ...current, [reviewId]: true }))
-
-    try {
-      const result = await getReviewCommentsPage(reviewId, {
-        currentUserId,
-        limit: VISIBLE_COMMENT_BATCH_SIZE,
-        offset,
-      })
-      if (
-        !isScopeActive(expectedScopeKey) ||
-        requestVersion !== paginationRequestVersionRef.current
-      ) return
-
-      if (result.error && result.data.length === 0) {
-        setReviewFeedback({
-          tone: 'error',
-          message: getReviewErrorMessage(t, result.error, 'load'),
-        })
-        return
-      }
-
-      setReviews(current => current.map(currentReview => (
-        currentReview.id === reviewId
-          ? {
-              ...currentReview,
-              comentarios: mergeCommentPagePreservingClientState(
-                currentReview.comentarios,
-                result.data
-              ),
-            }
-          : currentReview
-      )))
-      setCommentTotalsByReviewId(current => ({
-        ...current,
-        [reviewId]: result.totalCount ?? current[reviewId] ?? knownTotal,
-      }))
-      const loadedThroughOffset = offset + result.data.length
-      setNextCommentOffsetByReviewId(current => ({
-        ...current,
-        [reviewId]: result.nextOffset ?? loadedThroughOffset,
-      }))
-      setVisibleCommentsByReviewId(current => ({
-        ...current,
-        [reviewId]: Math.max(current[reviewId] ?? 0, loadedThroughOffset),
-      }))
-    } finally {
-      loadingCommentIdsRef.current.delete(requestKey)
-      if (isScopeActive(expectedScopeKey)) {
-        setLoadingCommentsByReviewId(current => ({ ...current, [reviewId]: false }))
-      }
-    }
-  }, [
-    commentTotalsByReviewId,
-    currentUserId,
-    isScopeActive,
-    nextCommentOffsetByReviewId,
-    reviews,
-    scopeKey,
-    t,
-  ])
-
-  const handleExpandReviews = useCallback(async () => {
-    if (
-      !gameId ||
-      loadingMoreReviewsRef.current !== null ||
-      nextReviewOffset >= totalReviewCount
-    ) return
-
-    const expectedScopeKey = scopeKey
-    const requestVersion = paginationRequestVersionRef.current
-    const offset = nextReviewOffset
-    const requestKey = `${scopeKey}:${offset}`
-    loadingMoreReviewsRef.current = requestKey
-    setLoadingMoreReviews(true)
-
-    try {
-      const result = await getGameReviewsPage(gameId, {
-        currentUserId,
-        limit: VISIBLE_REVIEW_BATCH_SIZE,
-        offset,
-        initialCommentsLimit: INITIAL_VISIBLE_COMMENT_COUNT,
-      })
-      if (
-        !isScopeActive(expectedScopeKey) ||
-        requestVersion !== paginationRequestVersionRef.current
-      ) return
-
-      if (result.error && result.data.length === 0) {
-        setReviewFeedback({
-          tone: 'error',
-          message: getReviewErrorMessage(t, result.error, 'load'),
-        })
-        return
-      }
-
-      setReviews(current => mergeReviewPagePreservingClientState(current, result.data))
-      setTotalReviewCount(current => result.totalCount ?? current)
-      setNextReviewOffset(result.nextOffset ?? offset + result.data.length)
-      setCommentTotalsByReviewId(current => ({ ...current, ...(result.commentTotals || {}) }))
-      setVisibleCommentsByReviewId(current => {
-        const next = { ...current }
-        result.data.forEach(review => {
-          next[review.id] = Math.max(next[review.id] ?? 0, review.comentarios.length)
-        })
-        return next
-      })
-      setNextCommentOffsetByReviewId(current => {
-        const next = { ...current }
-        result.data.forEach(review => {
-          next[review.id] = Math.max(next[review.id] ?? 0, review.comentarios.length)
-        })
-        return next
-      })
-    } finally {
-      if (loadingMoreReviewsRef.current === requestKey) {
-        loadingMoreReviewsRef.current = null
-        if (isScopeActive(expectedScopeKey)) setLoadingMoreReviews(false)
-      }
-    }
-  }, [
-    currentUserId,
-    gameId,
-    isScopeActive,
-    nextReviewOffset,
-    scopeKey,
-    t,
-    totalReviewCount,
-  ])
-
-  const handleDeleteComment = useCallback(async (
-    reviewId: string,
-    comment: ReviewComment
-  ) => {
-    if (!currentUserId || comment.usuario_id !== currentUserId) return
-
-    const removal = removeCommentForRollback(reviews, reviewId, comment.id)
-    if (!removal.snapshot) return
-
-    const expectedScopeKey = scopeKey
-    const loadedCommentCount = reviews.find(review => review.id === reviewId)?.comentarios.length || 0
-    const previousCommentTotal = commentTotalsByReviewId[reviewId] ?? loadedCommentCount
-    const previousCommentOffset = nextCommentOffsetByReviewId[reviewId] ?? loadedCommentCount
-    setReviewFeedback(null)
-    setReviews(removal.reviews)
-    setCommentTotalsByReviewId(current => ({
-      ...current,
-      [reviewId]: Math.max((current[reviewId] ?? previousCommentTotal) - 1, 0),
-    }))
-    setNextCommentOffsetByReviewId(current => ({
-      ...current,
-      [reviewId]: Math.max((current[reviewId] ?? previousCommentOffset) - 1, 0),
-    }))
-    setPendingCommentReactionIds(current => current.filter(id => id !== comment.id))
-    setReportModalTarget(current => (
-      current?.targetType === 'comment' && current.targetId === comment.id ? null : current
-    ))
-    setReportModalFeedback(null)
-
-    const deleteResult = await deleteReviewComment({
-      userId: currentUserId,
-      commentId: comment.id,
-    })
-
-    if (!isScopeActive(expectedScopeKey) || deleteResult.ok) return
-
-    setReviews(current => restoreCommentFromRollback(current, removal.snapshot!))
-    setCommentTotalsByReviewId(current => ({
-      ...current,
-      [reviewId]: previousCommentTotal,
-    }))
-    setNextCommentOffsetByReviewId(current => ({
-      ...current,
-      [reviewId]: previousCommentOffset,
-    }))
-    setReviewFeedback({
-      tone: 'error',
-      message: getReviewErrorMessage(t, deleteResult.error, 'comment_delete'),
-    })
-  }, [
-    commentTotalsByReviewId,
-    currentUserId,
-    isScopeActive,
-    nextCommentOffsetByReviewId,
-    reviews,
-    scopeKey,
-    t,
-  ])
-
-  const handleDeleteReview = useCallback(async (review: ReviewItem) => {
-    if (
-      !currentUserId ||
-      !gameId ||
-      review.usuario_id !== currentUserId ||
-      deletingReviewIds.includes(review.id)
-    ) return
-
-    const expectedScopeKey = scopeKey
-    setDeletingReviewIds(current => (
-      current.includes(review.id) ? current : [...current, review.id]
-    ))
-    setReviewFeedback(null)
-
-    const deleteResult = await deleteReview({
-      userId: currentUserId,
-      reviewId: review.id,
-    })
-
-    if (!isScopeActive(expectedScopeKey)) return
-
-    if (!deleteResult.ok) {
-      setReviewFeedback({
-        tone: 'error',
-        message: getReviewErrorMessage(t, deleteResult.error, 'delete'),
-      })
-      setDeletingReviewIds(current => current.filter(id => id !== review.id))
-      return
-    }
-
-    setReviews(current => current.filter(item => item.id !== review.id))
-    setOwnReviewForForm(current => current?.id === review.id ? null : current)
-    setTotalReviewCount(current => Math.max(current - 1, 0))
-    setNextReviewOffset(current => Math.max(current - 1, 0))
-    setComentarioTexto(current => removeMapKey(current, review.id))
-    setSubmittingComentario(current => removeMapKey(current, review.id))
-    setVisibleCommentsByReviewId(current => removeMapKey(current, review.id))
-    setCommentTotalsByReviewId(current => removeMapKey(current, review.id))
-    setNextCommentOffsetByReviewId(current => removeMapKey(current, review.id))
-    setLoadingCommentsByReviewId(current => removeMapKey(current, review.id))
-    setPendingReviewReactionIds(current => current.filter(id => id !== review.id))
-    setPendingCommentReactionIds(current => current.filter(id => (
-      !review.comentarios.some(comment => comment.id === id)
-    )))
-    setReportModalTarget(current => current?.reviewId === review.id ? null : current)
-    setReportModalFeedback(null)
-
-    const [refreshResult] = await Promise.all([
-      refreshReviews(gameId),
-      refreshRatingSummary(gameId),
-    ])
-
-    if (!isScopeActive(expectedScopeKey)) return
-
-    setReviewFeedback(
-      refreshResult.error && refreshResult.data.length === 0
-        ? {
-            tone: 'info',
-            message: t('game.details.reviewFeedback.deleteRefreshFailed'),
-          }
-        : {
-            tone: 'success',
-            message: t('game.details.reviewFeedback.deleteSuccess'),
-          }
-    )
-    setDeletingReviewIds(current => current.filter(id => id !== review.id))
-  }, [
-    currentUserId,
-    deletingReviewIds,
-    gameId,
-    isScopeActive,
-    refreshRatingSummary,
-    refreshReviews,
-    scopeKey,
-    t,
+    setCommentTotalsByReviewId,
+    setNextCommentOffsetByReviewId,
+    setReviews,
+    setTotalReviewCount,
+    setVisibleCommentsByReviewId,
   ])
 
   return {
     overview: {
       reviews,
       ratingSummary,
-      totalComments: reviews.reduce(
-        (total, review) => total + (
-          commentTotalsByReviewId[review.id] ?? review.comentarios.length
-        ),
-        0
-      ),
+      totalComments:
+        reviewOverview && !reviewOverviewFallbackUsed
+          ? reviewOverview.commentCount
+          : reviews.reduce(
+              (total, review) => total + (
+                commentTotalsByReviewId[review.id] ?? review.comentarios.length
+              ),
+              0
+            ),
       loading: reviewsLoading,
     },
     section: {
@@ -1419,8 +726,8 @@ export function useGameReviewsController({
         setText: setTextoReview,
         submitting,
         feedback: reviewFeedback,
-        editing: Boolean(currentUserReview),
-        submit: handleSubmitAvaliacao,
+        editing: Boolean(editorController.currentUserReview),
+        submit: editorController.submit,
       },
       list: {
         userId: currentUserId,
@@ -1439,27 +746,27 @@ export function useGameReviewsController({
         hidden: hiddenReviewsCount,
       },
       report: {
-        target: activeReportTarget,
-        feedback: reportModalFeedback,
-        submitting: submittingReport,
-        removing: removingReport,
+        target: reportController.activeTarget,
+        feedback: reportController.feedback,
+        submitting: reportController.submitting,
+        removing: reportController.removing,
       },
       actions: {
         refreshReviews,
-        reviewLike: handleToggleReviewLike,
-        reviewDislike: handleToggleReviewDislike,
-        reviewDelete: handleDeleteReview,
-        commentLike: handleToggleCommentLike,
-        commentDislike: handleToggleCommentDislike,
-        commentDelete: handleDeleteComment,
-        openReport: handleOpenReportModal,
-        expandComments: handleExpandComments,
-        submitComment: handleSubmitComentario,
+        reviewLike: reactionController.reviewLike,
+        reviewDislike: reactionController.reviewDislike,
+        reviewDelete: feedActions.remove,
+        commentLike: reactionController.commentLike,
+        commentDislike: reactionController.commentDislike,
+        commentDelete: commentsController.remove,
+        openReport: reportController.open,
+        expandComments: commentsController.expand,
+        submitComment: commentsController.submit,
         setCommentText: setComentarioTexto,
-        expandReviews: handleExpandReviews,
-        closeReport: handleCloseReportModal,
-        submitReport: handleSubmitReport,
-        removeReport: handleRemoveReport,
+        expandReviews: feedActions.expand,
+        closeReport: reportController.close,
+        submitReport: reportController.submit,
+        removeReport: reportController.remove,
       },
     },
   }

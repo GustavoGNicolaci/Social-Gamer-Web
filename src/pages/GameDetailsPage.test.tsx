@@ -6,7 +6,7 @@ import GameDetailsPage from './GameDetailsPage'
 
 const serviceMocks = vi.hoisted(() => ({
   getCatalogGameDetailsById: vi.fn(),
-  getGameRatingSummaries: vi.fn(),
+  getGameReviewOverview: vi.fn(),
   getGameReviewsPage: vi.fn(),
   getReviewByGameAndUserId: vi.fn(),
   getReviewCommentsPage: vi.fn(),
@@ -57,7 +57,7 @@ vi.mock('../services/reviewService', () => ({
   createReviewComment: vi.fn(),
   deleteReviewComment: vi.fn(),
   deleteReview: vi.fn(),
-  getGameRatingSummaries: serviceMocks.getGameRatingSummaries,
+  getGameReviewOverview: serviceMocks.getGameReviewOverview,
   getGameReviewsPage: serviceMocks.getGameReviewsPage,
   getReviewByGameAndUserId: serviceMocks.getReviewByGameAndUserId,
   getReviewCommentsPage: serviceMocks.getReviewCommentsPage,
@@ -182,8 +182,13 @@ describe('GameDetailsPage characterization', () => {
     })
     serviceMocks.getReviewByGameAndUserId.mockResolvedValue({ data: null, error: null })
     serviceMocks.resolveGameReviewAnchor.mockResolvedValue({ data: null, error: null })
-    serviceMocks.getGameRatingSummaries.mockResolvedValue({
-      data: [{ gameId: 7, averageRating: null, reviewCount: 0 }],
+    serviceMocks.getGameReviewOverview.mockResolvedValue({
+      data: {
+        gameId: 7,
+        averageRating: null,
+        reviewCount: 0,
+        commentCount: 0,
+      },
       error: null,
     })
     serviceMocks.getWishlistEntry.mockResolvedValue({ data: null, error: null })
@@ -234,7 +239,7 @@ describe('GameDetailsPage characterization', () => {
       offset: 0,
       initialCommentsLimit: 2,
     })
-    expect(serviceMocks.getGameRatingSummaries).toHaveBeenCalledWith([7])
+    expect(serviceMocks.getGameReviewOverview).toHaveBeenCalledWith(7)
     expect(screen.getByRole('link', { name: 'game.details.loginToRate' })).toHaveAttribute(
       'href',
       '/login'

@@ -1,31 +1,19 @@
 import {
   memo,
   useEffect,
-  useLayoutEffect,
   useMemo,
-  useRef,
   useState,
   type CSSProperties,
-  type DragEvent,
-  type MutableRefObject,
-  type MouseEvent,
 } from 'react'
 import { Link } from 'react-router-dom'
-import { useI18n } from '../../i18n/I18nContext'
 import {
-  type WishlistError,
-  type WishlistGameItem,
-  updateWishlistPriorities,
-} from '../../services/wishlistService'
+  useProfileWishlistReorderController,
+  type WishlistOrderStatusState,
+} from '../../features/profile/hooks/useProfileWishlistReorderController'
+import { useI18n } from '../../i18n/I18nContext'
+import type { WishlistGameItem } from '../../services/wishlistService'
 import { ProfileWishlistGrid } from './ProfileWishlistGrid'
 import './ProfileWishlistSection.css'
-
-type OrderStatusTone = 'saving' | 'error'
-
-interface OrderStatusState {
-  tone: OrderStatusTone
-  message: string
-}
 
 interface ProfileWishlistSectionProps {
   userId: string
@@ -39,14 +27,18 @@ interface ProfileWishlistSectionProps {
   isPreparingReorder: boolean
   isFullyLoaded: boolean
   isOwnerView: boolean
-  onDeleteWishlistItem: (itemId: string) => Promise<{ ok: boolean; message?: string }>
+  onDeleteWishlistItem: (itemId: string) => Promise<{
+    ok: boolean
+    message?: string
+  }>
   onLoadMore: () => Promise<void>
-  onLoadFullWishlistForReorder: () => Promise<{ ok: boolean; message?: string }>
+  onLoadFullWishlistForReorder: () => Promise<{
+    ok: boolean
+    message?: string
+  }>
 }
 
 const HORIZONTAL_LAYOUT_THRESHOLD = 6
-const DRAG_EDGE_THRESHOLD = 72
-const DRAG_PAGE_ADVANCE_DELAY = 220
 
 function getItemsPerPage(viewportWidth: number) {
   if (viewportWidth <= 480) return 1
@@ -66,60 +58,6 @@ function chunkWishlistItems(items: WishlistGameItem[], chunkSize: number) {
   return itemGroups
 }
 
-function getWishlistOrderErrorMessage(
-  error: WishlistError | null,
-  t: (key: string, params?: Record<string, string | number>) => string
-) {
-  if (!error) {
-    return t('profileWishlist.orderSaveError')
-  }
-
-  const fullMessage = [error.message, error.details, error.hint].filter(Boolean).join(' ').toLowerCase()
-
-  if (
-    error.code === '42501' ||
-    fullMessage.includes('permission denied') ||
-    fullMessage.includes('row-level security') ||
-    fullMessage.includes('policy')
-  ) {
-    return t('profileWishlist.orderPermissionError')
-  }
-
-  if (fullMessage.includes('column')) {
-    return t('profileWishlist.orderStructureError')
-  }
-
-  return t('profileWishlist.orderSaveError')
-}
-
-function moveWishlistItem(items: WishlistGameItem[], sourceIndex: number, targetIndex: number) {
-  const nextItems = [...items]
-  const [movedItem] = nextItems.splice(sourceIndex, 1)
-
-  nextItems.splice(targetIndex, 0, movedItem)
-  return nextItems
-}
-
-function assignSequentialPriorities(items: WishlistGameItem[]) {
-  return items.map((item, index) => ({
-    ...item,
-    prioridade: index + 1,
-  }))
-}
-
-function registerItemRef(
-  itemRefs: MutableRefObject<Map<string, HTMLElement>>,
-  itemId: string,
-  node: HTMLElement | null
-) {
-  if (node) {
-    itemRefs.current.set(itemId, node)
-    return
-  }
-
-  itemRefs.current.delete(itemId)
-}
-
 export const ProfileWishlistSection = memo(function ProfileWishlistSection({
   userId,
   items,
@@ -137,58 +75,64 @@ export const ProfileWishlistSection = memo(function ProfileWishlistSection({
   onLoadFullWishlistForReorder,
 }: ProfileWishlistSectionProps) {
   const { t } = useI18n()
-  const [orderedItemIds, setOrderedItemIds] = useState<string[] | null>(null)
-  const [draggedItemId, setDraggedItemId] = useState<string | null>(null)
-  const [dropTargetId, setDropTargetId] = useState<string | null>(null)
-  const [isSavingOrder, setIsSavingOrder] = useState(false)
-  const [orderStatus, setOrderStatus] = useState<OrderStatusState | null>(null)
-  const [hasFinePointer, setHasFinePointer] = useState(false)
+  const [orderStatus, setOrderStatus] =
+    useState<WishlistOrderStatusState | null>(null)
   const [removingItemIds, setRemovingItemIds] = useState<string[]>([])
   const [itemsPerPage, setItemsPerPage] = useState(() =>
     typeof window === 'undefined' ? 6 : getItemsPerPage(window.innerWidth)
   )
   const [currentPage, setCurrentPage] = useState(0)
-
-  const itemRefs = useRef(new Map<string, HTMLElement>())
-  const layoutSnapshotRef = useRef(new Map<string, DOMRect>())
-  const shouldAnimateLayoutRef = useRef(false)
-  const dragAutoPageTimeoutRef = useRef<number | null>(null)
-  const dragAutoPageDirectionRef = useRef<'previous' | 'next' | null>(null)
-
-  const orderedItems = useMemo(() => {
-    if (!orderedItemIds) return items
-
-    const itemsById = new Map(items.map(item => [item.id, item]))
-    const orderedFromState = orderedItemIds.flatMap(itemId => {
-      const item = itemsById.get(itemId)
-      return item ? [item] : []
-    })
-    const orderedIdSet = new Set(orderedItemIds)
-    const missingItems = items.filter(item => !orderedIdSet.has(item.id))
-
-    return [...orderedFromState, ...missingItems]
-  }, [items, orderedItemIds])
-
-  const hasWishlistItems = orderedItems.length > 0
-  const isPaginatedLayout = orderedItems.length > HORIZONTAL_LAYOUT_THRESHOLD
   const hasPendingRemoval = removingItemIds.length > 0
-  const canReorder =
-    isOwnerView &&
-    isFullyLoaded &&
-    orderedItems.length > 1 &&
-    hasFinePointer &&
-    !isSavingOrder &&
-    !hasPendingRemoval
-  const canPrepareReorder =
-    isOwnerView && !isFullyLoaded && hasFinePointer && orderedItems.length > 1 && !isPreparingReorder
+  const reorderController = useProfileWishlistReorderController({
+    userId,
+    items,
+    isOwnerView,
+    isFullyLoaded,
+    isPreparingReorder,
+    hasPendingRemoval,
+    onLoadFullWishlistForReorder,
+    onOrderStatusChange: setOrderStatus,
+  })
+  const {
+    canPrepareReorder,
+    canReorder,
+    clearAutoPageSchedule,
+    draggedItemId,
+    dropTargetId,
+    handleDragEnd,
+    handleDragHandleClick,
+    handleDragHandlePointerDown,
+    handleDragOver,
+    handleDragStart,
+    handleDrop,
+    handlePrepareReorder,
+    handleViewportDragLeave,
+    handleViewportDragOver,
+    isSavingOrder,
+    orderedItems,
+    registerItem,
+    resetInteraction,
+  } = reorderController
+  const hasWishlistItems = orderedItems.length > 0
+  const isPaginatedLayout =
+    orderedItems.length > HORIZONTAL_LAYOUT_THRESHOLD
   const pagedItems = useMemo(
-    () => (isPaginatedLayout ? chunkWishlistItems(orderedItems, itemsPerPage) : []),
+    () =>
+      isPaginatedLayout
+        ? chunkWishlistItems(orderedItems, itemsPerPage)
+        : [],
     [isPaginatedLayout, itemsPerPage, orderedItems]
   )
   const totalPages = isPaginatedLayout ? pagedItems.length : 1
-  const safeCurrentPage = Math.min(currentPage, Math.max(totalPages - 1, 0))
+  const safeCurrentPage = Math.min(
+    currentPage,
+    Math.max(totalPages - 1, 0)
+  )
   const visiblePageItems = useMemo(
-    () => (isPaginatedLayout ? pagedItems[safeCurrentPage] || [] : orderedItems),
+    () =>
+      isPaginatedLayout
+        ? pagedItems[safeCurrentPage] || []
+        : orderedItems,
     [isPaginatedLayout, orderedItems, pagedItems, safeCurrentPage]
   )
   const visibleItemIds = useMemo(
@@ -196,26 +140,11 @@ export const ProfileWishlistSection = memo(function ProfileWishlistSection({
     [visiblePageItems]
   )
   const canGoPrevPage = isPaginatedLayout && safeCurrentPage > 0
-  const canGoNextPage = isPaginatedLayout && safeCurrentPage < totalPages - 1
-
+  const canGoNextPage =
+    isPaginatedLayout && safeCurrentPage < totalPages - 1
   const wishlistColumnsStyle = {
     '--wishlist-columns': String(itemsPerPage),
   } as CSSProperties
-  useEffect(() => {
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return
-
-    const pointerMedia = window.matchMedia('(pointer: fine)')
-    const syncPointerType = () => {
-      setHasFinePointer(pointerMedia.matches)
-    }
-
-    syncPointerType()
-    pointerMedia.addEventListener('change', syncPointerType)
-
-    return () => {
-      pointerMedia.removeEventListener('change', syncPointerType)
-    }
-  }, [])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -232,240 +161,18 @@ export const ProfileWishlistSection = memo(function ProfileWishlistSection({
     }
   }, [])
 
-  useEffect(() => {
-    return () => {
-      if (dragAutoPageTimeoutRef.current !== null) {
-        window.clearTimeout(dragAutoPageTimeoutRef.current)
-      }
-    }
-  }, [])
-
-  useLayoutEffect(() => {
-    if (!shouldAnimateLayoutRef.current) return
-
-    const previousRects = layoutSnapshotRef.current
-
-    orderedItems.forEach(item => {
-      const node = itemRefs.current.get(item.id)
-      const previousRect = previousRects.get(item.id)
-
-      if (!node || !previousRect) return
-
-      const nextRect = node.getBoundingClientRect()
-      const deltaX = previousRect.left - nextRect.left
-      const deltaY = previousRect.top - nextRect.top
-
-      if (Math.abs(deltaX) < 1 && Math.abs(deltaY) < 1) return
-      if (typeof node.animate !== 'function') return
-
-      node.animate(
-        [
-          { transform: `translate(${deltaX}px, ${deltaY}px)` },
-          { transform: 'translate(0, 0)' },
-        ],
-        {
-          duration: 220,
-          easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
-        }
-      )
-    })
-
-    shouldAnimateLayoutRef.current = false
-    layoutSnapshotRef.current = new Map()
-  }, [orderedItems])
-
-  const snapshotItemRects = () => {
-    const nextSnapshot = new Map<string, DOMRect>()
-
-    itemRefs.current.forEach((node, itemId) => {
-      nextSnapshot.set(itemId, node.getBoundingClientRect())
-    })
-
-    layoutSnapshotRef.current = nextSnapshot
-    shouldAnimateLayoutRef.current = true
-  }
-
-  const clearAutoPageSchedule = () => {
-    if (dragAutoPageTimeoutRef.current !== null) {
-      window.clearTimeout(dragAutoPageTimeoutRef.current)
-      dragAutoPageTimeoutRef.current = null
-    }
-
-    dragAutoPageDirectionRef.current = null
-  }
-
-  const scheduleAutoPageAdvance = (direction: 'previous' | 'next') => {
-    if (dragAutoPageDirectionRef.current === direction) return
-
-    clearAutoPageSchedule()
-    dragAutoPageDirectionRef.current = direction
-    dragAutoPageTimeoutRef.current = window.setTimeout(() => {
-      setCurrentPage(previousPage => {
-        if (direction === 'previous') {
-          return Math.max(previousPage - 1, 0)
-        }
-
-        return Math.min(previousPage + 1, totalPages - 1)
-      })
-
-      dragAutoPageTimeoutRef.current = null
-      dragAutoPageDirectionRef.current = null
-    }, DRAG_PAGE_ADVANCE_DELAY)
-  }
-
-  const handleDragStart = (itemId: string, event: DragEvent<HTMLButtonElement>) => {
-    if (!canReorder) return
-    if (!visibleItemIds.has(itemId)) return
-
-    const cardNode = itemRefs.current.get(itemId)
-
-    event.stopPropagation()
-    event.dataTransfer.effectAllowed = 'move'
-    event.dataTransfer.setData('text/plain', itemId)
-
-    if (cardNode) {
-      event.dataTransfer.setDragImage(cardNode, Math.min(cardNode.clientWidth / 2, 72), 28)
-    }
-
-    setOrderStatus(null)
-    setDraggedItemId(itemId)
-    setDropTargetId(null)
-  }
-
-  const handleDragHandlePointerDown = (event: MouseEvent<HTMLButtonElement>) => {
-    event.stopPropagation()
-  }
-
-  const handleDragHandleClick = (event: MouseEvent<HTMLButtonElement>) => {
-    event.preventDefault()
-    event.stopPropagation()
-  }
-
-  const handleDragOver = (targetItemId: string, event: DragEvent<HTMLElement>) => {
-    if (!draggedItemId || draggedItemId === targetItemId || isSavingOrder) return
-    if (!visibleItemIds.has(targetItemId)) return
-
-    event.preventDefault()
-    event.dataTransfer.dropEffect = 'move'
-
-    if (dropTargetId !== targetItemId) {
-      setDropTargetId(targetItemId)
-    }
-  }
-
-  const handleDragEnd = () => {
-    clearAutoPageSchedule()
-    setDraggedItemId(null)
-    setDropTargetId(null)
-  }
-
-  const handleViewportDragOver = (event: DragEvent<HTMLDivElement>) => {
-    if (!isPaginatedLayout || !draggedItemId || isSavingOrder) return
-
-    event.preventDefault()
-
-    const viewportBounds = event.currentTarget.getBoundingClientRect()
-    const leftDistance = event.clientX - viewportBounds.left
-    const rightDistance = viewportBounds.right - event.clientX
-    const threshold = Math.min(DRAG_EDGE_THRESHOLD, viewportBounds.width * 0.18)
-
-    if (leftDistance <= threshold && canGoPrevPage) {
-      scheduleAutoPageAdvance('previous')
-      return
-    }
-
-    if (rightDistance <= threshold && canGoNextPage) {
-      scheduleAutoPageAdvance('next')
-      return
-    }
-
-    clearAutoPageSchedule()
-  }
-
-  const handleViewportDragLeave = (event: DragEvent<HTMLDivElement>) => {
-    const nextTarget = event.relatedTarget
-
-    if (
-      nextTarget instanceof Node &&
-      event.currentTarget.contains(nextTarget)
-    ) {
-      return
-    }
-
-    clearAutoPageSchedule()
-  }
-
-  const handleDrop = async (targetItemId: string, event: DragEvent<HTMLElement>) => {
-    event.preventDefault()
-
-    if (!draggedItemId || draggedItemId === targetItemId || isSavingOrder) {
-      clearAutoPageSchedule()
-      setDraggedItemId(null)
-      setDropTargetId(null)
-      return
-    }
-
-    if (!visibleItemIds.has(targetItemId)) {
-      clearAutoPageSchedule()
-      setDraggedItemId(null)
-      setDropTargetId(null)
-      return
-    }
-
-    const sourceIndex = orderedItems.findIndex(item => item.id === draggedItemId)
-    const targetIndex = orderedItems.findIndex(item => item.id === targetItemId)
-
-    if (sourceIndex < 0 || targetIndex < 0) {
-      clearAutoPageSchedule()
-      setDraggedItemId(null)
-      setDropTargetId(null)
-      return
-    }
-
-    const previousItems = orderedItems
-    const reorderedItems = assignSequentialPriorities(
-      moveWishlistItem(orderedItems, sourceIndex, targetIndex)
-    )
-
-    snapshotItemRects()
-    setOrderedItemIds(reorderedItems.map(item => item.id))
-    clearAutoPageSchedule()
-    setDraggedItemId(null)
-    setDropTargetId(null)
-    setIsSavingOrder(true)
-    setOrderStatus({
-      tone: 'saving',
-      message: t('profileWishlist.savingOrder'),
-    })
-
-    const { error } = await updateWishlistPriorities(userId, reorderedItems)
-
-    if (error) {
-      snapshotItemRects()
-      setOrderedItemIds(previousItems.map(item => item.id))
-      setOrderStatus({
-        tone: 'error',
-        message: getWishlistOrderErrorMessage(error, t),
-      })
-    } else {
-      setOrderStatus(null)
-    }
-
-    setIsSavingOrder(false)
-  }
-
   const handleDeleteItem = async (itemId: string) => {
     setOrderStatus(null)
-    setDraggedItemId(null)
-    setDropTargetId(null)
-    clearAutoPageSchedule()
+    resetInteraction()
     setRemovingItemIds(currentIds =>
       currentIds.includes(itemId) ? currentIds : [...currentIds, itemId]
     )
 
     const result = await onDeleteWishlistItem(itemId)
 
-    setRemovingItemIds(currentIds => currentIds.filter(currentId => currentId !== itemId))
+    setRemovingItemIds(currentIds =>
+      currentIds.filter(currentId => currentId !== itemId)
+    )
 
     if (!result.ok) {
       setOrderStatus({
@@ -473,25 +180,6 @@ export const ProfileWishlistSection = memo(function ProfileWishlistSection({
         message: result.message || t('profileWishlist.removeError'),
       })
     }
-  }
-
-  const handlePrepareReorder = async () => {
-    setOrderStatus({
-      tone: 'saving',
-      message: t('profileWishlist.loadingFull'),
-    })
-
-    const result = await onLoadFullWishlistForReorder()
-
-    if (result.ok) {
-      setOrderStatus(null)
-      return
-    }
-
-    setOrderStatus({
-      tone: 'error',
-      message: result.message || t('profileWishlist.prepareError'),
-    })
   }
 
   return (
@@ -502,7 +190,9 @@ export const ProfileWishlistSection = memo(function ProfileWishlistSection({
       <div className="profile-wishlist-content">
         <div className="profile-section-head">
           <div className="profile-section-copy">
-            <span className="profile-section-label">{t('profileWishlist.title')}</span>
+            <span className="profile-section-label">
+              {t('profileWishlist.title')}
+            </span>
             <h2>{t('profileWishlist.title')}</h2>
             <p>
               {isOwnerView
@@ -529,10 +219,20 @@ export const ProfileWishlistSection = memo(function ProfileWishlistSection({
                 ? t('profileWishlist.loadingOwnerText')
                 : t('profileWishlist.loadingPublicText')}
             </p>
-            <div className="profile-wishlist-skeleton-grid" style={wishlistColumnsStyle} aria-hidden="true">
-              {Array.from({ length: Math.min(itemsPerPage, 6) }, (_, index) => (
-                <span key={`wishlist-skeleton-${index}`} className="profile-wishlist-skeleton-card" />
-              ))}
+            <div
+              className="profile-wishlist-skeleton-grid"
+              style={wishlistColumnsStyle}
+              aria-hidden="true"
+            >
+              {Array.from(
+                { length: Math.min(itemsPerPage, 6) },
+                (_, index) => (
+                  <span
+                    key={`wishlist-skeleton-${index}`}
+                    className="profile-wishlist-skeleton-card"
+                  />
+                )
+              )}
             </div>
           </div>
         ) : errorMessage ? (
@@ -550,7 +250,10 @@ export const ProfileWishlistSection = memo(function ProfileWishlistSection({
                 : t('profileWishlist.emptyPublicText')}
             </p>
             {isOwnerView ? (
-              <Link to="/games" className="profile-secondary-button profile-wishlist-link">
+              <Link
+                to="/games"
+                className="profile-secondary-button profile-wishlist-link"
+              >
                 {t('common.exploreGames')}
               </Link>
             ) : null}
@@ -564,7 +267,9 @@ export const ProfileWishlistSection = memo(function ProfileWishlistSection({
                       loaded: orderedItems.length,
                       total: totalCount,
                     })
-                  : t('profileWishlist.loadedCount', { count: orderedItems.length })}
+                  : t('profileWishlist.loadedCount', {
+                      count: orderedItems.length,
+                    })}
               </p>
 
               {canPrepareReorder ? (
@@ -574,7 +279,9 @@ export const ProfileWishlistSection = memo(function ProfileWishlistSection({
                   onClick={() => void handlePrepareReorder()}
                   disabled={isPreparingReorder}
                 >
-                  {isPreparingReorder ? t('profileWishlist.preparing') : t('profileWishlist.prepareReorder')}
+                  {isPreparingReorder
+                    ? t('profileWishlist.preparing')
+                    : t('profileWishlist.prepareReorder')}
                 </button>
               ) : null}
             </div>
@@ -592,27 +299,47 @@ export const ProfileWishlistSection = memo(function ProfileWishlistSection({
               dropTargetId={dropTargetId}
               isSavingOrder={isSavingOrder}
               removingItemIds={removingItemIds}
-              onRegisterItem={(itemId, node) => registerItemRef(itemRefs, itemId, node)}
-              onDragOverItem={handleDragOver}
-              onDropItem={handleDrop}
-              onDragStart={handleDragStart}
+              onRegisterItem={registerItem}
+              onDragOverItem={(itemId, event) =>
+                handleDragOver(itemId, event, visibleItemIds)
+              }
+              onDropItem={(itemId, event) =>
+                handleDrop(itemId, event, visibleItemIds)
+              }
+              onDragStart={(itemId, event) =>
+                handleDragStart(itemId, event, visibleItemIds)
+              }
               onDragEnd={handleDragEnd}
               onDragHandlePointerDown={handleDragHandlePointerDown}
               onDragHandleClick={handleDragHandleClick}
-              onViewportDragOver={handleViewportDragOver}
+              onViewportDragOver={event =>
+                handleViewportDragOver(event, {
+                  isPaginatedLayout,
+                  canGoPreviousPage: canGoPrevPage,
+                  canGoNextPage,
+                  totalPages,
+                  setCurrentPage,
+                })
+              }
               onViewportDragLeave={handleViewportDragLeave}
               onViewportDrop={clearAutoPageSchedule}
               onPreviousPage={() =>
-                setCurrentPage(previousPage => Math.max(previousPage - 1, 0))
+                setCurrentPage(previousPage =>
+                  Math.max(previousPage - 1, 0)
+                )
               }
               onNextPage={() =>
-                setCurrentPage(previousPage => Math.min(previousPage + 1, totalPages - 1))
+                setCurrentPage(previousPage =>
+                  Math.min(previousPage + 1, totalPages - 1)
+                )
               }
               onDeleteItem={handleDeleteItem}
             />
 
             {orderStatus ? (
-              <p className={`profile-wishlist-order-status is-${orderStatus.tone}`}>
+              <p
+                className={`profile-wishlist-order-status is-${orderStatus.tone}`}
+              >
                 {orderStatus.message}
               </p>
             ) : null}
@@ -624,7 +351,9 @@ export const ProfileWishlistSection = memo(function ProfileWishlistSection({
                 onClick={() => void onLoadMore()}
                 disabled={isLoadingMore}
               >
-                {isLoadingMore ? t('common.loading') : t('profileStatus.moreGames')}
+                {isLoadingMore
+                  ? t('common.loading')
+                  : t('profileStatus.moreGames')}
               </button>
             ) : null}
           </>

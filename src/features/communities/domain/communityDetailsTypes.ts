@@ -4,14 +4,21 @@ import type {
   CommunityMember,
   CommunityPost,
   CommunityPostingPermission,
+  CommunityReportTargetType,
   CommunityVisibility,
-} from '../../../services/communityService'
+} from '../data/types'
 
 export type FeedbackTone = 'success' | 'error' | 'info'
 
 export interface FeedbackState {
   tone: FeedbackTone
   message: string
+}
+
+export interface CommunityFeedReportTarget {
+  type: CommunityReportTargetType
+  id: string
+  label: string
 }
 
 export interface SettingsDraft {

@@ -91,6 +91,14 @@ create policy __contract_expected_report_04
   on public.denuncias_perfil for delete to authenticated
   using (denunciante_id = (select auth.uid()));
 
+create policy __contract_expected_report_05
+  on public.denuncias_conteudo for select to authenticated
+  using ((select auth.uid()) = denunciante_id);
+
+create policy __contract_expected_report_06
+  on public.denuncias_perfil for select to authenticated
+  using ((select auth.uid()) = denunciante_id);
+
 create policy __contract_expected_profile_01
   on public.lista_desejos for insert to authenticated
   with check ((select auth.uid()) = usuario_id);
@@ -169,8 +177,10 @@ values
   ('comentario_deslikes_delete_own', '__contract_expected_reaction_08', 'public', 'comentario_deslikes'),
   ('denuncias_conteudo_insert_own', '__contract_expected_report_01', 'public', 'denuncias_conteudo'),
   ('denuncias_conteudo_delete_own', '__contract_expected_report_02', 'public', 'denuncias_conteudo'),
+  ('denuncias_conteudo_select_own', '__contract_expected_report_05', 'public', 'denuncias_conteudo'),
   ('denuncias_perfil_insert_own', '__contract_expected_report_03', 'public', 'denuncias_perfil'),
   ('denuncias_perfil_delete_own', '__contract_expected_report_04', 'public', 'denuncias_perfil'),
+  ('denuncias_perfil_select_own', '__contract_expected_report_06', 'public', 'denuncias_perfil'),
   ('lista_desejos_insert_own', '__contract_expected_profile_01', 'public', 'lista_desejos'),
   ('lista_desejos_update_own', '__contract_expected_profile_02', 'public', 'lista_desejos'),
   ('lista_desejos_delete_own', '__contract_expected_profile_03', 'public', 'lista_desejos'),
@@ -212,7 +222,7 @@ select results_eq(
     from expected_policy_contracts contract
     order by contract.actual_name
   $$,
-  'the 22 policies retain their commands, authenticated role and permissive mode'
+  'the 24 policies retain their commands, authenticated role and permissive mode'
 );
 
 select results_eq(
@@ -249,7 +259,7 @@ select results_eq(
     from expected_policy_contracts contract
     order by contract.actual_name
   $$,
-  'the 22 effective USING and WITH CHECK trees match the initplan-safe contracts'
+  'the 24 effective USING and WITH CHECK trees match the initplan-safe contracts'
 );
 
 select is(

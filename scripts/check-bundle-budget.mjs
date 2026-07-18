@@ -9,6 +9,8 @@ const ROUTE_BUDGETS = [
     label: 'ProfilePage',
     baselineBytes: 98_496,
     maxBytes: 103_421,
+    acceptedReason:
+      'Controllers específicos de status, reordenação com rollback da wishlist e Top 5, além de toolbar/editor/tabs caracterizados, ficam no chunk lazy; a medição minificada atribui cerca de 5,1 kB do excedente à separação e o JavaScript inicial continua abaixo de +5%.',
   },
   {
     manifestKey: 'src/pages/GameDetailsPage.tsx',
@@ -25,6 +27,12 @@ const ROUTE_BUDGETS = [
     maxBytes: 49_533,
     acceptedReason:
       'Controllers com proteção de corrida, paginação de membros/comentários, âncoras e compensação segura de mídia ficam restritos ao chunk lazy da rota.',
+  },
+  {
+    manifestKey: 'src/pages/GamesPage.tsx',
+    label: 'GamesPage',
+    baselineBytes: 14_851,
+    maxBytes: 15_594,
   },
 ]
 const manifestPath = path.join(process.cwd(), 'dist', '.vite', 'manifest.json')

@@ -1,184 +1,149 @@
-# Aplicação no Supabase sem Docker
+# Aplicação das migrations no Supabase sem Docker
 
-Este procedimento não usa Docker. Ele conecta a CLI diretamente ao projeto
-remoto `apwkscpcjfmkfbqarguh`. Nenhum destes comandos foi executado durante a
-refatoração.
+Este procedimento conecta a CLI diretamente ao projeto remoto
+`apwkscpcjfmkfbqarguh`. A refatoração não executa nenhum destes comandos e não
+usa Docker.
 
-## 1. Antes de alterar o projeto remoto
+As migrations anteriores, até
+`20260715015907_harden_notification_functions`, já estão aplicadas. Nesta
+rodada devem existir somente duas migrations pendentes:
 
-1. Confirme que há backup recente ou Point-in-Time Recovery no Dashboard.
-2. Atualize a Supabase CLI.
-3. Execute os comandos a partir da raiz do repositório.
-4. Não prossiga se o `--dry-run` listar migrations além das esperadas neste
-   documento.
+```text
+20260718001827_optimize_remaining_report_select_rls_initplans
+20260718001830_add_game_review_overview_summary
+```
+
+Nenhuma Edge Function foi alterada nesta rodada, portanto não é necessário
+executar `supabase functions deploy`.
+
+## 1. Conferir o projeto e o histórico
+
+Antes de alterar o projeto remoto:
+
+1. Confirme que existe um backup recente ou Point-in-Time Recovery.
+2. Execute os comandos na raiz do repositório.
+3. Não prossiga se aparecer qualquer migration além das duas listadas acima.
+4. Não use `migration repair` apenas para ocultar uma divergência.
 
 ```powershell
 supabase login
 supabase link --project-ref apwkscpcjfmkfbqarguh
 supabase migration list --linked
-```
-
-## 2. Configurar secrets antes do deploy das funções
-
-O valor de um secret já salvo não pode ser recuperado pela CLI. Este comando
-mostra apenas os nomes:
-
-```powershell
-supabase secrets list --project-ref apwkscpcjfmkfbqarguh
-```
-
-Se o `GAME_CATALOG_SYNC_SECRET` foi perdido, gere outro e rotacione:
-
-```powershell
-node -e "console.log(require('node:crypto').randomBytes(48).toString('base64url'))"
-```
-
-Guarde o resultado em um gerenciador de senhas. Não use a anon key, a
-service-role key ou a chave da DeepL como sync secret.
-
-Configure primeiro as origens autorizadas. Isso é necessário para evitar o 403
-sem `Access-Control-Allow-Origin` no localhost e na Vercel:
-
-```powershell
-supabase secrets set --project-ref apwkscpcjfmkfbqarguh CORS_ALLOWED_ORIGINS="https://social-gamer-web.vercel.app,http://localhost:5173,http://127.0.0.1:5173"
-```
-
-Configure as credenciais externas usando os valores reais:
-
-```powershell
-supabase secrets set --project-ref apwkscpcjfmkfbqarguh IGDB_CLIENT_ID="SEU_CLIENT_ID" IGDB_CLIENT_SECRET="SEU_CLIENT_SECRET"
-supabase secrets set --project-ref apwkscpcjfmkfbqarguh GAME_CATALOG_SYNC_SECRET="SEU_SEGREDO_GERADO" DEEPL_API_KEY="SUA_CHAVE_DEEPL"
-```
-
-- `IGDB_CLIENT_ID` e `IGDB_CLIENT_SECRET`: aplicativo no portal de
-  desenvolvedores da Twitch/IGDB.
-- `DEEPL_API_KEY`: chave da conta DeepL API.
-- `GAME_CATALOG_SYNC_SECRET`: segredo aleatório criado por você; ele não vem de
-  uma API externa.
-
-Depois confira somente a presença dos nomes:
-
-```powershell
-supabase secrets list --project-ref apwkscpcjfmkfbqarguh
-```
-
-## 3. Revisar as migrations pendentes
-
-As 11 migrations novas esperadas, nesta ordem, são:
-
-```text
-20260715015801_optimize_reaction_and_report_rls_initplans
-20260715015809_optimize_profile_state_rls_initplans
-20260715015816_optimize_community_rls_initplans
-20260715015823_relocate_pg_trgm_to_extensions
-20260715015830_add_paginated_game_review_read_models
-20260715015839_add_paginated_community_comment_read_models
-20260715015846_add_profile_game_status_page
-20260715015856_harden_community_membership_functions
-20260715015900_harden_community_content_functions
-20260715015903_harden_community_moderation_functions
-20260715015907_harden_notification_functions
-```
-
-Faça o dry-run:
-
-```powershell
 supabase db push --linked --dry-run
 ```
 
-Se aparecer qualquer migration anterior não reconhecida, não execute o push.
-Revise primeiro a saída de `supabase migration list --linked`. Não use
-`migration repair` apenas para fazer a lista ficar verde.
+Revise o dry-run inteiro. Ele deve listar, na mesma ordem:
 
-## 4. Aplicar as migrations
+```text
+20260718001827_optimize_remaining_report_select_rls_initplans.sql
+20260718001830_add_game_review_overview_summary.sql
+```
 
-Somente depois de confirmar o dry-run:
+## 2. Aplicar
+
+Somente após confirmar o dry-run:
 
 ```powershell
 supabase db push --linked
 supabase migration list --linked
 ```
 
-O push aplica todas as migrations pendentes em ordem. Não é necessário colar
-cada arquivo no SQL Editor.
+O primeiro arquivo apenas preserva as policies autenticadas de denúncias,
+trocando `auth.uid()` por `(select auth.uid())`. O segundo adiciona a RPC pública
+e somente-leitura `get_game_review_overview(integer)`.
 
-## 5. Fazer deploy das Edge Functions
+Nenhum dado, tabela, índice, bucket ou configuração de Auth é removido.
 
-As quatro funções devem ser publicadas porque a versão exata do Supabase JS foi
-fixada em seus `deno.json`. As duas funções públicas validam autorização dentro
-do próprio contrato indicado:
+## 3. Comparar os tipos gerados
 
-```powershell
-supabase functions deploy game-catalog --project-ref apwkscpcjfmkfbqarguh --no-verify-jwt
-supabase functions deploy search-import-games --project-ref apwkscpcjfmkfbqarguh
-supabase functions deploy game-catalog-sync --project-ref apwkscpcjfmkfbqarguh --no-verify-jwt
-supabase functions deploy delete-own-account --project-ref apwkscpcjfmkfbqarguh
-```
-
-- `game-catalog`: público, somente leitura.
-- `search-import-games`: exige JWT de usuário.
-- `game-catalog-sync`: servidor para servidor; exige
-  `GAME_CATALOG_SYNC_SECRET`.
-- `delete-own-account`: exige JWT de usuário e validação de senha.
-
-## 6. Validar CORS antes do frontend
-
-Teste o preflight local:
+Depois da aplicação, gere os tipos remotos em um arquivo temporário e compare
+com o contrato já versionado:
 
 ```powershell
-curl.exe -i -X OPTIONS "https://apwkscpcjfmkfbqarguh.supabase.co/functions/v1/game-catalog" -H "Origin: http://localhost:5173" -H "Access-Control-Request-Method: POST" -H "Access-Control-Request-Headers: authorization,apikey,content-type"
+supabase gen types typescript --linked --schema public | Set-Content -Encoding utf8 src/types/supabase.remote.ts
+git diff --no-index -- src/types/supabase.ts src/types/supabase.remote.ts
+Remove-Item -LiteralPath src/types/supabase.remote.ts
 ```
 
-O esperado é status `204` e:
+A assinatura esperada é:
 
 ```text
-Access-Control-Allow-Origin: http://localhost:5173
+get_game_review_overview:
+  Args: { p_game_id: number }
+  Returns:
+    game_id: number
+    review_count: number
+    average_rating: number | null
+    comment_count: number
 ```
 
-Repita com a origem hospedada:
+Diferenças em outros objetos indicam divergência do schema e devem ser
+investigadas antes do deploy do frontend.
 
-```powershell
-curl.exe -i -X OPTIONS "https://apwkscpcjfmkfbqarguh.supabase.co/functions/v1/game-catalog" -H "Origin: https://social-gamer-web.vercel.app" -H "Access-Control-Request-Method: POST" -H "Access-Control-Request-Headers: authorization,apikey,content-type"
+## 4. Validar policies e advisors
+
+No Dashboard, abra **Database → Advisors** e atualize os advisors de
+performance. O número esperado de avisos `auth_rls_initplan` é zero.
+
+No SQL Editor, esta consulta deve mostrar as duas policies com um subselect em
+`auth.uid()`:
+
+```sql
+select
+  schemaname,
+  tablename,
+  policyname,
+  roles,
+  qual
+from pg_policies
+where schemaname = 'public'
+  and (
+    (tablename = 'denuncias_conteudo'
+      and policyname = 'denuncias_conteudo_select_own')
+    or
+    (tablename = 'denuncias_perfil'
+      and policyname = 'denuncias_perfil_select_own')
+  )
+order by tablename, policyname;
 ```
 
-## 7. Smoke tests obrigatórios
+As três tabelas internas do catálogo sem policies permanecem sem grants
+públicos. Os avisos de funções `SECURITY DEFINER` já cobertos pela allowlist e
+os índices sem uso não devem ser alterados nesta aplicação.
 
-Antes do deploy do frontend, valide:
+## 5. Smoke tests
 
-1. Página de detalhes de jogo anônima no localhost e na Vercel.
-2. Busca local do catálogo; importação externa somente após login.
-3. Reviews públicas, “mostrar mais”, comentários, reações e deep links.
-4. Perfil público/amigos/privado; status e wishlist.
-5. Comunidade pública/privada; membros, comentários e moderação.
-6. Login, recuperação, troca de senha e uma exclusão usando conta de teste.
-7. Notificações, Realtime e mídia privada.
-8. PT/EN, temas e tamanhos desktop/mobile.
+Antes de publicar o frontend:
 
-Para testar uma sincronização mínima sem expor o secret no navegador:
+1. Abra detalhes de um jogo sem login.
+2. Confirme média, quantidade de reviews e total global de comentários.
+3. Entre com uma conta de teste e repita a leitura.
+4. Crie um comentário e confirme que o total aumenta após a atualização.
+5. Teste paginação, reações e deep links `review-*` e `comment-*`.
+6. Teste um jogo sem reviews: contagens zero e média vazia.
+7. Confirme que catálogo, perfis e comunidades continuam carregando.
+8. Verifique PT/EN, tema claro/escuro e mobile/desktop.
 
-```powershell
-$env:GAME_CATALOG_SYNC_SECRET="SEU_SEGREDO_GERADO"
-curl.exe -i -X POST "https://apwkscpcjfmkfbqarguh.supabase.co/functions/v1/game-catalog-sync" -H "Authorization: Bearer $env:GAME_CATALOG_SYNC_SECRET" -H "Content-Type: application/json" --data "{\"limit\":1}"
-Remove-Item Env:GAME_CATALOG_SYNC_SECRET
-```
+O frontend mantém fallback somente para `PGRST202` e `42883`. Assim, a versão
+atual continua funcionando antes da aplicação, mas o total global exato só
+aparece depois que a nova RPC estiver disponível.
 
-## 8. Configuração administrativa
+## 6. Configuração administrativa
 
-No Dashboard, ative “Leaked password protection” em Authentication quando a
-opção estiver disponível no plano. Mantenha a expiração do JWT em 3.600
-segundos.
+Ative **Leaked password protection** em Authentication quando a opção estiver
+disponível no plano. Mantenha `jwt_expiry = 3600`.
 
-## 9. Deploy do frontend
+Os secrets existentes (`CORS_ALLOWED_ORIGINS`, IGDB, DeepL e
+`GAME_CATALOG_SYNC_SECRET`) e as quatro Edge Functions não precisam ser
+alterados nesta rodada.
 
-Faça o deploy somente após os smoke tests:
+## 7. Publicar o frontend
+
+Publique somente depois dos smoke tests:
 
 ```powershell
 vercel --prod
 ```
 
-Se o projeto já é publicado automaticamente por Git, use o fluxo habitual em
-vez desse comando.
-
-Mantenha os fallbacks de RPC no frontend até confirmar em produção que as novas
-funções aparecem no cache de schema da Data API. Eles só são acionados para
-`PGRST202` e `42883`.
+Se o projeto usa deploy automático pelo Git, use o fluxo habitual. Mantenha o
+fallback da nova RPC por uma versão após a confirmação em produção.

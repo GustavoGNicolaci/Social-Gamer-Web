@@ -1,16 +1,18 @@
 import {
-  sortCommentsByRelevance,
-  sortReviewsByRelevance,
   type ReviewComment,
-  type ReviewError,
   type ReviewItem,
-} from '../../../services/reviewService'
+} from './reviewModels'
+import type { ReviewError } from './reviewError'
 import type {
   CommentReactionState,
   CurrentUserReportSummary,
   ReportTargetType,
   ReviewReactionState,
-} from '../../../services/reviewInteractionsService'
+} from './reviewInteractions'
+import {
+  sortCommentsByRelevance,
+  sortReviewsByRelevance,
+} from './reviewSorting'
 
 type ReactionState = ReviewReactionState | CommentReactionState
 

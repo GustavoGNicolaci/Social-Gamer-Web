@@ -1,13 +1,12 @@
 import { Link } from 'react-router-dom'
 import { ContentReportModal } from '../../../components/reviews/ContentReportModal'
 import { useI18n } from '../../../i18n/I18nContext'
+import { REVIEW_SCORE_OPTIONS } from '../domain/reviewConstants'
 import {
   getInitialVisibleCommentCount,
   type GameReviewsSectionController,
-} from '../hooks/useGameReviewsController'
+} from '../hooks/gameReviewControllerContracts'
 import { GameReviewCard } from './GameReviewCard'
-
-const REVIEW_SCORE_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
 export type GameReviewsSectionProps = GameReviewsSectionController
 

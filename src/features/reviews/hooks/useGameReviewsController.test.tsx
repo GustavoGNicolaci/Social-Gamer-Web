@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
   deleteContentReport: vi.fn(),
   deleteReview: vi.fn(),
   deleteReviewComment: vi.fn(),
-  getGameRatingSummaries: vi.fn(),
+  getGameReviewOverview: vi.fn(),
   getGameReviewsPage: vi.fn(),
   getReviewByGameAndUserId: vi.fn(),
   getReviewCommentsPage: vi.fn(),
@@ -28,7 +28,7 @@ vi.mock('../../../services/reviewService', async importOriginal => {
     createReviewComment: mocks.createReviewComment,
     deleteReview: mocks.deleteReview,
     deleteReviewComment: mocks.deleteReviewComment,
-    getGameRatingSummaries: mocks.getGameRatingSummaries,
+    getGameReviewOverview: mocks.getGameReviewOverview,
     getGameReviewsPage: mocks.getGameReviewsPage,
     getReviewByGameAndUserId: mocks.getReviewByGameAndUserId,
     getReviewCommentsPage: mocks.getReviewCommentsPage,
@@ -138,8 +138,13 @@ beforeEach(() => {
   })
   mocks.getReviewByGameAndUserId.mockResolvedValue({ data: null, error: null })
   mocks.resolveGameReviewAnchor.mockResolvedValue({ data: null, error: null })
-  mocks.getGameRatingSummaries.mockResolvedValue({
-    data: [{ gameId: 1, averageRating: null, reviewCount: 0 }],
+  mocks.getGameReviewOverview.mockResolvedValue({
+    data: {
+      gameId: 1,
+      averageRating: null,
+      reviewCount: 0,
+      commentCount: 0,
+    },
     error: null,
   })
   mocks.createReviewComment.mockResolvedValue({ data: null, error: null })
@@ -186,12 +191,65 @@ describe('useGameReviewsController', () => {
     expect(result.current.section.list.error).toBeNull()
   })
 
+  it('usa o total global exato de comentarios sem depender das reviews carregadas', async () => {
+    mocks.getGameReviewsPage.mockResolvedValueOnce({
+      data: [createReview('loaded', { comentarios: [createComment('visible')] })],
+      error: null,
+      totalCount: 8,
+      hasMore: true,
+      nextOffset: 1,
+      commentTotals: { loaded: 5 },
+    })
+    mocks.getGameReviewOverview.mockResolvedValueOnce({
+      data: {
+        gameId: 1,
+        averageRating: 8.5,
+        reviewCount: 8,
+        commentCount: 31,
+      },
+      error: null,
+    })
+
+    const { result } = renderController()
+
+    await waitFor(() => expect(result.current.overview.loading).toBe(false))
+    expect(result.current.overview.totalComments).toBe(31)
+  })
+
+  it('mantem a soma carregada enquanto usa o fallback de compatibilidade', async () => {
+    mocks.getGameReviewsPage.mockResolvedValueOnce({
+      data: [createReview('loaded', { comentarios: [createComment('visible')] })],
+      error: null,
+      totalCount: 1,
+      hasMore: false,
+      nextOffset: null,
+      commentTotals: { loaded: 5 },
+    })
+    mocks.getGameReviewOverview.mockResolvedValueOnce({
+      data: {
+        gameId: 1,
+        averageRating: 8,
+        reviewCount: 1,
+        commentCount: 0,
+      },
+      error: null,
+      fallbackUsed: true,
+    })
+
+    const { result } = renderController()
+
+    await waitFor(() => expect(result.current.overview.loading).toBe(false))
+    expect(result.current.overview.totalComments).toBe(5)
+  })
+
   it('mantem dados parciais e so exibe erro de carga quando nao ha reviews', async () => {
     mocks.getGameReviewsPage.mockResolvedValueOnce({ data: [], error: noError })
     const { result } = renderController()
 
     await waitFor(() => expect(result.current.overview.loading).toBe(false))
-    expect(result.current.section.list.error).toBe(noError.message)
+    expect(result.current.section.list.error).toBe(
+      'game.details.reviewError.load.default'
+    )
 
     mocks.getGameReviewsPage.mockResolvedValueOnce({
       data: [createReview('partial')],
@@ -247,8 +305,13 @@ describe('useGameReviewsController', () => {
       if (gameId === 1) return stale.promise
       return Promise.resolve({ data: [createReview('current', { jogo_id: 2 })], error: null })
     })
-    mocks.getGameRatingSummaries.mockImplementation((gameIds: number[]) => Promise.resolve({
-      data: [{ gameId: gameIds[0], averageRating: 8, reviewCount: 1 }],
+    mocks.getGameReviewOverview.mockImplementation((requestedGameId: number) => Promise.resolve({
+      data: {
+        gameId: requestedGameId,
+        averageRating: 8,
+        reviewCount: 1,
+        commentCount: 4,
+      },
       error: null,
     }))
 
@@ -342,7 +405,7 @@ describe('useGameReviewsController', () => {
     })
     expect(result.current.section.form.feedback).toEqual({
       tone: 'error',
-      message: noError.message,
+      message: 'game.details.reviewError.review_like.default',
     })
   })
 

@@ -8,15 +8,13 @@ import type { TranslationParams } from '../../../i18n'
 import type {
   CommunityPost,
   CommunityReactionType,
-  CommunityReportTargetType,
   CommunityRole,
 } from '../../../services/communityService'
+import type {
+  CommunityFeedReportTarget,
+} from '../domain/communityDetailsTypes'
 
-export interface CommunityFeedReportTarget {
-  type: CommunityReportTargetType
-  id: string
-  label: string
-}
+export type { CommunityFeedReportTarget } from '../domain/communityDetailsTypes'
 
 export interface CommunityFeedComposerProps {
   canPost: boolean

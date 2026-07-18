@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { UserAvatar } from '../components/UserAvatar'
 import { ProfileConnectionsModal } from '../components/profile/ProfileConnectionsModal'
+import { ProfileContentTabs } from '../components/profile/ProfileContentTabs'
 import { ProfileCommunitiesSection } from '../components/profile/ProfileCommunitiesSection'
 import { ProfileGameStatusSection } from '../components/profile/ProfileGameStatusSection'
 import { ProfileReportModal } from '../components/profile/ProfileReportModal'
 import { ProfileReviewsSection } from '../components/profile/ProfileReviewsSection'
+import { ProfileStateCard } from '../components/profile/ProfileStateCard'
 import { ProfileTopFiveSection } from '../components/profile/ProfileTopFiveSection'
 import { ProfileWishlistSection } from '../components/profile/ProfileWishlistSection'
 import { useAuth } from '../contexts/AuthContext'
@@ -214,99 +216,71 @@ export function ProfilePage() {
 
   if (pageLoading) {
     return (
-      <div className="page-container">
-        <div className="page-content">
-          <div className="profile-state-card">
-            <span className="profile-state-badge">{t('common.profile')}</span>
-            <h1>{t('profile.loadingTitle')}</h1>
-            <p>{t('profile.loadingText')}</p>
-          </div>
-        </div>
-      </div>
+      <ProfileStateCard
+        badge={t('common.profile')}
+        title={t('profile.loadingTitle')}
+        message={t('profile.loadingText')}
+      />
     )
   }
 
   if (!isUsernameRoute && !user) {
     return (
-      <div className="page-container">
-        <div className="page-content">
-          <div className="profile-state-card">
-            <span className="profile-state-badge">{t('common.profile')}</span>
-            <h1>{t('profile.loginTitle')}</h1>
-            <p>{t('profile.loginText')}</p>
-          </div>
-        </div>
-      </div>
+      <ProfileStateCard
+        badge={t('common.profile')}
+        title={t('profile.loginTitle')}
+        message={t('profile.loginText')}
+      />
     )
   }
 
   if (isUsernameRoute && publicProfileError) {
     return (
-      <div className="page-container">
-        <div className="page-content">
-          <div className="profile-state-card">
-            <span className="profile-state-badge">{t('common.profile')}</span>
-            <h1>{t('profile.unavailableTitle')}</h1>
-            <p>{publicProfileError}</p>
-          </div>
-        </div>
-      </div>
+      <ProfileStateCard
+        badge={t('common.profile')}
+        title={t('profile.unavailableTitle')}
+        message={publicProfileError}
+      />
     )
   }
 
   if (!isUsernameRoute && !profile) {
     return (
-      <div className="page-container">
-        <div className="page-content">
-          <div className="profile-state-card">
-            <span className="profile-state-badge">{t('common.profile')}</span>
-            <h1>{t('profile.unavailableTitle')}</h1>
-            <p>{t('profile.ownLoadError')}</p>
-          </div>
-        </div>
-      </div>
+      <ProfileStateCard
+        badge={t('common.profile')}
+        title={t('profile.unavailableTitle')}
+        message={t('profile.ownLoadError')}
+      />
     )
   }
 
   if (isUsernameRoute && !publicProfile) {
     return (
-      <div className="page-container">
-        <div className="page-content">
-          <div className="profile-state-card">
-            <span className="profile-state-badge">{t('common.profile')}</span>
-            <h1>{t('profile.notFoundTitle')}</h1>
-            <p>{t('profile.notFoundText')}</p>
-          </div>
-        </div>
-      </div>
+      <ProfileStateCard
+        badge={t('common.profile')}
+        title={t('profile.notFoundTitle')}
+        message={t('profile.notFoundText')}
+      />
     )
   }
 
   if (isUsernameRoute && publicProfile && user && user.id === publicProfile.id && !profile) {
     return (
-      <div className="page-container">
-        <div className="page-content">
-          <div className="profile-state-card">
-            <span className="profile-state-badge">{t('common.profile')}</span>
-            <h1>{t('profile.unavailableTitle')}</h1>
-            <p>{t('profile.editableLoadError')}</p>
-          </div>
-        </div>
-      </div>
+      <ProfileStateCard
+        badge={t('common.profile')}
+        title={t('profile.unavailableTitle')}
+        message={t('profile.editableLoadError')}
+      />
     )
   }
 
   if (!activeProfile) {
     return (
-      <div className="page-container">
-        <div className="page-content">
-          <div className="profile-state-card">
-            <span className="profile-state-badge">{t('common.profile')}</span>
-            <h1>{t('profile.unavailableTitle')}</h1>
-            <p>{t('profile.pageLoadError')}</p>
-          </div>
-        </div>
-      </div>
+      <ProfileStateCard
+        badge={t('common.profile')}
+        title={t('profile.unavailableTitle')}
+        message={t('profile.pageLoadError')}
+      />
     )
   }
 
@@ -674,219 +648,103 @@ export function ProfilePage() {
           </section>
 
           {!isRestrictedPublicView ? (
-            <section className="profile-tabs-shell" aria-label={t('profile.contentLabel')}>
-              <div className="profile-tabs" role="tablist" aria-label={t('profile.navigationLabel')}>
-                <button
-                  id="profile-tab-status"
-                  type="button"
-                  role="tab"
-                  className={`profile-tab-button${activeTab === 'status' ? ' is-active' : ''}`}
-                  aria-selected={activeTab === 'status'}
-                  aria-controls="profile-panel-status"
-                  onClick={() => setActiveTab('status')}
-                >
-                  <span>{t('profile.tab.status')}</span>
-                </button>
-
-                <button
-                  id="profile-tab-wishlist"
-                  type="button"
-                  role="tab"
-                  className={`profile-tab-button${activeTab === 'wishlist' ? ' is-active' : ''}`}
-                  aria-selected={activeTab === 'wishlist'}
-                  aria-controls="profile-panel-wishlist"
-                  onClick={() => setActiveTab('wishlist')}
-                >
-                  <span>{t('profile.tab.wishlist')}</span>
-                </button>
-
-                <button
-                  id="profile-tab-reviews"
-                  type="button"
-                  role="tab"
-                  className={`profile-tab-button${activeTab === 'reviews' ? ' is-active' : ''}`}
-                  aria-selected={activeTab === 'reviews'}
-                  aria-controls="profile-panel-reviews"
-                  onClick={() => setActiveTab('reviews')}
-                >
-                  <span>{t('profile.tab.reviews')}</span>
-                </button>
-
-                <button
-                  id="profile-tab-communities"
-                  type="button"
-                  role="tab"
-                  className={`profile-tab-button${activeTab === 'communities' ? ' is-active' : ''}`}
-                  aria-selected={activeTab === 'communities'}
-                  aria-controls="profile-panel-communities"
-                  onClick={() => setActiveTab('communities')}
-                >
-                  <span>{t('communities.nav')}</span>
-                </button>
-
-                <button
-                  id="profile-tab-community-posts"
-                  type="button"
-                  role="tab"
-                  className={`profile-tab-button${activeTab === 'communityPosts' ? ' is-active' : ''}`}
-                  aria-selected={activeTab === 'communityPosts'}
-                  aria-controls="profile-panel-community-posts"
-                  onClick={() => setActiveTab('communityPosts')}
-                >
-                  <span>{t('profileCommunities.posts.kicker')}</span>
-                </button>
-
-                {isOwnerView ? (
-                  <button
-                    id="profile-tab-saved-community-posts"
-                    type="button"
-                    role="tab"
-                    className={`profile-tab-button${activeTab === 'savedCommunityPosts' ? ' is-active' : ''}`}
-                    aria-selected={activeTab === 'savedCommunityPosts'}
-                    aria-controls="profile-panel-saved-community-posts"
-                    onClick={() => setActiveTab('savedCommunityPosts')}
-                  >
-                    <span>{t('profileCommunities.saved.title')}</span>
-                  </button>
-                ) : null}
-              </div>
-
-              <div
-                id="profile-panel-status"
-                className="profile-tab-panel"
-                role="tabpanel"
-                aria-labelledby="profile-tab-status"
-                hidden={activeTab !== 'status'}
-              >
-                {activeTab === 'status' ? (
-                  <ProfileGameStatusSection
-                    key={`profile-status-${activeProfile.id}`}
-                    userId={activeProfile.id}
-                    items={statusItemsForView}
-                    isLoading={statusSectionLoading}
-                    errorMessage={statusError}
-                    countLabel={statusCountLabel}
-                    totalCount={statusPageState.totalCount}
-                    hasMore={statusPageState.hasMore}
-                    isLoadingMore={statusLoadingMore}
-                    isOwnerView={Boolean(isOwnerView)}
-                    onSaveStatus={isOwnerView ? handleSaveGameStatus : readOnlySaveStatus}
-                    onDeleteStatus={isOwnerView ? handleDeleteStatus : readOnlyDeleteStatus}
-                    onRefresh={handleRefreshStatusGames}
-                    onLoadMore={handleLoadMoreStatusGames}
-                    onControlsChange={handleStatusControlsChange}
-                  />
-                ) : null}
-              </div>
-
-              <div
-                id="profile-panel-wishlist"
-                className="profile-tab-panel"
-                role="tabpanel"
-                aria-labelledby="profile-tab-wishlist"
-                hidden={activeTab !== 'wishlist'}
-              >
-                {activeTab === 'wishlist' ? (
-                  <ProfileWishlistSection
-                    key={`profile-wishlist-${activeProfile.id}`}
-                    userId={activeProfile.id}
-                    items={wishlistItemsForView}
-                    isLoading={wishlistSectionLoading}
-                    errorMessage={wishlistError}
-                    countLabel={wishlistCountLabel}
-                    totalCount={wishlistPageState.totalCount}
-                    hasMore={wishlistPageState.hasMore}
-                    isLoadingMore={wishlistLoadingMore}
-                    isPreparingReorder={wishlistPreparingReorder}
-                    isFullyLoaded={wishlistPageState.loaded && !wishlistPageState.hasMore}
-                    isOwnerView={Boolean(isOwnerView)}
-                    onDeleteWishlistItem={isOwnerView ? handleDeleteWishlistItem : readOnlyDeleteWishlist}
-                    onLoadMore={handleLoadMoreWishlistGames}
-                    onLoadFullWishlistForReorder={handleLoadFullWishlistForReorder}
-                  />
-                ) : null}
-              </div>
-
-              <div
-                id="profile-panel-reviews"
-                className="profile-tab-panel"
-                role="tabpanel"
-                aria-labelledby="profile-tab-reviews"
-                hidden={activeTab !== 'reviews'}
-              >
-                {activeTab === 'reviews' ? (
-                  <ProfileReviewsSection
-                    key={`profile-reviews-${activeProfile.id}`}
-                    items={reviewItemsForView}
-                    isLoading={reviewsSectionLoading}
-                    errorMessage={reviewsError}
-                    countLabel={reviewsCountLabel}
-                    totalCount={reviewsPageState.totalCount}
-                    hasMore={reviewsPageState.hasMore}
-                    isLoadingMore={reviewsLoadingMore}
-                    isOwnerView={Boolean(isOwnerView)}
-                    onDeleteReview={isOwnerView ? handleDeleteReview : undefined}
-                    onLoadMore={handleLoadMoreReviews}
-                  />
-                ) : null}
-              </div>
-
-              <div
-                id="profile-panel-communities"
-                className="profile-tab-panel"
-                role="tabpanel"
-                aria-labelledby="profile-tab-communities"
-                hidden={activeTab !== 'communities'}
-              >
-                {activeTab === 'communities' ? (
-                  <ProfileCommunitiesSection
-                    key={`profile-communities-${activeProfile.id}`}
-                    profileId={activeProfile.id}
-                    currentUserId={user?.id}
-                    isOwnerView={Boolean(isOwnerView)}
-                    kind="communities"
-                  />
-                ) : null}
-              </div>
-
-              <div
-                id="profile-panel-community-posts"
-                className="profile-tab-panel"
-                role="tabpanel"
-                aria-labelledby="profile-tab-community-posts"
-                hidden={activeTab !== 'communityPosts'}
-              >
-                {activeTab === 'communityPosts' ? (
-                  <ProfileCommunitiesSection
-                    key={`profile-community-posts-${activeProfile.id}`}
-                    profileId={activeProfile.id}
-                    currentUserId={user?.id}
-                    isOwnerView={Boolean(isOwnerView)}
-                    kind="posts"
-                  />
-                ) : null}
-              </div>
-
-              {isOwnerView ? (
-                <div
-                  id="profile-panel-saved-community-posts"
-                  className="profile-tab-panel"
-                  role="tabpanel"
-                  aria-labelledby="profile-tab-saved-community-posts"
-                  hidden={activeTab !== 'savedCommunityPosts'}
-                >
-                  {activeTab === 'savedCommunityPosts' ? (
-                    <ProfileCommunitiesSection
-                      key={`profile-saved-community-posts-${activeProfile.id}`}
-                      profileId={activeProfile.id}
-                      currentUserId={user?.id}
-                      isOwnerView={Boolean(isOwnerView)}
-                      kind="saved"
-                    />
-                  ) : null}
-                </div>
-              ) : null}
-            </section>
+            <ProfileContentTabs
+              activeTab={activeTab}
+              isOwnerView={Boolean(isOwnerView)}
+              contentLabel={t('profile.contentLabel')}
+              navigationLabel={t('profile.navigationLabel')}
+              statusLabel={t('profile.tab.status')}
+              wishlistLabel={t('profile.tab.wishlist')}
+              reviewsLabel={t('profile.tab.reviews')}
+              communitiesLabel={t('communities.nav')}
+              communityPostsLabel={t('profileCommunities.posts.kicker')}
+              savedCommunityPostsLabel={t('profileCommunities.saved.title')}
+              onTabChange={setActiveTab}
+              statusPanel={
+                <ProfileGameStatusSection
+                  key={`profile-status-${activeProfile.id}`}
+                  userId={activeProfile.id}
+                  items={statusItemsForView}
+                  isLoading={statusSectionLoading}
+                  errorMessage={statusError}
+                  countLabel={statusCountLabel}
+                  totalCount={statusPageState.totalCount}
+                  hasMore={statusPageState.hasMore}
+                  isLoadingMore={statusLoadingMore}
+                  isOwnerView={Boolean(isOwnerView)}
+                  onSaveStatus={isOwnerView ? handleSaveGameStatus : readOnlySaveStatus}
+                  onDeleteStatus={isOwnerView ? handleDeleteStatus : readOnlyDeleteStatus}
+                  onRefresh={handleRefreshStatusGames}
+                  onLoadMore={handleLoadMoreStatusGames}
+                  onControlsChange={handleStatusControlsChange}
+                />
+              }
+              wishlistPanel={
+                <ProfileWishlistSection
+                  key={`profile-wishlist-${activeProfile.id}`}
+                  userId={activeProfile.id}
+                  items={wishlistItemsForView}
+                  isLoading={wishlistSectionLoading}
+                  errorMessage={wishlistError}
+                  countLabel={wishlistCountLabel}
+                  totalCount={wishlistPageState.totalCount}
+                  hasMore={wishlistPageState.hasMore}
+                  isLoadingMore={wishlistLoadingMore}
+                  isPreparingReorder={wishlistPreparingReorder}
+                  isFullyLoaded={wishlistPageState.loaded && !wishlistPageState.hasMore}
+                  isOwnerView={Boolean(isOwnerView)}
+                  onDeleteWishlistItem={
+                    isOwnerView
+                      ? handleDeleteWishlistItem
+                      : readOnlyDeleteWishlist
+                  }
+                  onLoadMore={handleLoadMoreWishlistGames}
+                  onLoadFullWishlistForReorder={handleLoadFullWishlistForReorder}
+                />
+              }
+              reviewsPanel={
+                <ProfileReviewsSection
+                  key={`profile-reviews-${activeProfile.id}`}
+                  items={reviewItemsForView}
+                  isLoading={reviewsSectionLoading}
+                  errorMessage={reviewsError}
+                  countLabel={reviewsCountLabel}
+                  totalCount={reviewsPageState.totalCount}
+                  hasMore={reviewsPageState.hasMore}
+                  isLoadingMore={reviewsLoadingMore}
+                  isOwnerView={Boolean(isOwnerView)}
+                  onDeleteReview={isOwnerView ? handleDeleteReview : undefined}
+                  onLoadMore={handleLoadMoreReviews}
+                />
+              }
+              communitiesPanel={
+                <ProfileCommunitiesSection
+                  key={`profile-communities-${activeProfile.id}`}
+                  profileId={activeProfile.id}
+                  currentUserId={user?.id}
+                  isOwnerView={Boolean(isOwnerView)}
+                  kind="communities"
+                />
+              }
+              communityPostsPanel={
+                <ProfileCommunitiesSection
+                  key={`profile-community-posts-${activeProfile.id}`}
+                  profileId={activeProfile.id}
+                  currentUserId={user?.id}
+                  isOwnerView={Boolean(isOwnerView)}
+                  kind="posts"
+                />
+              }
+              savedCommunityPostsPanel={
+                <ProfileCommunitiesSection
+                  key={`profile-saved-community-posts-${activeProfile.id}`}
+                  profileId={activeProfile.id}
+                  currentUserId={user?.id}
+                  isOwnerView={Boolean(isOwnerView)}
+                  kind="saved"
+                />
+              }
+            />
           ) : null}
         </div>
 

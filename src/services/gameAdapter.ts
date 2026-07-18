@@ -1,59 +1,19 @@
 import { translate } from '../i18n'
+import type {
+  CatalogGameDetails,
+  CatalogGamePreview,
+  GameListField,
+  GameMedia,
+} from '../features/catalog/domain/catalogTypes'
 
-export type GameListField = string[] | string | null
-export type GameSourceProvider = 'manual' | 'igdb' | 'rawg' | 'steam' | 'mobygames' | string
+export type {
+  GameListField,
+  GameMedia,
+  GameSourceProvider,
+} from '../features/catalog/domain/catalogTypes'
 
-export interface GameMedia {
-  id: number | string
-  type: 'cover' | 'screenshot' | 'artwork' | 'video' | string
-  url: string
-  thumbnailUrl: string | null
-  provider: GameSourceProvider | null
-  externalMediaId: string | null
-  width: number | null
-  height: number | null
-  order: number
-  isPrimary: boolean
-}
-
-export interface GamePreview {
-  id: number
-  igdbId: string | null
-  title: string
-  titulo: string
-  coverUrl: string | null
-  capa_url: string | null
-  developer: string[]
-  desenvolvedora: GameListField
-  genres: string[]
-  generos: GameListField
-  releaseDate: string | null
-  data_lancamento: string | null
-  platforms: string[]
-  plataformas: GameListField
-  sourcePrimary: GameSourceProvider | null
-  importStatus: string | null
-  averageRating?: number | null
-  reviewCount?: number | null
-}
-
-export interface GameDetails extends GamePreview {
-  slug: string | null
-  description: string | null
-  descricao: string | null
-  sourceDescription: string | null
-  shortDescription: string | null
-  externalRating: number | null
-  externalRatingCount: number
-  externalUpdatedAt: string | null
-  metadata: Record<string, unknown> | null
-  media: GameMedia[]
-  screenshots: GameMedia[]
-  coverMedia: GameMedia | null
-  descriptionLocale: string | null
-  descriptionFallback: boolean
-  translationStatus: string | null
-}
+export type GamePreview = CatalogGamePreview
+export type GameDetails = CatalogGameDetails
 
 export interface GamePreviewSourceRow {
   id: number

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -7,29 +7,34 @@ import type { CatalogGamePreview } from '../../services/gameCatalogService'
 import type { WishlistGameItem } from '../../services/wishlistService'
 
 const mocks = vi.hoisted(() => ({
+  getCatalogGamesByIds: vi.fn(),
   searchCatalogGamesByTitle: vi.fn(),
+  translate: (key: string, params?: Record<string, string | number>) => {
+    if (!params) return key
+    return `${key}:${Object.values(params).join(':')}`
+  },
+  updateWishlistPriorities: vi.fn(),
 }))
 
 vi.mock('../../i18n/I18nContext', () => ({
   useI18n: () => ({
     locale: 'pt-BR',
     formatDate: (value: string | null | undefined) => value || 'fallback-date',
-    t: (key: string, params?: Record<string, string | number>) => {
-      if (!params) return key
-      return `${key}:${Object.values(params).join(':')}`
-    },
+    t: mocks.translate,
   }),
 }))
 
 vi.mock('../../services/gameCatalogService', () => ({
+  getCatalogGamesByIds: mocks.getCatalogGamesByIds,
   searchCatalogGamesByTitle: mocks.searchCatalogGamesByTitle,
 }))
 
 vi.mock('../../services/wishlistService', () => ({
-  updateWishlistPriorities: vi.fn(),
+  updateWishlistPriorities: mocks.updateWishlistPriorities,
 }))
 
 import { ProfileGameStatusSection } from './ProfileGameStatusSection'
+import { ProfileTopFiveSection } from './ProfileTopFiveSection'
 import { ProfileWishlistSection } from './ProfileWishlistSection'
 
 function createCatalogGame(id: number, title: string): CatalogGamePreview {
@@ -120,12 +125,26 @@ function renderInRouter(element: ReactNode) {
   return render(<MemoryRouter>{element}</MemoryRouter>)
 }
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>(promiseResolve => {
+    resolve = promiseResolve
+  })
+
+  return { promise, resolve }
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1440 })
+  mocks.getCatalogGamesByIds.mockResolvedValue({ data: [], error: null })
+  mocks.updateWishlistPriorities.mockResolvedValue({ error: null })
 })
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
+})
 
 describe('ProfileGameStatusSection', () => {
   it('preserva o card e encaminha alteracao, favorito e remocao do proprietario', async () => {
@@ -181,6 +200,11 @@ describe('ProfileGameStatusSection', () => {
     fireEvent.change(screen.getByLabelText('profileStatus.searchLabel'), {
       target: { value: 'Searched' },
     })
+
+    expect(screen.getByLabelText('profileStatus.searchLabel')).toHaveAttribute(
+      'aria-controls',
+      'profile-status-search-results-user-1'
+    )
     fireEvent.click(await screen.findByRole('button', { name: /Searched Game/ }))
 
     expect(document.querySelector('.profile-status-composer')).toBeInTheDocument()
@@ -193,6 +217,48 @@ describe('ProfileGameStatusSection', () => {
         status: 'jogando',
         favorito: true,
       })
+    })
+  })
+
+  it('preserva a matematica de pagina e reinicia a pagina ao alterar os controles', () => {
+    const items = Array.from({ length: 25 }, (_, index) => ({
+      ...statusItem,
+      id: `status-${index + 1}`,
+      jogo_id: index + 1,
+      created_at: `2026-07-14T12:00:${String(index + 1).padStart(2, '0')}.000Z`,
+      jogo: createCatalogGame(index + 1, `Status Game ${index + 1}`),
+    }))
+    const onControlsChange = vi.fn()
+
+    renderInRouter(
+      <ProfileGameStatusSection
+        {...commonStatusProps}
+        items={items}
+        totalCount={25}
+        countLabel="25"
+        onControlsChange={onControlsChange}
+      />
+    )
+
+    expect(screen.queryByText('Status Game 1')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'profileStatus.next' }))
+    expect(screen.getByText('Status Game 1')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /profileStatus.sortAria/ }))
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'profileStatus.sort.oldest' }))
+
+    expect(screen.getByText('Status Game 1')).toBeInTheDocument()
+    expect(onControlsChange).toHaveBeenLastCalledWith({
+      sortValue: 'oldest',
+      statuses: [],
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /profileStatus.sortAria/ }))
+    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'game.status.jogando' }))
+
+    expect(onControlsChange).toHaveBeenLastCalledWith({
+      sortValue: 'oldest',
+      statuses: ['jogando'],
     })
   })
 
@@ -247,5 +313,148 @@ describe('ProfileWishlistSection', () => {
 
     expect(screen.getByText('Wishlist Game 7')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'profileWishlist.previousGroup' })).toBeInTheDocument()
+  })
+
+  it('mantem a reordenacao otimista, a animacao FLIP e o rollback em caso de erro', async () => {
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      value: () => ({
+        matches: true,
+        media: '(pointer: fine)',
+        onchange: null,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      }),
+    })
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: HTMLElement
+    ) {
+      const siblings = this.parentElement ? Array.from(this.parentElement.children) : []
+      const index = Math.max(siblings.indexOf(this), 0)
+      const left = index * 100
+
+      return {
+        x: left,
+        y: 0,
+        top: 0,
+        right: left + 80,
+        bottom: 80,
+        left,
+        width: 80,
+        height: 80,
+        toJSON: () => ({}),
+      }
+    })
+    const animate = vi.fn()
+    Object.defineProperty(HTMLElement.prototype, 'animate', {
+      configurable: true,
+      value: animate,
+    })
+    const saveOrder = createDeferred<{
+      error: { message: string; details: string; hint: string; code: string }
+    }>()
+    mocks.updateWishlistPriorities.mockReturnValue(saveOrder.promise)
+
+    renderInRouter(
+      <ProfileWishlistSection
+        {...commonWishlistProps}
+        items={[createWishlistItem(1), createWishlistItem(2), createWishlistItem(3)]}
+        totalCount={3}
+      />
+    )
+
+    const dragHandle = await screen.findByRole('button', {
+      name: 'profileWishlist.reorderAria:Wishlist Game 1',
+    })
+    const targetCard = screen.getByText('Wishlist Game 2').closest('article')
+    const dataTransfer = {
+      dropEffect: 'none',
+      effectAllowed: 'none',
+      setData: vi.fn(),
+      setDragImage: vi.fn(),
+    }
+
+    fireEvent.dragStart(dragHandle, { dataTransfer })
+    fireEvent.dragOver(targetCard!, { dataTransfer })
+    fireEvent.drop(targetCard!, { dataTransfer })
+
+    expect(
+      screen.getAllByRole('heading', { level: 3 }).map(heading => heading.textContent)
+    ).toEqual(['Wishlist Game 2', 'Wishlist Game 1', 'Wishlist Game 3'])
+    expect(mocks.updateWishlistPriorities).toHaveBeenCalledWith(
+      'user-1',
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'wishlist-2', prioridade: 1 }),
+        expect.objectContaining({ id: 'wishlist-1', prioridade: 2 }),
+      ])
+    )
+    await waitFor(() => expect(animate).toHaveBeenCalled())
+
+    await act(async () => {
+      saveOrder.resolve({
+        error: {
+          message: 'database unavailable',
+          details: '',
+          hint: '',
+          code: 'XX000',
+        },
+      })
+      await saveOrder.promise
+    })
+
+    expect(
+      screen.getAllByRole('heading', { level: 3 }).map(heading => heading.textContent)
+    ).toEqual(['Wishlist Game 1', 'Wishlist Game 2', 'Wishlist Game 3'])
+    expect(screen.getByText('profileWishlist.orderSaveError')).toBeInTheDocument()
+
+    delete (HTMLElement.prototype as { animate?: unknown }).animate
+  })
+})
+
+describe('ProfileTopFiveSection', () => {
+  it('mantem o cache visual otimista e restaura a selecao quando a persistencia falha', async () => {
+    const currentGame = createCatalogGame(1, 'Current Top Game')
+    const replacementGame = createCatalogGame(2, 'Replacement Top Game')
+    const saveTopFive = createDeferred<{ ok: boolean; message?: string }>()
+    const onSaveTopFive = vi.fn().mockReturnValue(saveTopFive.promise)
+    mocks.getCatalogGamesByIds.mockImplementation((gameIds: number[]) =>
+      Promise.resolve({
+        data: gameIds.includes(1) ? [currentGame] : [],
+        error: null,
+      })
+    )
+    mocks.searchCatalogGamesByTitle.mockResolvedValue({
+      data: [replacementGame],
+      error: null,
+    })
+
+    renderInRouter(
+      <ProfileTopFiveSection
+        isOwnerView
+        entries={[{ posicao: 1, jogo_id: 1 }]}
+        onSaveTopFive={onSaveTopFive}
+      />
+    )
+
+    expect(await screen.findByText('Current Top Game')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'profileTopFive.changeGame' }))
+    fireEvent.change(screen.getByLabelText('profileTopFive.searchLabel'), {
+      target: { value: 'Replacement' },
+    })
+    fireEvent.click(await screen.findByRole('button', { name: /Replacement Top Game/ }))
+
+    expect(onSaveTopFive).toHaveBeenCalledWith([{ posicao: 1, jogo_id: 2 }])
+    expect(screen.getAllByText('Replacement Top Game').length).toBeGreaterThan(0)
+
+    await act(async () => {
+      saveTopFive.resolve({ ok: false, message: 'top-five-save-failed' })
+      await saveTopFive.promise
+    })
+
+    expect(screen.getByText('top-five-save-failed')).toBeInTheDocument()
+    expect(screen.getAllByText('Current Top Game').length).toBeGreaterThan(0)
   })
 })

@@ -24,6 +24,7 @@ vi.mock('./reviewInteractionsService', async importOriginal => {
 })
 
 import {
+  getGameReviewOverview,
   getGameReviewsPage,
   getReviewCommentsPage,
   resolveGameReviewAnchor,
@@ -104,6 +105,78 @@ beforeEach(() => {
 })
 
 describe('paginated game review read models', () => {
+  it('maps the exact global review overview returned by the RPC', async () => {
+    mocks.rpc.mockResolvedValue({
+      data: [{
+        game_id: 7,
+        review_count: 12,
+        average_rating: '8.25',
+        comment_count: 31,
+      }],
+      error: null,
+    })
+
+    const result = await getGameReviewOverview(7)
+
+    expect(mocks.rpc).toHaveBeenCalledWith('get_game_review_overview', {
+      p_game_id: 7,
+    })
+    expect(result).toEqual({
+      data: {
+        gameId: 7,
+        reviewCount: 12,
+        averageRating: 8.25,
+        commentCount: 31,
+      },
+      error: null,
+    })
+  })
+
+  it.each(['PGRST202', '42883'])(
+    'falls back to the rating view only when the overview RPC is unavailable (%s)',
+    async code => {
+      mocks.rpc.mockResolvedValue({ data: null, error: { code, message: 'missing RPC' } })
+      const ratingQuery = {
+        select: vi.fn(),
+        in: vi.fn().mockResolvedValue({
+          data: [{ jogo_id: 7, review_count: 3, average_rating: 9 }],
+          error: null,
+        }),
+      }
+      ratingQuery.select.mockReturnValue(ratingQuery)
+      mocks.from.mockReturnValue(ratingQuery)
+
+      const result = await getGameReviewOverview(7)
+
+      expect(mocks.from).toHaveBeenCalledWith('game_rating_summaries')
+      expect(result).toEqual({
+        data: {
+          gameId: 7,
+          reviewCount: 3,
+          averageRating: 9,
+          commentCount: 0,
+        },
+        error: null,
+        fallbackUsed: true,
+      })
+    }
+  )
+
+  it('does not fall back for an ordinary overview RPC error', async () => {
+    mocks.rpc.mockResolvedValue({
+      data: null,
+      error: { code: '42501', message: 'permission denied' },
+    })
+
+    const result = await getGameReviewOverview(7)
+
+    expect(mocks.from).not.toHaveBeenCalled()
+    expect(result).toEqual({
+      data: null,
+      error: expect.objectContaining({ code: '42501', message: 'permission denied' }),
+    })
+  })
+
   it('loads three initial reviews and two initial comments from the RPCs', async () => {
     mocks.rpc.mockImplementation((name: string) => {
       if (name === 'get_game_reviews_page') {

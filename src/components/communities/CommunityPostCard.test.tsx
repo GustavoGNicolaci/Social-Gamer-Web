@@ -96,6 +96,31 @@ function ProgressiveCard({
 }
 
 describe('CommunityPostCard progressive comments', () => {
+  it('preserves post and comment ids, classes and DOM hierarchy', () => {
+    const { container } = render(
+      <MemoryRouter>
+        <ProgressiveCard onLoad={vi.fn(async () => false)} />
+      </MemoryRouter>
+    )
+
+    const article = container.querySelector('#post-post-1')
+    const commentsSection = article?.querySelector(
+      'section.community-comments',
+    )
+
+    expect(article).toHaveClass('community-post-card')
+    expect(commentsSection).toBeInTheDocument()
+    expect(
+      commentsSection?.querySelector('.community-comment-list'),
+    ).toBeInTheDocument()
+    expect(
+      commentsSection?.querySelector('#community-comment-comment-1'),
+    ).toHaveClass('community-comment-card')
+    expect(
+      commentsSection?.querySelector('#community-comment-comment-3'),
+    ).toHaveClass('community-comment-card')
+  })
+
   it('loads the next batch before revealing three more comments', async () => {
     const onLoad = vi.fn(async () => true)
     render(
