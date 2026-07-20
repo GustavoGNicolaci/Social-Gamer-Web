@@ -1,12 +1,12 @@
-# Aplicação das migrations no Supabase sem Docker
+# Estado e verificação das migrations no Supabase sem Docker
 
-Este procedimento conecta a CLI diretamente ao projeto remoto
-`apwkscpcjfmkfbqarguh`. A refatoração não executa nenhum destes comandos e não
-usa Docker.
+Este documento registra o estado das migrations e o procedimento de verificação
+do projeto remoto `apwkscpcjfmkfbqarguh`. A refatoração original não aplicou
+migrations e não usou Docker.
 
-As migrations anteriores, até
-`20260715015907_harden_notification_functions`, já estão aplicadas. Nesta
-rodada devem existir somente duas migrations pendentes:
+Em 20/07/2026, uma consulta somente de leitura com
+`supabase migration list --linked` confirmou que o histórico local e o remoto
+estavam alinhados, incluindo:
 
 ```text
 20260718001827_optimize_remaining_report_select_rls_initplans
@@ -18,35 +18,32 @@ executar `supabase functions deploy`.
 
 ## 1. Conferir o projeto e o histórico
 
-Antes de alterar o projeto remoto:
+Para reconfirmar o estado sem alterar o projeto remoto:
 
-1. Confirme que existe um backup recente ou Point-in-Time Recovery.
-2. Execute os comandos na raiz do repositório.
-3. Não prossiga se aparecer qualquer migration além das duas listadas acima.
-4. Não use `migration repair` apenas para ocultar uma divergência.
+1. Execute os comandos na raiz do repositório.
+2. Confirme que todas as linhas possuem os mesmos valores nas colunas `Local` e
+   `Remote`.
+3. Não use `migration repair` apenas para ocultar uma divergência.
 
 ```powershell
 supabase login
 supabase link --project-ref apwkscpcjfmkfbqarguh
 supabase migration list --linked
-supabase db push --linked --dry-run
 ```
 
-Revise o dry-run inteiro. Ele deve listar, na mesma ordem:
+As últimas linhas esperadas são:
 
 ```text
-20260718001827_optimize_remaining_report_select_rls_initplans.sql
-20260718001830_add_game_review_overview_summary.sql
+Local          Remote
+20260718001827 20260718001827
+20260718001830 20260718001830
 ```
 
-## 2. Aplicar
+## 2. Situação da aplicação
 
-Somente após confirmar o dry-run:
-
-```powershell
-supabase db push --linked
-supabase migration list --linked
-```
+Não há migration local pendente no estado registrado em 20/07/2026. Portanto,
+não é necessário executar `supabase db push --linked` apenas para reproduzir
+esta verificação.
 
 O primeiro arquivo apenas preserva as policies autenticadas de denúncias,
 trocando `auth.uid()` por `(select auth.uid())`. O segundo adiciona a RPC pública
@@ -54,10 +51,15 @@ e somente-leitura `get_game_review_overview(integer)`.
 
 Nenhum dado, tabela, índice, bucket ou configuração de Auth é removido.
 
+Se uma consulta futura mostrar divergência, confirme backup ou Point-in-Time
+Recovery, investigue a origem da diferença e revise um
+`supabase db push --linked --dry-run` completo antes de autorizar qualquer
+aplicação.
+
 ## 3. Comparar os tipos gerados
 
-Depois da aplicação, gere os tipos remotos em um arquivo temporário e compare
-com o contrato já versionado:
+Para revalidar o contrato após a aplicação, gere os tipos remotos em um arquivo
+temporário e compare com o contrato já versionado:
 
 ```powershell
 supabase gen types typescript --linked --schema public | Set-Content -Encoding utf8 src/types/supabase.remote.ts
@@ -124,9 +126,10 @@ Antes de publicar o frontend:
 7. Confirme que catálogo, perfis e comunidades continuam carregando.
 8. Verifique PT/EN, tema claro/escuro e mobile/desktop.
 
-O frontend mantém fallback somente para `PGRST202` e `42883`. Assim, a versão
-atual continua funcionando antes da aplicação, mas o total global exato só
-aparece depois que a nova RPC estiver disponível.
+O frontend mantém fallback somente para `PGRST202` e `42883`. A RPC já está
+registrada no histórico remoto; o fallback deve permanecer por uma versão para
+compatibilidade com outros ambientes ou durante um rollback. No ambiente
+atualizado, o total global exato vem da RPC.
 
 ## 6. Configuração administrativa
 

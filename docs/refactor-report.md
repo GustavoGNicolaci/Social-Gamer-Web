@@ -12,6 +12,15 @@ públicos, classes CSS, IDs de deep links, traduções e fachadas existentes.
 - Docker não foi utilizado.
 - Nenhuma dependência nova de runtime foi adicionada.
 
+### Atualização pós-refatoração — 20/07/2026
+
+Uma consulta somente de leitura com `supabase migration list --linked` confirmou
+que o histórico local e o remoto estão alinhados até
+`20260718001830_add_game_review_overview_summary`. Isso inclui as duas migrations
+de 18/07/2026 que estavam pendentes ao término da rodada. Essa atualização não
+altera as garantias acima: a aplicação não ocorreu durante a execução da
+refatoração documentada neste relatório.
+
 ## Resumo das mudanças
 
 As páginas e serviços mais concentrados foram divididos por domínio, mantendo
@@ -202,10 +211,10 @@ Foram criadas 13 migrations, na ordem:
 12. `20260718001827_optimize_remaining_report_select_rls_initplans.sql`
 13. `20260718001830_add_game_review_overview_summary.sql`
 
-As 11 primeiras já estão aplicadas no projeto remoto. As duas últimas foram
-criadas localmente nesta rodada e ainda aguardam o dry-run e a aplicação pelo
-usuário. Cada grupo possui um contrato pgTAP correspondente em
-`supabase/tests/`.
+As 13 migrations estão registradas no projeto remoto. Em 20/07/2026,
+`supabase migration list --linked` confirmou que não havia diferença entre o
+histórico local e o remoto. Cada grupo possui um contrato pgTAP correspondente
+em `supabase/tests/`.
 
 ## Arquivos removidos
 
@@ -271,9 +280,9 @@ extrações, paginação e guards; as exceções estão justificadas em
 
 ## Melhorias de segurança
 
-- 22 policies já aplicadas avaliam `(select auth.uid())` uma vez por statement;
-  as duas policies restantes estão versionadas na migration pendente, sempre
-  preservando `TO authenticated` e a lógica de proprietário.
+- As 24 policies abrangidas pelas migrations de otimização avaliam
+  `(select auth.uid())` uma vez por statement, preservando `TO authenticated` e
+  a lógica de proprietário.
 - Novas RPCs possuem limites de entrada, desempates estáveis e grants
   explícitos.
 - `get_game_review_overview(integer)` é `STABLE`, `SECURITY INVOKER`, usa
@@ -314,6 +323,7 @@ O access token já emitido pode continuar válido até expirar. O projeto manté
 | `npm run check:bundle` | aprovado; inicial +1,42%, `GamesPage` +4,77% e exceções lazy documentadas |
 | `npm run check:architecture` | 192 arquivos, 642 dependências internas e nenhum ciclo |
 | `npm run check:supabase-static` | aprovado |
+| `supabase migration list --linked` | histórico local e remoto alinhado até `20260718001830` em 20/07/2026 |
 | `npm audit --omit=dev` | 0 vulnerabilidades |
 | `git diff --check` | aprovado |
 | Navegador desktop/mobile | home e quatro rotas afetadas sem overlay, erro de console ou overflow |
@@ -326,12 +336,14 @@ pgTAP contra um PostgreSQL local não foram executados.
 
 ## Pendências e limitações conhecidas
 
-- As migrations foram revisadas estaticamente, mas ainda precisam do
-  `--dry-run`, aplicação e smoke test no projeto remoto.
+- O histórico remoto das migrations está alinhado, mas os smoke tests
+  pós-aplicação e a conferência dos advisors ainda não estão documentados como
+  concluídos.
 - Os contratos pgTAP não foram executados em um banco Supabase por decisão de
   não usar Docker.
-- Até a migration de overview ser aplicada, o frontend usa o fallback legado e
-  soma apenas os totais já carregados. Depois da RPC, o total é global e exato.
+- A migration de overview já está aplicada no projeto remoto. O fallback legado
+  permanece temporariamente para compatibilidade com ambientes ainda não
+  atualizados; no projeto remoto, a RPC permite retornar o total global e exato.
 - A ordenação SQL por título usa `lower(titulo)`, enquanto o navegador usava
   `localeCompare`; títulos acentuados podem ter ordem diferente entre locales.
 - Testes funcionais SQL por papel (membro, moderador, líder e terceiro) dependem
