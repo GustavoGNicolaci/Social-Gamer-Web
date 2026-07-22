@@ -98,6 +98,7 @@ function HomePage() {
     reviews: 0,
   })
   const [homeErrors, setHomeErrors] = useState<HomeErrors>(EMPTY_HOME_ERRORS)
+  const [hasStatsError, setHasStatsError] = useState(false)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -106,6 +107,7 @@ function HomePage() {
     const fetchData = async () => {
       setLoading(true)
       setHomeErrors(EMPTY_HOME_ERRORS)
+      setHasStatsError(false)
 
       try {
         const [
@@ -164,6 +166,7 @@ function HomePage() {
         setNewReleases(releasesResponse.data)
         setTrendingReviews(trendingReviewsResponse.data)
         setSiteStats(statsResponse.data)
+        setHasStatsError(Boolean(statsResponse.error))
         setHomeErrors({
           following: followingResponse.error?.message || null,
           featured: featuredGamesResponse.error?.message || null,
@@ -180,6 +183,7 @@ function HomePage() {
           setActiveCommunities([])
           setNewReleases([])
           setTrendingReviews([])
+          setHasStatsError(true)
           setHomeErrors({
             following: t('home.error.following'),
             featured: t('home.error.featured'),
@@ -214,8 +218,22 @@ function HomePage() {
     : { to: '/register', label: t('common.register') }
 
   const heroStats = [
-    { value: loading ? t('common.loadingShort') : formatCount(siteStats.games), label: t('home.stat.games') },
-    { value: loading ? t('common.loadingShort') : formatCount(siteStats.reviews), label: t('home.stat.reviews') },
+    {
+      value: loading
+        ? t('common.loadingShort')
+        : hasStatsError
+          ? t('common.pendingSymbol')
+          : formatCount(siteStats.games),
+      label: t('home.stat.games'),
+    },
+    {
+      value: loading
+        ? t('common.loadingShort')
+        : hasStatsError
+          ? t('common.pendingSymbol')
+          : formatCount(siteStats.reviews),
+      label: t('home.stat.reviews'),
+    },
   ]
 
   const featureCards: Array<{
@@ -250,7 +268,7 @@ function HomePage() {
 
   return (
     <div className="page-container">
-      <div className="page-content home-page">
+      <div className="page-content home-page" aria-busy={loading}>
         <section className="home-hero">
           <div className="home-hero-copy">
             <span className="home-eyebrow">{heroEyebrow}</span>
@@ -279,7 +297,11 @@ function HomePage() {
           </div>
 
           <div className="home-hero-side">
-            <article className="home-hero-card home-network-card">
+            <article
+              className="home-hero-card home-network-card"
+              aria-busy={loading}
+              role={!loading && user && homeErrors.following ? 'alert' : undefined}
+            >
               <span className="home-eyebrow">{t('home.networkNow')}</span>
 
               {loading ? (
@@ -293,6 +315,14 @@ function HomePage() {
                   <p>{t('home.networkLoginText')}</p>
                   <Link to="/login" className="home-inline-link">
                     {t('auth.login.submit')}
+                  </Link>
+                </>
+              ) : homeErrors.following ? (
+                <>
+                  <h2>{homeErrors.following}</h2>
+                  <p>{t('home.networkQuietText')}</p>
+                  <Link to="/games" className="home-inline-link">
+                    {t('common.exploreGames')}
                   </Link>
                 </>
               ) : latestNetworkActivity ? (

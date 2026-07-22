@@ -32,6 +32,7 @@ vi.mock('../services/gameCatalogService', () => ({
 
 vi.mock('../i18n/I18nContext', () => ({
   useI18n: () => ({
+    formatDate: (value: string) => new Date(value).toLocaleDateString('en-US'),
     formatNumber: (value: number) => String(value),
     t: (key: string, params?: Record<string, unknown>) => {
       if (key === 'catalog.filter.genrePrefix') return 'Genre'
@@ -322,7 +323,7 @@ describe('GamesPage catalog contract', () => {
     })
     expect(container.querySelector('article.gp-game')).toBeInTheDocument()
     expect(container.querySelectorAll('a[href="/games/7"]')).toHaveLength(2)
-    expect(screen.getByRole('link', { name: 'common.viewDetails' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Hades — common.viewDetails' })).toHaveAttribute(
       'href',
       '/games/7'
     )
@@ -425,10 +426,10 @@ describe('GamesPage catalog contract', () => {
     renderGamesPage()
 
     await screen.findByRole('heading', { name: 'common.games' })
-    fireEvent.click(screen.getByRole('button', { name: '+1' }))
+    fireEvent.click(screen.getByRole('button', { name: 'catalog.showAllGenresFor' }))
 
     expect(
-      screen.getByRole('heading', { name: 'catalog.allGameGenres' })
+      await screen.findByRole('heading', { name: 'catalog.allGameGenres' })
     ).toBeInTheDocument()
     expect(screen.getByText('Indie')).toHaveClass('genre-chip', 'gp-tag')
 

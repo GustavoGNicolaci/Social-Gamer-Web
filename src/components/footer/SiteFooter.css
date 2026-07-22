@@ -1,6 +1,6 @@
 .site-footer {
   width: 100%;
-  padding: 1rem 2rem 2rem;
+  padding: 1rem clamp(0.75rem, 2.4vw, 2rem) 1.5rem;
   color: var(--foreground);
 }
 
@@ -20,7 +20,7 @@
   grid-template-columns: minmax(280px, 1.35fr) repeat(2, minmax(160px, 0.55fr)) minmax(260px, 0.9fr);
   gap: clamp(1rem, 2vw, 1.5rem);
   align-items: start;
-  border-radius: 8px 8px 0 0;
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
   padding: clamp(1.25rem, 3vw, 2rem);
 }
 
@@ -107,6 +107,9 @@
 }
 
 .site-footer-section a {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
   color: var(--muted-foreground);
   text-decoration: none;
   font-weight: 700;
@@ -124,17 +127,17 @@
   gap: 0.8rem;
   padding: 1rem;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: var(--surface);
 }
 
 .site-footer-support-icon {
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   display: grid;
   place-items: center;
   border: 1px solid var(--badge-border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--badge);
   color: var(--badge-foreground);
 }
@@ -150,6 +153,7 @@
 }
 
 .site-footer-support-link {
+  min-height: 44px;
   display: inline-flex;
   align-items: center;
   width: fit-content;
@@ -166,7 +170,7 @@
   align-items: center;
   justify-content: space-between;
   border-top: 0;
-  border-radius: 0 0 8px 8px;
+  border-radius: 0 0 var(--radius-xl) var(--radius-xl);
   padding: 0.95rem clamp(1.25rem, 3vw, 2rem);
   color: var(--muted-foreground);
   font-size: 0.86rem;
@@ -201,27 +205,43 @@ body.light .site-footer-bottom {
 
 @media (max-width: 768px) {
   .site-footer {
-    padding: 0.75rem 1rem 1.25rem;
+    padding: 0.5rem 0.75rem 1rem;
   }
 
   .site-footer-inner {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+    padding: 1.15rem;
+  }
+
+  .site-footer-brand,
+  .site-footer-support {
+    grid-column: 1 / -1;
+  }
+
+  .site-footer-brand {
+    gap: 0.7rem;
+  }
+
+  .site-footer-brand p,
+  .site-footer-support p {
+    font-size: 0.86rem;
+    line-height: 1.55;
   }
 
   .site-footer-bottom {
     display: grid;
     justify-content: stretch;
+    gap: 0.45rem;
+    padding-block: 0.8rem;
+    font-size: 0.78rem;
   }
 }
 
 @media (max-width: 420px) {
-  .site-footer {
-    padding-inline: 0.5rem;
-  }
-
   .site-footer-inner,
   .site-footer-bottom {
-    padding-inline: 0.9rem;
+    padding-inline: 0.8rem;
   }
 
   .site-footer-support {

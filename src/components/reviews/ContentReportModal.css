@@ -98,10 +98,10 @@
 }
 
 .content-report-modal-close-button {
-  width: 42px;
-  height: 42px;
-  min-width: 42px;
-  min-height: 42px;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
@@ -200,7 +200,7 @@
 }
 
 .content-report-modal-textarea::placeholder {
-  color: rgba(238, 242, 255, 0.42);
+  color: var(--muted-foreground);
 }
 
 .content-report-modal-pill-row {
@@ -273,27 +273,30 @@
 
 @media (max-width: 640px) {
   .content-report-modal-backdrop {
-    padding: 0.75rem;
+    align-items: end;
+    padding: 0;
   }
 
   .content-report-modal {
-    width: calc(100vw - 24px);
-    max-height: calc(100vh - 24px);
-    max-height: calc(100dvh - 24px);
-    border-radius: 22px;
+    width: 100%;
+    max-height: 92vh;
+    max-height: 92dvh;
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: 24px 24px 0 0;
   }
 
   .content-report-modal-content {
     padding: 1rem;
   }
 
-  .content-report-modal-header,
   .content-report-modal-actions {
     display: grid;
   }
 
   .content-report-modal-close-button {
-    justify-self: end;
+    align-self: start;
   }
 
   .content-report-modal-actions .game-button {
@@ -343,7 +346,7 @@ body.light .content-report-modal-secondary-action {
 }
 
 body.light .content-report-modal-textarea::placeholder {
-  color: color-mix(in srgb, var(--muted-foreground) 78%, transparent);
+  color: var(--muted-foreground);
 }
 
 body.light .content-report-modal-select:focus,
@@ -370,4 +373,14 @@ body.light .content-report-modal-danger-action {
 
 body.light .content-report-modal-feedback.is-info {
   color: var(--info);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .content-report-modal-close-button {
+    transition: none;
+  }
+
+  .content-report-modal-close-button:hover {
+    transform: none;
+  }
 }

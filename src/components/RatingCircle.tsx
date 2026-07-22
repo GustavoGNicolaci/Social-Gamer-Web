@@ -8,6 +8,8 @@ interface RatingCircleProps {
   strokeWidth?: number
   className?: string
   ariaLabel?: string
+  emptyLabel?: string
+  locale?: string
 }
 
 const EMPTY_RATING_LABEL = '\u2013'
@@ -16,11 +18,26 @@ function clampRating(value: number, max: number) {
   return Math.min(Math.max(value, 0), max)
 }
 
-function formatRatingValue(value: number) {
-  return value.toLocaleString('pt-BR', {
+function formatRatingValue(value: number, locale: string) {
+  return value.toLocaleString(locale, {
     minimumFractionDigits: 0,
     maximumFractionDigits: 1,
   })
+}
+
+function getRatingLocale() {
+  if (typeof document === 'undefined') return 'pt-BR'
+  return document.documentElement.lang || 'pt-BR'
+}
+
+function getDefaultEmptyLabel(locale: string) {
+  return locale.toLowerCase().startsWith('en') ? 'No rating' : 'Sem nota'
+}
+
+function getDefaultRatingLabel(locale: string, rating: string, max: string) {
+  return locale.toLowerCase().startsWith('en')
+    ? `Rating ${rating} out of ${max}`
+    : `Nota ${rating} de ${max}`
 }
 
 export function RatingCircle({
@@ -30,6 +47,8 @@ export function RatingCircle({
   strokeWidth = 5,
   className = '',
   ariaLabel,
+  locale = getRatingLocale(),
+  emptyLabel = getDefaultEmptyLabel(locale),
 }: RatingCircleProps) {
   const hasRating = typeof value === 'number' && Number.isFinite(value)
   const normalizedRating = hasRating ? clampRating(value, max) : null
@@ -38,10 +57,15 @@ export function RatingCircle({
   const circumference = 2 * Math.PI * radius
   const dashOffset = circumference * (1 - progress)
   const formattedRating =
-    normalizedRating === null ? EMPTY_RATING_LABEL : formatRatingValue(normalizedRating)
-  const formattedMax = formatRatingValue(max)
+    normalizedRating === null
+      ? EMPTY_RATING_LABEL
+      : formatRatingValue(normalizedRating, locale)
+  const formattedMax = formatRatingValue(max, locale)
   const accessibleLabel =
-    ariaLabel || (normalizedRating === null ? 'Sem nota' : `Nota ${formattedRating} de ${formattedMax}`)
+    ariaLabel ||
+    (normalizedRating === null
+      ? emptyLabel
+      : getDefaultRatingLabel(locale, formattedRating, formattedMax))
 
   return (
     <span

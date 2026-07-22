@@ -251,7 +251,6 @@ function normalizeGame(row: {
 function getStatusLabel(statusValue: string | null | undefined) {
   if (statusValue === 'zerado') return 'zerou'
   if (statusValue === 'dropado') return 'dropou'
-  if (statusValue === 'planejando') return 'planeja jogar'
   if (statusValue === 'pausado') return 'pausou'
   return 'comecou a jogar'
 }
@@ -271,6 +270,10 @@ function buildFollowingActivitySummary(row: FollowingActivityRow) {
 
   if (row.is_favorite) {
     return 'Adicionou este jogo aos favoritos.'
+  }
+
+  if (row.status_value === 'planejando') {
+    return 'Adicionou este jogo ao perfil.'
   }
 
   return `Adicionou este jogo ao perfil e ${getStatusLabel(row.status_value)}.`

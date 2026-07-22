@@ -1,7 +1,8 @@
 import { Link } from 'react-router-dom'
+import { ArrowLeft, Heart, LogIn, Star } from 'lucide-react'
 import { useI18n } from '../../../i18n/I18nContext'
 import {
-  STATUS_VALUES,
+  SELECTABLE_STATUS_VALUES,
   type GameStatusValue,
 } from '../../../services/gameStatusService'
 
@@ -31,7 +32,7 @@ export interface GameDetailsUserActionsProps {
   }
 }
 
-const QUICK_PROFILE_STATUS_OPTIONS = STATUS_VALUES.map(value => ({
+const QUICK_PROFILE_STATUS_OPTIONS = SELECTABLE_STATUS_VALUES.map(value => ({
   value,
   labelKey: `game.status.${value}`,
 }))
@@ -54,10 +55,16 @@ export function GameDetailsUserActions({
   const profileStatusTitle = status.current
     ? t('game.details.profilePanelTitleUpdate')
     : t('game.details.profilePanelTitleAdd')
+  const isLegacyStatus = status.current === 'planejando'
+  const currentStatusLabel = isLegacyStatus
+    ? t('profileStatus.legacyStatus')
+    : status.current
+      ? t(`game.status.${status.current}`)
+      : ''
   const profileStatusSubtitle = status.loading
     ? t('game.details.profilePanelChecking')
     : status.current
-      ? t('game.details.profilePanelCurrent', { status: t(`game.status.${status.current}`) })
+      ? t('game.details.profilePanelCurrent', { status: currentStatusLabel })
       : t('game.details.quickStatusText')
 
   return (
@@ -65,10 +72,12 @@ export function GameDetailsUserActions({
       <div className="game-details-actions">
         {authenticated ? (
           <a href="#game-community" className="game-button game-details-primary-button">
+            <Star size={18} aria-hidden="true" />
             {t('game.details.rateNow')}
           </a>
         ) : (
           <Link to="/login" className="game-button game-details-primary-button">
+            <LogIn size={18} aria-hidden="true" />
             {t('game.details.loginToRate')}
           </Link>
         )}
@@ -80,7 +89,9 @@ export function GameDetailsUserActions({
             onClick={wishlist.toggle}
             disabled={wishlist.loading || wishlist.saving}
             aria-live="polite"
+            aria-pressed={wishlist.saved}
           >
+            <Heart size={18} fill={wishlist.saved ? 'currentColor' : 'none'} aria-hidden="true" />
             {wishlistButtonLabel}
           </button>
         ) : (
@@ -88,11 +99,13 @@ export function GameDetailsUserActions({
             to="/login"
             className="game-button game-details-secondary-button game-details-wishlist-button"
           >
+            <Heart size={18} aria-hidden="true" />
             {t('game.details.loginToSave')}
           </Link>
         )}
 
         <Link to="/games" className="game-button game-details-secondary-button">
+          <ArrowLeft size={18} aria-hidden="true" />
           {t('common.goBackToCatalog')}
         </Link>
       </div>
@@ -103,9 +116,25 @@ export function GameDetailsUserActions({
             <span className="game-details-panel-kicker">{t('common.profile')}</span>
             <strong>{profileStatusTitle}</strong>
             <p>{profileStatusSubtitle}</p>
+            {isLegacyStatus ? (
+              <button
+                type="button"
+                className="game-button game-details-legacy-status-button"
+                onClick={() => void status.select('planejando')}
+                disabled={status.loading || status.saving}
+              >
+                {status.saving && status.pending === 'planejando'
+                  ? t('common.removing')
+                  : t('profileStatus.removeLegacyStatus')}
+              </button>
+            ) : null}
           </div>
 
-          <div className="game-details-profile-status-actions">
+          <div
+            className="game-details-profile-status-actions"
+            role="group"
+            aria-label={profileStatusTitle}
+          >
             {QUICK_PROFILE_STATUS_OPTIONS.map(option => {
               const isSelected = status.current === option.value
               const isPendingThisStatus = status.pending === option.value
@@ -118,6 +147,7 @@ export function GameDetailsUserActions({
                   className={`game-button game-details-profile-status-button is-${option.value}${isSelected ? ' is-selected' : ''}`}
                   onClick={() => void status.select(option.value)}
                   disabled={status.loading || status.saving}
+                  aria-pressed={isSelected}
                 >
                   <span className="game-details-profile-status-button-label">
                     {status.saving && isPendingThisStatus
@@ -139,13 +169,19 @@ export function GameDetailsUserActions({
       ) : null}
 
       {wishlist.feedback ? (
-        <p className={`game-details-feedback is-${wishlist.feedback.tone}`}>
+        <p
+          className={`game-details-feedback is-${wishlist.feedback.tone}`}
+          role={wishlist.feedback.tone === 'error' ? 'alert' : 'status'}
+        >
           {wishlist.feedback.message}
         </p>
       ) : null}
 
       {status.feedback ? (
-        <p className={`game-details-feedback is-${status.feedback.tone}`}>
+        <p
+          className={`game-details-feedback is-${status.feedback.tone}`}
+          role={status.feedback.tone === 'error' ? 'alert' : 'status'}
+        >
           {status.feedback.message}
         </p>
       ) : null}

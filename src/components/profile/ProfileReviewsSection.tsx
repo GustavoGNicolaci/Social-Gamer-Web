@@ -99,7 +99,7 @@ export const ProfileReviewsSection = memo(function ProfileReviewsSection({
         </div>
 
         {isLoading ? (
-          <div className="profile-reviews-empty">
+          <div className="profile-reviews-empty" role="status" aria-live="polite">
             <h3>{isOwnerView ? t('profileReviews.loadingOwner') : t('profileReviews.loadingPublic')}</h3>
             <p>
               {isOwnerView
@@ -113,7 +113,7 @@ export const ProfileReviewsSection = memo(function ProfileReviewsSection({
             </div>
           </div>
         ) : errorMessage ? (
-          <div className="profile-reviews-empty">
+          <div className="profile-reviews-empty" role="alert">
             <h3>{t('profileReviews.errorTitle')}</h3>
             <p>{errorMessage}</p>
           </div>
@@ -139,70 +139,80 @@ export const ProfileReviewsSection = memo(function ProfileReviewsSection({
           <>
             <div className="profile-reviews-grid">
               {items.map(review => {
-              const visibleTitle = review.jogo?.titulo || t('common.gameUnavailable')
-              const isRemovingReview = removingReviewIds.includes(review.id)
+                const visibleTitle = review.jogo?.titulo || t('common.gameUnavailable')
+                const isRemovingReview = removingReviewIds.includes(review.id)
 
-              return (
-                <article
-                  key={review.id}
-                  className={`profile-reviews-card${isRemovingReview ? ' is-removing' : ''}`}
-                >
-                  <Link to={`/games/${review.jogo_id}`} className="profile-reviews-card-link">
-                    <div className="profile-reviews-card-cover">
-                      {review.jogo?.capa_url ? (
-                        <GameCoverImage
-                          src={review.jogo.capa_url}
-                          alt={t('catalog.coverAlt', { title: visibleTitle })}
-                          width={360}
-                          height={160}
-                          sizes="(max-width: 768px) 100vw, 33vw"
-                        />
-                      ) : (
-                        <div className="profile-reviews-card-fallback">{getInitial(visibleTitle)}</div>
-                      )}
-                    </div>
-
-                    <div className="profile-reviews-card-body">
-                      <div className="profile-reviews-card-meta">
-                        <span className="profile-reviews-score-pill">
-                          {t('profileReviews.score', { score: formatScoreLabel(review.nota) })}
-                        </span>
-                        <span className="profile-reviews-date">
-                          {t('profileReviews.reviewedAt', {
-                            date: formatReviewDate(review.data_publicacao),
-                          })}
-                        </span>
+                return (
+                  <article
+                    key={review.id}
+                    className={`profile-reviews-card${isRemovingReview ? ' is-removing' : ''}`}
+                  >
+                    <Link to={`/games/${review.jogo_id}`} className="profile-reviews-card-link">
+                      <div className="profile-reviews-card-cover">
+                        {review.jogo?.capa_url ? (
+                          <GameCoverImage
+                            src={review.jogo.capa_url}
+                            alt={t('catalog.coverAlt', { title: visibleTitle })}
+                            width={360}
+                            height={540}
+                            sizes="(max-width: 800px) 96px, 120px"
+                          />
+                        ) : (
+                          <div className="profile-reviews-card-fallback">
+                            {getInitial(visibleTitle)}
+                          </div>
+                        )}
                       </div>
 
-                      <h3>{visibleTitle}</h3>
+                      <div className="profile-reviews-card-body">
+                        <h3>{visibleTitle}</h3>
 
-                      {review.texto_review ? (
-                        <p className="profile-reviews-comment">{review.texto_review}</p>
-                      ) : (
-                        <p className="profile-reviews-comment is-empty">
-                          {t('profileReviews.noComment')}
-                        </p>
-                      )}
+                        <div className="profile-reviews-card-meta">
+                          <span className="profile-reviews-score-pill">
+                            {t('profileReviews.score', {
+                              score: formatScoreLabel(review.nota),
+                            })}
+                          </span>
+                          <span className="profile-reviews-date">
+                            {t('profileReviews.reviewedAt', {
+                              date: formatReviewDate(review.data_publicacao),
+                            })}
+                          </span>
+                        </div>
 
-                      <span className="profile-reviews-cta">{t('common.viewGameDetails')}</span>
-                    </div>
-                  </Link>
+                        <div className="profile-reviews-comment-shell">
+                          {review.texto_review ? (
+                            <p className="profile-reviews-comment">{review.texto_review}</p>
+                          ) : (
+                            <p className="profile-reviews-comment is-empty">
+                              {t('profileReviews.noComment')}
+                            </p>
+                          )}
+                        </div>
 
-                  {isOwnerView && onDeleteReview ? (
-                    <div className="profile-reviews-card-actions">
-                      <button
-                        type="button"
-                        className="profile-secondary-button profile-reviews-delete-button"
-                        onClick={() => void handleDeleteReview(review.id)}
-                        disabled={isRemovingReview}
-                      >
-                        {isRemovingReview ? t('common.deleting') : t('profileReviews.delete')}
-                      </button>
-                    </div>
-                  ) : null}
-                </article>
-              )
-            })}
+                        <span className="profile-reviews-cta">
+                          {t('common.viewGameDetails')}
+                        </span>
+                      </div>
+                    </Link>
+
+                    {isOwnerView && onDeleteReview ? (
+                      <div className="profile-reviews-card-actions">
+                        <button
+                          type="button"
+                          className="profile-secondary-button profile-reviews-delete-button"
+                          onClick={() => void handleDeleteReview(review.id)}
+                          disabled={isRemovingReview}
+                        >
+                          {isRemovingReview
+                            ? t('common.deleting')
+                            : t('profileReviews.delete')}
+                        </button>
+                      </div>
+                    ) : null}
+                  </article>
+                )
+              })}
             </div>
 
             {hasMore ? (
@@ -222,7 +232,11 @@ export const ProfileReviewsSection = memo(function ProfileReviewsSection({
           </>
         )}
 
-        {actionError ? <p className="profile-feedback is-error">{actionError}</p> : null}
+        {actionError ? (
+          <p className="profile-feedback is-error" role="alert">
+            {actionError}
+          </p>
+        ) : null}
       </div>
     </section>
   )

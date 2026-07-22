@@ -28,6 +28,8 @@ vi.mock('../contexts/AuthContext', () => ({
 vi.mock('../i18n/I18nContext', () => ({
   useI18n: () => ({
     t: i18nMocks.t,
+    locale: 'pt-BR',
+    formatDate: i18nMocks.formatLocalizedDate,
     formatNumber: i18nMocks.formatNumber,
   }),
 }))
@@ -78,6 +80,7 @@ vi.mock('../services/reviewInteractionsService', () => ({
 
 vi.mock('../services/gameStatusService', () => ({
   STATUS_VALUES: ['jogando', 'zerado', 'dropado', 'planejando', 'pausado'],
+  SELECTABLE_STATUS_VALUES: ['jogando', 'zerado', 'dropado', 'pausado'],
   deleteGameStatus: vi.fn(),
   getGameStatusEntry: serviceMocks.getGameStatusEntry,
   saveGameStatus: vi.fn(),

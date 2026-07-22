@@ -3,6 +3,7 @@ import { GameCoverImage } from '../GameCoverImage'
 import type { HomeFeaturedGame } from '../../services/homeService'
 import { useI18n } from '../../i18n/I18nContext'
 import { formatCompactDate, formatRating, getInitial } from './homeDisplayUtils'
+import { HomePanelState } from './HomePanelState'
 
 interface FeaturedRecentReviewedGamesProps {
   items: HomeFeaturedGame[]
@@ -37,17 +38,11 @@ export function FeaturedRecentReviewedGames({
       </div>
 
       {isLoading ? (
-        <div className="home-empty-state">
-          <p>{t('home.featured.loading')}</p>
-        </div>
+        <HomePanelState message={t('home.featured.loading')} tone="loading" rows={4} />
       ) : errorMessage ? (
-        <div className="home-empty-state is-error">
-          <p>{errorMessage}</p>
-        </div>
+        <HomePanelState message={errorMessage} tone="error" />
       ) : items.length === 0 ? (
-        <div className="home-empty-state">
-          <p>{t('home.featured.empty')}</p>
-        </div>
+        <HomePanelState message={t('home.featured.empty')} />
       ) : (
         <div className="home-spotlight-list">
           {items.map(game => {
@@ -70,7 +65,7 @@ export function FeaturedRecentReviewedGames({
                 </div>
 
                 <div className="home-spotlight-copy">
-                  <h3>{game.title}</h3>
+                  <h4>{game.title}</h4>
                   <p>{game.genres.slice(0, 2).join(', ') || t('common.noGenreProvided')}</p>
                   <div className="home-spotlight-meta">
                     <span>{getReviewCountLabel(game, t)}</span>

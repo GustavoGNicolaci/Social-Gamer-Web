@@ -1,4 +1,6 @@
+import { useId } from 'react'
 import { useI18n } from '../../../i18n/I18nContext'
+import { CatalogDialog } from './CatalogDialog'
 
 export type CatalogFacetCategory = 'genre' | 'platform' | 'developer'
 
@@ -39,17 +41,24 @@ export function CatalogFiltersModal({
   isFacetActive,
 }: CatalogFiltersModalProps) {
   const { t, formatNumber } = useI18n()
-
-  if (!open) return null
+  const titleId = useId()
+  const descriptionId = useId()
 
   return (
-    <div className="gp-modal" onClick={onClose}>
-      <div className="gp-modal-card gp-filters-modal" onClick={event => event.stopPropagation()}>
+    <CatalogDialog
+      open={open}
+      className="gp-filters-modal"
+      labelledBy={titleId}
+      describedBy={descriptionId}
+      onClose={onClose}
+    >
         <div className="gp-modal-head">
           <div>
             <span className="gp-badge">{t('catalog.allFilters')}</span>
-            <h3>{t('catalog.filtersTitle')}</h3>
-            <p className="gp-muted">{t('catalog.filtersText')}</p>
+            <h3 id={titleId}>{t('catalog.filtersTitle')}</h3>
+            <p id={descriptionId} className="gp-muted">
+              {t('catalog.filtersText')}
+            </p>
           </div>
 
           <button
@@ -57,21 +66,20 @@ export function CatalogFiltersModal({
             className="gp-modal-close"
             aria-label={t('catalog.closeFilters')}
             onClick={onClose}
+            data-dialog-autofocus
           >
-            x
+            <span aria-hidden="true">&times;</span>
           </button>
         </div>
 
         <label className="gp-modal-search">
+          <span className="gp-visually-hidden">
+            {t('catalog.searchFiltersPlaceholder')}
+          </span>
           <span className="gp-search-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path
-                d="M21 21L16.65 16.65M18 11C18 14.866 14.866 18 11 18C7.13401 18 4 14.866 4 11C4 7.13401 7.13401 4 11 4C14.866 4 18 7.13401 18 11Z"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
+            <svg viewBox="0 0 24 24" focusable="false">
+              <circle cx="11" cy="11" r="6.5" />
+              <path d="m16 16 4 4" />
             </svg>
           </span>
 
@@ -93,7 +101,7 @@ export function CatalogFiltersModal({
                   aria-label={t('catalog.removeFilter', { label: filter.label })}
                   onClick={filter.onRemove}
                 >
-                  x
+                  <span aria-hidden="true">&times;</span>
                 </button>
               </span>
             ))}
@@ -122,6 +130,7 @@ export function CatalogFiltersModal({
                         isFacetActive(group.category, option) ? ' is-active' : ''
                       }`}
                       onClick={() => onToggleFacet(group.category, option)}
+                      aria-pressed={isFacetActive(group.category, option)}
                     >
                       {option}
                     </button>
@@ -143,7 +152,6 @@ export function CatalogFiltersModal({
             {t('common.applyFilters')}
           </button>
         </div>
-      </div>
-    </div>
+    </CatalogDialog>
   )
 }

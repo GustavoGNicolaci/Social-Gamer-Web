@@ -1,6 +1,19 @@
 import type { TranslationDictionary } from '../types'
 
 export const enUS: TranslationDictionary = {
+  'catalog.showAllGenresFor': 'Show all genres for {title}',
+  'auth.showPassword': 'Show {field}',
+  'auth.hidePassword': 'Hide {field}',
+  'app.skipToContent': 'Skip to main content',
+  'app.errorEyebrow': 'Something left the game',
+  'app.errorTitle': 'This screen could not be loaded',
+  'app.errorText': 'The rest of the site is still available. Reload the page or return Home to try again.',
+  'app.reload': 'Reload page',
+  'app.backHome': 'Back to Home',
+  'app.notFoundEyebrow': 'Error 404',
+  'app.notFoundTitle': 'This level does not exist',
+  'app.notFoundText': 'This address may have changed or the content is no longer available. Continue through the catalog or return Home.',
+
   'app.loadingPage': 'Loading page...',
 
   'language.portuguese': 'Portuguese',
@@ -803,6 +816,8 @@ export const enUS: TranslationDictionary = {
   'profileStatus.notLoaded': ' {count} still not loaded.',
   'profileStatus.page': 'Page {page} of {total}',
   'profileStatus.updatedAt': 'Updated on {date}',
+  'profileStatus.legacyStatus': 'Legacy status',
+  'profileStatus.removeLegacyStatus': 'Remove legacy status',
   'profileStatus.savingLabel': 'Saving...',
   'profileStatus.removingLabel': 'Removing...',
   'profileStatus.moreGames': 'View more games',
@@ -838,6 +853,8 @@ export const enUS: TranslationDictionary = {
   'profileWishlist.addedAt': 'Added on {date}',
   'profileWishlist.reorderAria': 'Reorder {title}',
   'profileWishlist.dragTitle': 'Drag to reorder',
+  'profileWishlist.moveEarlier': 'Move {title} earlier',
+  'profileWishlist.moveLater': 'Move {title} later',
   'profileWishlist.savingOrder': 'Saving new order...',
   'profileWishlist.loadingFull': 'Loading full list to reorder...',
   'profileWishlist.totalSaved': 'Total saved',

@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState, type FocusEvent } from 'react'
-import { Gamepad2, Home, LifeBuoy, LogIn, LogOut, Menu, Moon, Settings, Sun, User, Users, X } from 'lucide-react'
+import { Gamepad2, Home, LifeBuoy, LogIn, LogOut, Menu, Moon, Search, Settings, Sun, User, Users, X } from 'lucide-react'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import BrandLogo from '../brand/BrandLogo'
 import { GameCoverImage } from '../GameCoverImage'
 import { NotificationsButton } from '../notifications/NotificationsButton'
 import { UserAvatar } from '../UserAvatar'
 import { useAuth } from '../../contexts/AuthContext'
+import { useTheme } from '../../contexts/ThemeContext'
 import {
   getNavbarGameMetaLine,
   getNavbarSearchResultInitial,
@@ -14,35 +15,6 @@ import {
 import { useI18n } from '../../i18n/I18nContext'
 import { getPublicProfilePath } from '../../utils/profileRoutes'
 import './Navbar.css'
-
-const THEME_STORAGE_KEY = 'social-gamer-theme'
-
-type SiteTheme = 'dark' | 'light'
-
-function isSiteTheme(value: unknown): value is SiteTheme {
-  return value === 'dark' || value === 'light'
-}
-
-function getInitialTheme(): SiteTheme {
-  if (typeof window !== 'undefined') {
-    try {
-      const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY)
-      if (isSiteTheme(storedTheme)) return storedTheme
-    } catch {
-      // Ignore storage errors so private browsing modes can still render.
-    }
-
-    if (window.matchMedia('(prefers-color-scheme: light)').matches) {
-      return 'light'
-    }
-  }
-
-  if (typeof document !== 'undefined' && document.body.classList.contains('light')) {
-    return 'light'
-  }
-
-  return 'dark'
-}
 
 function iconMenuUser() {
   return (
@@ -155,11 +127,11 @@ function iconChevron() {
 }
 
 function Navbar() {
-  const [theme, setTheme] = useState<SiteTheme>(getInitialTheme)
   const [showMenu, setShowMenu] = useState(false)
   const [showMobileMenu, setShowMobileMenu] = useState(false)
 
   const { user, profile, loading: authLoading, logout } = useAuth()
+  const { theme, toggleTheme } = useTheme()
   const { t } = useI18n()
   const navigate = useNavigate()
   const location = useLocation()
@@ -195,6 +167,9 @@ function Navbar() {
   } = useNavbarGlobalSearch({ viewerId: user?.id, t })
   const menuRef = useRef<HTMLDivElement | null>(null)
   const menuCloseTimeoutRef = useRef<number | null>(null)
+  const mobileMenuTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const mobileDrawerRef = useRef<HTMLElement | null>(null)
+  const mobileCloseRef = useRef<HTMLButtonElement | null>(null)
 
   const profileUsername = profile?.username?.trim() || ''
   const profileFullName = profile?.nome_completo?.trim() || ''
@@ -232,10 +207,10 @@ function Navbar() {
     }, 180)
   }, [clearMenuCloseTimeout])
   const handleThemeAction = useCallback(() => {
-    setTheme(prev => (prev === 'dark' ? 'light' : 'dark'))
+    toggleTheme()
     closeMenu()
     closeMobileMenu()
-  }, [closeMenu, closeMobileMenu])
+  }, [closeMenu, closeMobileMenu, toggleTheme])
   const handleLogoutAction = useCallback(async () => {
     await logout()
     closeMenu()
@@ -247,17 +222,6 @@ function Navbar() {
     closeMenu()
     closeSearch({ collapseCompact: true })
   }, [closeMenu, closeMobileMenu, closeSearch])
-
-  useEffect(() => {
-    document.body.classList.toggle('light', theme === 'light')
-    document.documentElement.style.colorScheme = theme
-
-    try {
-      window.localStorage.setItem(THEME_STORAGE_KEY, theme)
-    } catch {
-      // Theme persistence is progressive enhancement.
-    }
-  }, [theme])
 
   useEffect(() => () => {
     clearMenuCloseTimeout()
@@ -294,6 +258,48 @@ function Navbar() {
     }
   }, [closeMenu, closeMobileMenu, closeSearch, isCompactSearch, searchRef, showMenu, showMobileMenu, showMobileSearch, showSearchDropdown])
 
+  useEffect(() => {
+    if (!showMobileMenu) return
+
+    const previousOverflow = document.body.style.overflow
+    const triggerElement = mobileMenuTriggerRef.current
+    document.body.style.overflow = 'hidden'
+    const focusFrame = window.requestAnimationFrame(() => mobileCloseRef.current?.focus())
+
+    const handleDrawerKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== 'Tab') return
+
+      const focusableElements = Array.from(
+        mobileDrawerRef.current?.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ) ?? [],
+      ).filter(element => !element.hasAttribute('hidden'))
+
+      if (focusableElements.length === 0) {
+        event.preventDefault()
+        return
+      }
+
+      const firstElement = focusableElements[0]
+      const lastElement = focusableElements[focusableElements.length - 1]
+      if (event.shiftKey && document.activeElement === firstElement) {
+        event.preventDefault()
+        lastElement.focus()
+      } else if (!event.shiftKey && document.activeElement === lastElement) {
+        event.preventDefault()
+        firstElement.focus()
+      }
+    }
+
+    document.addEventListener('keydown', handleDrawerKeyDown)
+    return () => {
+      window.cancelAnimationFrame(focusFrame)
+      document.removeEventListener('keydown', handleDrawerKeyDown)
+      document.body.style.overflow = previousOverflow
+      triggerElement?.focus()
+    }
+  }, [showMobileMenu])
+
   const handleMenuMouseEnter = () => {
     if (supportsHover()) openMenu()
   }
@@ -326,8 +332,8 @@ function Navbar() {
             <button type="button" className={`navbar-search-toggle${showMobileSearch ? ' is-open' : ''}`} aria-label={showMobileSearch ? t('navbar.search.close') : t('navbar.search.open')} aria-expanded={showMobileSearch} aria-controls="navbar-search-panel" onClick={handleMobileSearchToggle}>{t('common.search')}</button>
             <div id="navbar-search-panel" className="navbar-search-panel">
               <label className="navbar-search-field" htmlFor="navbar-search-input">
-                <span className="navbar-search-field-icon" aria-hidden="true">/</span>
-                <input ref={searchInputRef} id="navbar-search-input" type="text" value={searchQuery} className="navbar-search-input" placeholder={t('navbar.search.placeholder')} autoComplete="off" role="combobox" aria-autocomplete="list" aria-expanded={shouldShowSearchDropdown} aria-controls={searchResultsId} aria-activedescendant={activeResultId} onChange={event => handleSearchChange(event.target.value)} onFocus={handleSearchFocus} onKeyDown={handleSearchKeyDown} />
+                <Search className="navbar-search-field-icon" aria-hidden="true" />
+                <input ref={searchInputRef} id="navbar-search-input" type="text" value={searchQuery} className="navbar-search-input" placeholder={t('navbar.search.placeholder')} aria-label={t('navbar.search.placeholder')} autoComplete="off" role="combobox" aria-autocomplete="list" aria-expanded={shouldShowSearchDropdown} aria-controls={searchResultsId} aria-activedescendant={activeResultId} onChange={event => handleSearchChange(event.target.value)} onFocus={handleSearchFocus} onKeyDown={handleSearchKeyDown} />
               </label>
               {trimmedSearchQuery.length === 1 ? <p className="navbar-search-helper">{t('navbar.search.keepTyping')}</p> : null}
               {shouldShowSearchDropdown ? (
@@ -374,6 +380,9 @@ function Navbar() {
           </div>
         </div>
         <div className="navbar-actions">
+          <button type="button" className="navbar-theme-toggle" aria-label={themeToggleLabel} title={themeToggleLabel} onClick={handleThemeAction}>
+            {theme === 'dark' ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}
+          </button>
           {user ? <NotificationsButton userId={user.id} /> : null}
           {user ? (
             <div ref={menuRef} className={`navbar-profile-menu${showMenu ? ' is-open' : ''}`} onMouseEnter={handleMenuMouseEnter} onMouseLeave={handleMenuMouseLeave} onBlur={handleMenuBlur}>
@@ -400,6 +409,7 @@ function Navbar() {
             <Link to="/login" className="navbar-button auth-btn"><span className="navbar-auth-label-full">{t('navbar.auth.full')}</span><span className="navbar-auth-label-short">{t('navbar.auth.short')}</span></Link>
           )}
           <button
+            ref={mobileMenuTriggerRef}
             type="button"
             className={`navbar-mobile-menu-trigger${showMobileMenu ? ' is-open' : ''}`}
             aria-label={showMobileMenu ? t('navbar.mobile.close') : t('navbar.mobile.open')}
@@ -419,18 +429,18 @@ function Navbar() {
             aria-label={t('navbar.mobile.close')}
             onClick={closeMobileMenu}
           />
-          <aside id="navbar-mobile-drawer" className="navbar-mobile-drawer" aria-label={t('navbar.mobile.menuLabel')}>
+          <aside ref={mobileDrawerRef} id="navbar-mobile-drawer" className="navbar-mobile-drawer" role="dialog" aria-modal="true" aria-label={t('navbar.mobile.menuLabel')}>
             <header className="navbar-mobile-drawer-header">
               <div>
                 <span>{t('navbar.mobile.eyebrow')}</span>
                 <strong>{t('navbar.mobile.title')}</strong>
               </div>
-              <button type="button" className="navbar-mobile-close" aria-label={t('navbar.mobile.close')} onClick={closeMobileMenu}>
+              <button ref={mobileCloseRef} type="button" className="navbar-mobile-close" aria-label={t('navbar.mobile.close')} onClick={closeMobileMenu}>
                 <X />
               </button>
             </header>
 
-            <nav className="navbar-mobile-nav" aria-label={t('navbar.mobile.menuLabel')}>
+            <div className="navbar-mobile-nav">
               <NavLink to="/" className={({ isActive }) => `navbar-mobile-link${isActive ? ' is-active' : ''}`} onClick={handleMobileNavigation}><Home /><span>{t('common.home')}</span></NavLink>
               <NavLink to="/games" className={({ isActive }) => `navbar-mobile-link${isActive ? ' is-active' : ''}`} onClick={handleMobileNavigation}><Gamepad2 /><span>{t('common.games')}</span></NavLink>
               <NavLink to="/comunidades" className={({ isActive }) => `navbar-mobile-link${isActive ? ' is-active' : ''}`} onClick={handleMobileNavigation}><Users /><span>{t('communities.nav')}</span></NavLink>
@@ -443,7 +453,7 @@ function Navbar() {
               ) : (
                 <NavLink to="/login" className={({ isActive }) => `navbar-mobile-link${isActive ? ' is-active' : ''}`} onClick={handleMobileNavigation}><LogIn /><span>{t('navbar.auth.short')}</span></NavLink>
               )}
-            </nav>
+            </div>
 
             <div className="navbar-mobile-actions">
               <button type="button" className="navbar-mobile-link" onClick={handleThemeAction}>

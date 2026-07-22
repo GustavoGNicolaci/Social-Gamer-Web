@@ -1,4 +1,6 @@
+import type { KeyboardEvent } from 'react'
 import { Link } from 'react-router-dom'
+import { AlertCircle, MessageSquareText, Star } from 'lucide-react'
 import { ContentReportModal } from '../../../components/reviews/ContentReportModal'
 import { useI18n } from '../../../i18n/I18nContext'
 import { REVIEW_SCORE_OPTIONS } from '../domain/reviewConstants'
@@ -9,6 +11,35 @@ import {
 import { GameReviewCard } from './GameReviewCard'
 
 export type GameReviewsSectionProps = GameReviewsSectionController
+
+function handleScoreKeyboardNavigation(
+  event: KeyboardEvent<HTMLDivElement>,
+  currentScore: number,
+  setScore: (score: number) => void
+) {
+  const isPrevious = event.key === 'ArrowLeft' || event.key === 'ArrowUp'
+  const isNext = event.key === 'ArrowRight' || event.key === 'ArrowDown'
+  const isBoundary = event.key === 'Home' || event.key === 'End'
+
+  if (!isPrevious && !isNext && !isBoundary) return
+
+  event.preventDefault()
+  const currentIndex = REVIEW_SCORE_OPTIONS.findIndex(option => option === currentScore)
+  const safeCurrentIndex = currentIndex === -1 ? (isPrevious ? 1 : -1) : currentIndex
+  const nextIndex = event.key === 'Home'
+    ? 0
+    : event.key === 'End'
+      ? REVIEW_SCORE_OPTIONS.length - 1
+      : isPrevious
+        ? Math.max(safeCurrentIndex - 1, 0)
+        : Math.min(safeCurrentIndex + 1, REVIEW_SCORE_OPTIONS.length - 1)
+  const nextScore = REVIEW_SCORE_OPTIONS[nextIndex]
+
+  setScore(nextScore)
+  event.currentTarget
+    .querySelector<HTMLInputElement>(`input[value="${nextScore}"]`)
+    ?.focus()
+}
 
 export function GameReviewsSection({
   form,
@@ -59,11 +90,15 @@ export function GameReviewsSection({
 
   return (
     <>
-      <section id="game-community" className="game-details-reviews">
+      <section
+        id="game-community"
+        className="game-details-reviews"
+        aria-labelledby="game-reviews-heading"
+      >
         <div className="game-details-section-heading">
           <div>
             <span className="game-details-panel-kicker">{t('game.details.community')}</span>
-            <h2>{t('game.details.reviewsHeading')}</h2>
+            <h2 id="game-reviews-heading">{t('game.details.reviewsHeading')}</h2>
             <p>{t('game.details.reviewsDescription')}</p>
           </div>
         </div>
@@ -83,22 +118,33 @@ export function GameReviewsSection({
             </div>
 
             <div className="game-details-form-block">
-              <label className="game-details-form-label">{t('game.details.yourScore')}</label>
+              <span id="game-review-score-label" className="game-details-form-label">
+                <Star size={16} aria-hidden="true" />
+                {t('game.details.yourScore')}
+              </span>
+              <span id="game-review-score-help" className="game-details-visually-hidden">
+                {t('game.details.scoreAria')}
+              </span>
               <div
                 className="game-details-rating-grid"
                 role="radiogroup"
-                aria-label={t('game.details.scoreAria')}
+                aria-labelledby="game-review-score-label"
+                aria-describedby="game-review-score-help"
+                onKeyDown={event =>
+                  handleScoreKeyboardNavigation(event, score, setScore)
+                }
               >
                 {REVIEW_SCORE_OPTIONS.map(scoreOption => (
-                  <button
-                    key={scoreOption}
-                    type="button"
-                    className={`game-details-rating-button${score === scoreOption ? ' is-selected' : ''}`}
-                    onClick={() => setScore(scoreOption)}
-                    aria-pressed={score === scoreOption}
-                  >
-                    {scoreOption}
-                  </button>
+                  <label key={scoreOption} className="game-details-rating-option">
+                    <input
+                      type="radio"
+                      name="game-review-score"
+                      value={scoreOption}
+                      checked={score === scoreOption}
+                      onChange={() => setScore(scoreOption)}
+                    />
+                    <span>{scoreOption}</span>
+                  </label>
                 ))}
               </div>
             </div>
@@ -149,7 +195,10 @@ export function GameReviewsSection({
         )}
 
         {formFeedback ? (
-          <p className={`game-details-feedback is-${formFeedback.tone}`}>
+          <p
+            className={`game-details-feedback is-${formFeedback.tone}`}
+            role={formFeedback.tone === 'error' ? 'alert' : 'status'}
+          >
             {formFeedback.message}
           </p>
         ) : null}
@@ -157,6 +206,9 @@ export function GameReviewsSection({
         <div className="game-details-review-list">
           {error && total === 0 ? (
             <div className="game-details-empty-card">
+              <span className="game-details-empty-icon" aria-hidden="true">
+                <AlertCircle size={24} />
+              </span>
               <h3>{t('game.details.reviewLoadErrorTitle')}</h3>
               <p>{error}</p>
               <button
@@ -169,6 +221,9 @@ export function GameReviewsSection({
             </div>
           ) : total === 0 ? (
             <div className="game-details-empty-card">
+              <span className="game-details-empty-icon" aria-hidden="true">
+                <MessageSquareText size={24} />
+              </span>
               <h3>{t('game.details.noReviewsTitle')}</h3>
               <p>{t('game.details.noReviewsText')}</p>
             </div>

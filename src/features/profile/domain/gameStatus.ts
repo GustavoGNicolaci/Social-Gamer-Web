@@ -87,6 +87,13 @@ export const STATUS_VALUES: GameStatusValue[] = [
   'pausado',
 ]
 
+export const SELECTABLE_STATUS_VALUES: GameStatusValue[] = [
+  'jogando',
+  'zerado',
+  'dropado',
+  'pausado',
+]
+
 const DEFAULT_STATUS_PAGE_SIZE = 12
 
 export function normalizeStatusValue(value: string | null | undefined): GameStatusValue {

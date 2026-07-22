@@ -333,8 +333,8 @@ describe('CommunityDetailsPage characterization', () => {
     expect(
       await screen.findByRole('heading', { name: 'Comunidade de caracterizacao' })
     ).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'communities.tabs.posts' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'communities.tabs.members' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'communities.tabs.posts' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'communities.tabs.members' })).toBeInTheDocument()
 
     await waitFor(() => {
       expect(serviceMocks.getCommunityMembers).toHaveBeenCalledWith('community-1', {
@@ -359,7 +359,7 @@ describe('CommunityDetailsPage characterization', () => {
 
     renderPage()
     await screen.findByRole('heading', { name: 'Comunidade de caracterizacao' })
-    fireEvent.click(screen.getByRole('button', { name: 'communities.tabs.members' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'communities.tabs.members' }))
 
     const loadMoreButton = await screen.findByRole('button', {
       name: 'communities.members.loadMore',
@@ -408,10 +408,10 @@ describe('CommunityDetailsPage characterization', () => {
     expect(
       await screen.findByRole('heading', { name: 'Comunidade privada' })
     ).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'communities.tabs.posts' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'communities.tabs.members' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'communities.tabs.posts' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'communities.tabs.members' })).not.toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'communities.tabs.memberSettings' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'communities.tabs.memberSettings' }))
     expect(await screen.findByText('communities.private.text')).toBeInTheDocument()
 
     await waitFor(() => {
@@ -444,7 +444,7 @@ describe('CommunityDetailsPage characterization', () => {
 
     const validRoute = renderPage('/comunidades/community-1#comment-valid%20anchor')
     await screen.findByRole('heading', { name: 'Comunidade de caracterizacao' })
-    fireEvent.click(screen.getByRole('button', { name: 'communities.tabs.posts' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'communities.tabs.posts' }))
     expect(await screen.findByTestId('community-post-card')).toHaveAttribute(
       'data-active-anchor',
       'comment-valid anchor'
@@ -455,7 +455,7 @@ describe('CommunityDetailsPage characterization', () => {
     expect(await screen.findByRole('heading', {
       name: 'Comunidade de caracterizacao',
     })).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'communities.tabs.posts' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'communities.tabs.posts' }))
     expect(await screen.findByTestId('community-post-card')).toHaveAttribute(
       'data-active-anchor',
       'comment-%E0%A4%A'
@@ -535,7 +535,7 @@ describe('CommunityDetailsPage characterization', () => {
 
     renderPage()
     await screen.findByRole('heading', { name: 'Comunidade de caracterizacao' })
-    fireEvent.click(screen.getByRole('button', { name: 'communities.tabs.posts' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'communities.tabs.posts' }))
     const button = await screen.findByRole('button', { name: 'load-more-comments' })
     fireEvent.click(button)
     fireEvent.click(button)
@@ -615,7 +615,7 @@ describe('CommunityDetailsPage characterization', () => {
 
     renderPage()
     await screen.findByRole('heading', { name: 'Comunidade de caracterizacao' })
-    fireEvent.click(screen.getByRole('button', { name: 'communities.tabs.moderation' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'communities.tabs.moderation' }))
     const approveButton = await screen.findByRole('button', {
       name: 'communities.moderation.approve',
     })

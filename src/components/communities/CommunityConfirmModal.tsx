@@ -1,4 +1,5 @@
 import './CommunityConfirmModal.css'
+import { DialogShell } from '../ui/DialogShell'
 
 interface CommunityConfirmModalProps {
   title: string
@@ -23,25 +24,28 @@ export function CommunityConfirmModal({
   onConfirm,
   onClose,
 }: CommunityConfirmModalProps) {
+  const handleClose = () => {
+    if (!isSubmitting) onClose()
+  }
+
   return (
-    <div className="community-modal-backdrop" role="presentation" onMouseDown={onClose}>
-      <div
-        className="community-confirm-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="community-confirm-title"
-        onMouseDown={event => event.stopPropagation()}
-      >
+    <DialogShell
+      open
+      className="community-confirm-modal"
+      titleId="community-confirm-title"
+      descriptionId="community-confirm-description"
+      onClose={handleClose}
+    >
         <div className="community-confirm-copy">
           <h2 id="community-confirm-title">{title}</h2>
-          <p>{description}</p>
+          <p id="community-confirm-description">{description}</p>
         </div>
 
         <div className="community-confirm-actions">
           <button
             type="button"
             className="community-confirm-secondary"
-            onClick={onClose}
+            onClick={handleClose}
             disabled={isSubmitting}
           >
             {cancelLabel}
@@ -50,13 +54,12 @@ export function CommunityConfirmModal({
           <button
             type="button"
             className={`community-confirm-primary is-${tone}`}
-          onClick={onConfirm}
-          disabled={isSubmitting}
-        >
-          {isSubmitting ? submittingLabel : confirmLabel}
-        </button>
+            onClick={onConfirm}
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? submittingLabel : confirmLabel}
+          </button>
         </div>
-      </div>
-    </div>
+    </DialogShell>
   )
 }

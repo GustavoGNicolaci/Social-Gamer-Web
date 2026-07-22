@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { Link } from 'react-router-dom'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { GameCoverImage } from '../GameCoverImage'
 import type { HomeGameSummary } from '../../services/homeService'
 import { useI18n } from '../../i18n/I18nContext'
 import { formatFullDate, getInitial } from './homeDisplayUtils'
+import { HomePanelState } from './HomePanelState'
 
 interface NewReleasesCarouselProps {
   items: HomeGameSummary[]
@@ -77,17 +79,25 @@ export function NewReleasesCarousel({
 
       <div className="home-release-shell" style={carouselStyle}>
         {isLoading ? (
-          <div className="home-empty-state">
-            <p>{t('home.releases.loading')}</p>
+          <div
+            className="home-release-skeleton-grid"
+            role="status"
+            aria-live="polite"
+            aria-busy="true"
+          >
+            <span className="home-sr-only">{t('home.releases.loading')}</span>
+            {Array.from({ length: itemsPerPage }, (_, index) => (
+              <div key={`release-skeleton-${index}`} className="home-release-card is-skeleton" aria-hidden="true">
+                <span className="home-release-skeleton-cover" />
+                <span className="home-release-skeleton-line is-short" />
+                <span className="home-release-skeleton-line" />
+              </div>
+            ))}
           </div>
         ) : errorMessage ? (
-          <div className="home-empty-state is-error">
-            <p>{errorMessage}</p>
-          </div>
+          <HomePanelState message={errorMessage} tone="error" />
         ) : items.length === 0 ? (
-          <div className="home-empty-state">
-            <p>{t('home.releases.empty')}</p>
-          </div>
+          <HomePanelState message={t('home.releases.empty')} />
         ) : (
           <>
             {canGoPrevious ? (
@@ -97,7 +107,7 @@ export function NewReleasesCarousel({
                 onClick={() => setCurrentPage(Math.max(safeCurrentPage - 1, 0))}
                 aria-label={t('home.releases.previous')}
               >
-                <span aria-hidden="true">&lt;</span>
+                <ChevronLeft aria-hidden="true" />
               </button>
             ) : null}
 
@@ -128,6 +138,12 @@ export function NewReleasesCarousel({
               </div>
             </div>
 
+            <div className="home-carousel-status" aria-live="polite" aria-atomic="true">
+              <span>{safeCurrentPage + 1}</span>
+              <span aria-hidden="true">/</span>
+              <span>{totalPages}</span>
+            </div>
+
             {canGoNext ? (
               <button
                 type="button"
@@ -135,7 +151,7 @@ export function NewReleasesCarousel({
                 onClick={() => setCurrentPage(Math.min(safeCurrentPage + 1, totalPages - 1))}
                 aria-label={t('home.releases.next')}
               >
-                <span aria-hidden="true">&gt;</span>
+                <ChevronRight aria-hidden="true" />
               </button>
             ) : null}
           </>

@@ -2,6 +2,7 @@ import { useId, useState, type ChangeEvent, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import AuthShell from '../components/auth/AuthShell'
 import AuthStatusBanner from '../components/auth/AuthStatusBanner'
+import { AuthSubmitButton } from '../components/auth/AuthSubmitButton'
 import { useAuth } from '../contexts/AuthContext'
 import { useI18n } from '../i18n/I18nContext'
 import { isValidEmailAddress } from '../utils/authErrorMessages'
@@ -89,36 +90,35 @@ function ForgotPasswordPage() {
       {successMessage ? <AuthStatusBanner tone="success">{successMessage}</AuthStatusBanner> : null}
       {errorMessage ? <AuthStatusBanner tone="error">{errorMessage}</AuthStatusBanner> : null}
 
-      <form className="auth-form" onSubmit={handleSubmit}>
+      <form className="auth-form" onSubmit={handleSubmit} aria-busy={isSubmitting}>
         <div className="auth-field">
           <label htmlFor="forgot-password-email">{t('common.email')}</label>
           <input
             type="email"
             id="forgot-password-email"
             className={`auth-input${emailError ? ' is-error' : ''}`}
-            placeholder="seu@email.com"
+            placeholder={t('common.email')}
             autoComplete="email"
             value={email}
             onChange={handleEmailChange}
             disabled={isSubmitting}
+            aria-required="true"
             aria-invalid={Boolean(emailError)}
             aria-describedby={emailError ? emailErrorId : undefined}
           />
           {emailError ? (
-            <span id={emailErrorId} className="auth-field-error">
+            <span id={emailErrorId} className="auth-field-error" role="alert">
               {emailError}
             </span>
           ) : null}
         </div>
 
         <div className="auth-actions">
-          <button
-            type="submit"
-            className="auth-button auth-button--primary"
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? t('auth.forgot.submitting') : t('auth.forgot.submit')}
-          </button>
+          <AuthSubmitButton
+            isSubmitting={isSubmitting}
+            idleLabel={t('auth.forgot.submit')}
+            busyLabel={t('auth.forgot.submitting')}
+          />
         </div>
       </form>
     </AuthShell>

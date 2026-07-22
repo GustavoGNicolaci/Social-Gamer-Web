@@ -1,143 +1,151 @@
 .profile-communities-section {
-  padding: 1.5rem;
+  padding: clamp(1rem, 2.4vw, 1.5rem);
 }
 
 .profile-communities-content {
   position: relative;
   z-index: 1;
+  min-width: 0;
   display: grid;
   gap: 1rem;
 }
 
 .profile-communities-grid {
+  min-width: 0;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.8rem;
+  gap: 0.75rem;
 }
 
 .profile-community-card,
 .profile-communities-empty {
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  background:
-    radial-gradient(circle at top left, rgba(102, 126, 234, 0.1), transparent 34%),
-    rgba(255, 255, 255, 0.04);
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-soft);
 }
 
 .profile-community-card {
-  overflow: hidden;
+  overflow: clip;
   color: inherit;
   text-decoration: none;
-  transition: transform 0.2s ease, border-color 0.2s ease;
+  transition:
+    transform var(--motion-base) var(--ease-out),
+    border-color var(--motion-fast) ease,
+    box-shadow var(--motion-base) ease;
 }
 
 .profile-community-card:hover {
   color: inherit;
   transform: translateY(-2px);
-  border-color: rgba(160, 177, 255, 0.3);
+  border-color: var(--ring);
+  box-shadow: var(--shadow-md);
 }
 
 .profile-community-media {
-  height: 360px;
+  width: 100%;
+  aspect-ratio: 16 / 9;
   display: grid;
   place-items: center;
   overflow: hidden;
-  background:
-    radial-gradient(circle at top left, rgba(255, 255, 255, 0.22), transparent 34%),
-    linear-gradient(135deg, rgba(102, 126, 234, 0.72), rgba(34, 197, 94, 0.62));
-  color: #fff;
-  font-size: 2.6rem;
-  font-weight: 800;
+  background: var(--primary-gradient);
+  color: var(--primary-foreground);
+  font-size: 2rem;
+  font-weight: 900;
+}
+
+.profile-community-media.is-post-cover {
+  aspect-ratio: 4 / 3;
 }
 
 .profile-community-media img {
   width: 100%;
   height: 100%;
+  display: block;
   object-fit: cover;
-  object-position: center;
-}
-
-.profile-community-media.is-post-cover img {
-  object-position: center 42%;
 }
 
 .profile-community-card-copy {
+  min-width: 0;
   display: grid;
-  gap: 0.45rem;
-  padding: 0.95rem;
+  gap: 0.4rem;
+  padding: 0.8rem;
+}
+
+.profile-community-card-copy h3,
+.profile-community-card-copy p {
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .profile-community-card-copy h3 {
-  margin: 0;
-  color: #fff;
-  font-size: 1rem;
+  color: var(--foreground);
+  font-size: 0.94rem;
   line-height: 1.35;
 }
 
 .profile-community-card-copy p {
-  margin: 0;
-  color: rgba(238, 242, 255, 0.82);
-  line-height: 1.55;
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 0.84rem;
+  line-height: 1.5;
 }
 
 .profile-community-card-copy span,
 .profile-communities-empty {
-  color: rgba(200, 210, 255, 0.76);
-  font-size: 0.86rem;
+  color: var(--muted-foreground);
+  font-size: 0.8rem;
 }
 
 .profile-communities-empty {
+  min-height: 150px;
   display: grid;
-  gap: 0.85rem;
+  place-items: center;
+  align-content: center;
+  gap: 0.75rem;
   padding: 1rem;
+  border-style: dashed;
+  text-align: center;
 }
 
 .profile-communities-empty p {
   margin: 0;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 980px) {
   .profile-communities-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
-@media (max-width: 480px) {
-  .profile-communities-section {
-    padding: 1.1rem;
-  }
-
+@media (max-width: 520px) {
   .profile-communities-grid {
     grid-template-columns: 1fr;
   }
 
-  .profile-community-media {
-    height: 370px;
+  .profile-community-card {
+    display: grid;
+    grid-template-columns: 108px minmax(0, 1fr);
+  }
+
+  .profile-community-media,
+  .profile-community-media.is-post-cover {
+    width: 108px;
+    height: 100%;
+    min-height: 132px;
+    aspect-ratio: auto;
   }
 }
 
-body.light .profile-community-card,
-body.light .profile-communities-empty {
-  border-color: var(--border);
-  background: var(--card);
-  color: var(--card-foreground);
-}
+@media (prefers-reduced-motion: reduce) {
+  .profile-community-card {
+    transition: none;
+  }
 
-body.light .profile-community-card:hover {
-  border-color: var(--ring);
-  background: var(--surface-hover);
-}
-
-body.light .profile-community-card-copy h3 {
-  color: var(--foreground);
-}
-
-body.light .profile-community-card-copy p,
-body.light .profile-community-card-copy span,
-body.light .profile-communities-empty {
-  color: var(--muted-foreground);
+  .profile-community-card:hover {
+    transform: none;
+  }
 }

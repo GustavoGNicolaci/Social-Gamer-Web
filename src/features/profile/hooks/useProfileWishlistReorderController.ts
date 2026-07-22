@@ -129,17 +129,16 @@ export function useProfileWishlistReorderController({
 
     return [...orderedFromState, ...missingItems]
   }, [items, orderedItemIds])
-  const canReorder =
+  const canKeyboardReorder =
     isOwnerView &&
     isFullyLoaded &&
     orderedItems.length > 1 &&
-    hasFinePointer &&
     !isSavingOrder &&
     !hasPendingRemoval
+  const canReorder = canKeyboardReorder && hasFinePointer
   const canPrepareReorder =
     isOwnerView &&
     !isFullyLoaded &&
-    hasFinePointer &&
     orderedItems.length > 1 &&
     !isPreparingReorder
 
@@ -171,6 +170,16 @@ export function useProfileWishlistReorderController({
 
   useLayoutEffect(() => {
     if (!shouldAnimateLayoutRef.current) return
+
+    const prefersReducedMotion =
+      typeof window.matchMedia === 'function'
+      && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+    if (prefersReducedMotion) {
+      shouldAnimateLayoutRef.current = false
+      layoutSnapshotRef.current = new Map()
+      return
+    }
 
     const previousRects = layoutSnapshotRef.current
 
@@ -361,33 +370,10 @@ export function useProfileWishlistReorderController({
     clearAutoPageSchedule()
   }
 
-  const handleDrop = async (
-    targetItemId: string,
-    event: DragEvent<HTMLElement>,
-    visibleItemIds: Set<string>
-  ) => {
-    event.preventDefault()
-
-    if (!draggedItemId || draggedItemId === targetItemId || isSavingOrder) {
-      handleDragEnd()
-      return
-    }
-
-    if (!visibleItemIds.has(targetItemId)) {
-      handleDragEnd()
-      return
-    }
-
-    const sourceIndex = orderedItems.findIndex(
-      item => item.id === draggedItemId
-    )
-    const targetIndex = orderedItems.findIndex(item => item.id === targetItemId)
-
-    if (sourceIndex < 0 || targetIndex < 0) {
-      handleDragEnd()
-      return
-    }
-
+  const persistReorderedItems = async (
+    sourceIndex: number,
+    targetIndex: number
+  ): Promise<boolean> => {
     const previousItems = orderedItems
     const reorderedItems = assignSequentialPriorities(
       moveWishlistItem(orderedItems, sourceIndex, targetIndex)
@@ -416,6 +402,59 @@ export function useProfileWishlistReorderController({
     }
 
     setIsSavingOrder(false)
+    return !error
+  }
+
+  const handleDrop = async (
+    targetItemId: string,
+    event: DragEvent<HTMLElement>,
+    visibleItemIds: Set<string>
+  ) => {
+    event.preventDefault()
+
+    if (!draggedItemId || draggedItemId === targetItemId || isSavingOrder) {
+      handleDragEnd()
+      return
+    }
+
+    if (!visibleItemIds.has(targetItemId)) {
+      handleDragEnd()
+      return
+    }
+
+    const sourceIndex = orderedItems.findIndex(
+      item => item.id === draggedItemId
+    )
+    const targetIndex = orderedItems.findIndex(item => item.id === targetItemId)
+
+    if (sourceIndex < 0 || targetIndex < 0) {
+      handleDragEnd()
+      return
+    }
+
+    await persistReorderedItems(sourceIndex, targetIndex)
+  }
+
+  const handleMoveItem = async (
+    itemId: string,
+    direction: 'earlier' | 'later'
+  ): Promise<boolean> => {
+    if (!canKeyboardReorder) return false
+
+    const sourceIndex = orderedItems.findIndex(item => item.id === itemId)
+    const targetIndex =
+      direction === 'earlier' ? sourceIndex - 1 : sourceIndex + 1
+
+    if (
+      sourceIndex < 0 ||
+      targetIndex < 0 ||
+      targetIndex >= orderedItems.length
+    ) {
+      return false
+    }
+
+    onOrderStatusChange(null)
+    return persistReorderedItems(sourceIndex, targetIndex)
   }
 
   const handlePrepareReorder = async () => {
@@ -443,6 +482,7 @@ export function useProfileWishlistReorderController({
 
   return {
     canPrepareReorder,
+    canKeyboardReorder,
     canReorder,
     clearAutoPageSchedule,
     draggedItemId,
@@ -453,6 +493,7 @@ export function useProfileWishlistReorderController({
     handleDragOver,
     handleDragStart,
     handleDrop,
+    handleMoveItem,
     handlePrepareReorder,
     handleViewportDragLeave,
     handleViewportDragOver,

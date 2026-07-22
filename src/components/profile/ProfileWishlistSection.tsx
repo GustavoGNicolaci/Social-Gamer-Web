@@ -82,6 +82,7 @@ export const ProfileWishlistSection = memo(function ProfileWishlistSection({
     typeof window === 'undefined' ? 6 : getItemsPerPage(window.innerWidth)
   )
   const [currentPage, setCurrentPage] = useState(0)
+  const [reorderFocusItemId, setReorderFocusItemId] = useState<string | null>(null)
   const hasPendingRemoval = removingItemIds.length > 0
   const reorderController = useProfileWishlistReorderController({
     userId,
@@ -95,6 +96,7 @@ export const ProfileWishlistSection = memo(function ProfileWishlistSection({
   })
   const {
     canPrepareReorder,
+    canKeyboardReorder,
     canReorder,
     clearAutoPageSchedule,
     draggedItemId,
@@ -105,6 +107,7 @@ export const ProfileWishlistSection = memo(function ProfileWishlistSection({
     handleDragOver,
     handleDragStart,
     handleDrop,
+    handleMoveItem,
     handlePrepareReorder,
     handleViewportDragLeave,
     handleViewportDragOver,
@@ -179,6 +182,23 @@ export const ProfileWishlistSection = memo(function ProfileWishlistSection({
         tone: 'error',
         message: result.message || t('profileWishlist.removeError'),
       })
+    }
+  }
+
+  const handleAccessibleMove = async (
+    itemId: string,
+    direction: 'earlier' | 'later'
+  ) => {
+    const sourceIndex = orderedItems.findIndex(item => item.id === itemId)
+    const targetIndex = direction === 'earlier' ? sourceIndex - 1 : sourceIndex + 1
+    if (sourceIndex < 0 || targetIndex < 0 || targetIndex >= orderedItems.length) return
+
+    setReorderFocusItemId(itemId)
+    if (isPaginatedLayout) setCurrentPage(Math.floor(targetIndex / itemsPerPage))
+
+    const didSave = await handleMoveItem(itemId, direction)
+    if (!didSave && isPaginatedLayout) {
+      setCurrentPage(Math.floor(sourceIndex / itemsPerPage))
     }
   }
 
@@ -295,6 +315,10 @@ export const ProfileWishlistSection = memo(function ProfileWishlistSection({
               columnsStyle={wishlistColumnsStyle}
               isOwnerView={isOwnerView}
               canReorder={canReorder}
+              canKeyboardReorder={canKeyboardReorder}
+              firstOrderedItemId={orderedItems[0]?.id ?? null}
+              lastOrderedItemId={orderedItems[orderedItems.length - 1]?.id ?? null}
+              focusItemId={reorderFocusItemId}
               draggedItemId={draggedItemId}
               dropTargetId={dropTargetId}
               isSavingOrder={isSavingOrder}
@@ -312,6 +336,7 @@ export const ProfileWishlistSection = memo(function ProfileWishlistSection({
               onDragEnd={handleDragEnd}
               onDragHandlePointerDown={handleDragHandlePointerDown}
               onDragHandleClick={handleDragHandleClick}
+              onMoveItem={handleAccessibleMove}
               onViewportDragOver={event =>
                 handleViewportDragOver(event, {
                   isPaginatedLayout,
@@ -339,6 +364,8 @@ export const ProfileWishlistSection = memo(function ProfileWishlistSection({
             {orderStatus ? (
               <p
                 className={`profile-wishlist-order-status is-${orderStatus.tone}`}
+                role="status"
+                aria-live="polite"
               >
                 {orderStatus.message}
               </p>

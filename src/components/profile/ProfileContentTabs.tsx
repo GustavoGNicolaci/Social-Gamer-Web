@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import type { KeyboardEvent, ReactNode } from 'react'
 import type { ProfileTab } from '../../features/profile/hooks/useProfileCollections'
 
 interface ProfileContentTabsProps {
@@ -19,6 +19,29 @@ interface ProfileContentTabsProps {
   communityPostsPanel: ReactNode
   savedCommunityPostsPanel: ReactNode
   onTabChange: (tab: ProfileTab) => void
+}
+
+function handleTabKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
+  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+
+  const tabList = event.currentTarget.closest('[role="tablist"]')
+  const tabs = Array.from(
+    tabList?.querySelectorAll<HTMLButtonElement>('[role="tab"]') || []
+  )
+  const currentIndex = tabs.indexOf(event.currentTarget)
+
+  if (currentIndex < 0 || tabs.length === 0) return
+
+  event.preventDefault()
+  const nextIndex = event.key === 'Home'
+    ? 0
+    : event.key === 'End'
+      ? tabs.length - 1
+      : (currentIndex + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length
+  const nextTab = tabs[nextIndex]
+
+  nextTab.focus()
+  nextTab.click()
 }
 
 export function ProfileContentTabs({
@@ -50,6 +73,8 @@ export function ProfileContentTabs({
           className={`profile-tab-button${activeTab === 'status' ? ' is-active' : ''}`}
           aria-selected={activeTab === 'status'}
           aria-controls="profile-panel-status"
+          tabIndex={activeTab === 'status' ? 0 : -1}
+          onKeyDown={handleTabKeyDown}
           onClick={() => onTabChange('status')}
         >
           <span>{statusLabel}</span>
@@ -62,6 +87,8 @@ export function ProfileContentTabs({
           className={`profile-tab-button${activeTab === 'wishlist' ? ' is-active' : ''}`}
           aria-selected={activeTab === 'wishlist'}
           aria-controls="profile-panel-wishlist"
+          tabIndex={activeTab === 'wishlist' ? 0 : -1}
+          onKeyDown={handleTabKeyDown}
           onClick={() => onTabChange('wishlist')}
         >
           <span>{wishlistLabel}</span>
@@ -74,6 +101,8 @@ export function ProfileContentTabs({
           className={`profile-tab-button${activeTab === 'reviews' ? ' is-active' : ''}`}
           aria-selected={activeTab === 'reviews'}
           aria-controls="profile-panel-reviews"
+          tabIndex={activeTab === 'reviews' ? 0 : -1}
+          onKeyDown={handleTabKeyDown}
           onClick={() => onTabChange('reviews')}
         >
           <span>{reviewsLabel}</span>
@@ -86,6 +115,8 @@ export function ProfileContentTabs({
           className={`profile-tab-button${activeTab === 'communities' ? ' is-active' : ''}`}
           aria-selected={activeTab === 'communities'}
           aria-controls="profile-panel-communities"
+          tabIndex={activeTab === 'communities' ? 0 : -1}
+          onKeyDown={handleTabKeyDown}
           onClick={() => onTabChange('communities')}
         >
           <span>{communitiesLabel}</span>
@@ -98,6 +129,8 @@ export function ProfileContentTabs({
           className={`profile-tab-button${activeTab === 'communityPosts' ? ' is-active' : ''}`}
           aria-selected={activeTab === 'communityPosts'}
           aria-controls="profile-panel-community-posts"
+          tabIndex={activeTab === 'communityPosts' ? 0 : -1}
+          onKeyDown={handleTabKeyDown}
           onClick={() => onTabChange('communityPosts')}
         >
           <span>{communityPostsLabel}</span>
@@ -111,6 +144,8 @@ export function ProfileContentTabs({
             className={`profile-tab-button${activeTab === 'savedCommunityPosts' ? ' is-active' : ''}`}
             aria-selected={activeTab === 'savedCommunityPosts'}
             aria-controls="profile-panel-saved-community-posts"
+            tabIndex={activeTab === 'savedCommunityPosts' ? 0 : -1}
+            onKeyDown={handleTabKeyDown}
             onClick={() => onTabChange('savedCommunityPosts')}
           >
             <span>{savedCommunityPostsLabel}</span>

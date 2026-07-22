@@ -1,6 +1,5 @@
-import { CatalogFiltersModal } from '../features/catalog/components/CatalogFiltersModal'
+import { lazy, Suspense } from 'react'
 import { CatalogGameCard } from '../features/catalog/components/CatalogGameCard'
-import { CatalogGenresModal } from '../features/catalog/components/CatalogGenresModal'
 import { CatalogPaginationControls } from '../features/catalog/components/CatalogPaginationControls'
 import {
   CATALOG_SORT_OPTIONS,
@@ -10,6 +9,17 @@ import type { CatalogSortOption } from '../features/catalog/domain/catalogTypes'
 import { useI18n } from '../i18n/I18nContext'
 import './GamesPage.css'
 
+const CatalogFiltersModal = lazy(() =>
+  import('../features/catalog/components/CatalogFiltersModal').then(module => ({
+    default: module.CatalogFiltersModal,
+  }))
+)
+const CatalogGenresModal = lazy(() =>
+  import('../features/catalog/components/CatalogGenresModal').then(module => ({
+    default: module.CatalogGenresModal,
+  }))
+)
+
 function GamesPage() {
   const { t } = useI18n()
   const { results, filters, layout, actions } = useGamesCatalogController()
@@ -18,10 +28,25 @@ function GamesPage() {
     return (
       <div className="page-container">
         <div className="page-content games-page">
-          <section className="gp-card">
-            <span className="gp-badge">{t('common.catalog')}</span>
-            <h1>{t('catalog.loadingTitle')}</h1>
-            <p className="gp-muted">{t('catalog.loadingText')}</p>
+          <section className="gp-loading" role="status" aria-live="polite">
+            <div className="gp-loading-copy">
+              <span className="gp-badge">
+                {t('common.catalog')}
+              </span>
+              <h1>{t('catalog.loadingTitle')}</h1>
+              <p className="gp-muted">{t('catalog.loadingText')}</p>
+            </div>
+
+            <div className="gp-grid gp-skeleton-grid" style={layout.gridStyle} aria-hidden="true">
+              {Array.from({ length: 10 }, (_, index) => (
+                <article key={index} className="gp-game gp-game-skeleton">
+                  <span className="gp-skeleton gp-skeleton-cover" />
+                  <span className="gp-skeleton gp-skeleton-title" />
+                  <span className="gp-skeleton gp-skeleton-line" />
+                  <span className="gp-skeleton gp-skeleton-line is-short" />
+                </article>
+              ))}
+            </div>
           </section>
         </div>
       </div>
@@ -31,11 +56,13 @@ function GamesPage() {
   return (
     <div className="page-container">
       <div className="page-content games-page">
-        <section className="gp-panel">
+        <section className="gp-panel" aria-labelledby="games-catalog-title">
           <div className="gp-panel-head">
             <div className="gp-panel-copy">
-              <span className="gp-badge">{t('common.catalog')}</span>
-              <h1>{t('common.games')}</h1>
+              <span className="gp-badge">
+                {t('common.catalog')}
+              </span>
+              <h1 id="games-catalog-title">{t('common.games')}</h1>
               <p className="gp-muted">{t('catalog.pageText')}</p>
             </div>
 
@@ -61,6 +88,7 @@ function GamesPage() {
                 type="button"
                 className="game-button gp-btn--secondary"
                 onClick={actions.openFiltersModal}
+                aria-haspopup="dialog"
               >
                 {t('catalog.allFilters')}
               </button>
@@ -88,13 +116,19 @@ function GamesPage() {
             </p>
 
             {results.catalogError ? (
-              <p className="gp-panel-footnote is-warning">{results.catalogError}</p>
+              <p className="gp-panel-footnote is-warning" role="alert">
+                {results.catalogError}
+              </p>
             ) : null}
           </div>
         </section>
 
         {results.games.length === 0 ? (
-          <article className="gp-empty">
+          <article className={`gp-empty${results.catalogError ? ' is-error' : ''}`}>
+            <span
+              className={`gp-empty-icon${results.catalogError ? ' is-error' : ''}`}
+              aria-hidden="true"
+            />
             <span className="gp-badge">{t('common.noResults')}</span>
             <h3>{t('catalog.emptyTitle')}</h3>
             <p className="gp-muted">{t('catalog.emptyText')}</p>
@@ -102,13 +136,18 @@ function GamesPage() {
               type="button"
               className="game-button gp-btn--secondary"
               onClick={actions.openFiltersModal}
+              aria-haspopup="dialog"
             >
               {t('catalog.allFilters')}
             </button>
           </article>
         ) : (
           <>
-            <div className="gp-grid" style={layout.gridStyle}>
+            <div
+              className="gp-grid"
+              style={layout.gridStyle}
+              aria-label={t('common.games')}
+            >
               {results.games.map(game => (
                 <CatalogGameCard
                   key={game.id}
@@ -129,23 +168,31 @@ function GamesPage() {
           </>
         )}
 
-        <CatalogFiltersModal
-          open={layout.showFiltersModal}
-          searchValue={filters.modalSearch}
-          activeFilters={filters.activeFilters}
-          groups={filters.modalGroups}
-          onClose={actions.closeFiltersModal}
-          onSearchChange={actions.updateFiltersModalSearch}
-          onClearAll={actions.clearAllFilters}
-          onToggleFacet={actions.toggleFacetFilter}
-          isFacetActive={actions.isFacetFilterActive}
-        />
+        <Suspense
+          fallback={<span className="sr-only" role="status">{t('common.loading')}</span>}
+        >
+          {layout.showFiltersModal ? (
+            <CatalogFiltersModal
+              open
+              searchValue={filters.modalSearch}
+              activeFilters={filters.activeFilters}
+              groups={filters.modalGroups}
+              onClose={actions.closeFiltersModal}
+              onSearchChange={actions.updateFiltersModalSearch}
+              onClearAll={actions.clearAllFilters}
+              onToggleFacet={actions.toggleFacetFilter}
+              isFacetActive={actions.isFacetFilterActive}
+            />
+          ) : null}
 
-        <CatalogGenresModal
-          open={layout.showGenresModal}
-          genres={layout.selectedGameGenres}
-          onClose={actions.closeGenresModal}
-        />
+          {layout.showGenresModal ? (
+            <CatalogGenresModal
+              open
+              genres={layout.selectedGameGenres}
+              onClose={actions.closeGenresModal}
+            />
+          ) : null}
+        </Suspense>
       </div>
     </div>
   )

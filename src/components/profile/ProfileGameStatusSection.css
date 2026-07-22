@@ -283,8 +283,9 @@
 }
 
 .profile-status-search-badge.is-planejando {
-  border-color: rgba(178, 146, 255, 0.32);
-  background: rgba(116, 82, 204, 0.16);
+  border-color: var(--border);
+  background: var(--muted);
+  color: var(--muted-foreground);
 }
 
 .profile-status-search-badge.is-pausado {
@@ -454,11 +455,6 @@
 .profile-status-sort-filter-option.is-active.is-dropado {
   border-color: rgba(255, 166, 114, 0.36);
   background: rgba(186, 104, 64, 0.22);
-}
-
-.profile-status-sort-filter-option.is-active.is-planejando {
-  border-color: rgba(178, 146, 255, 0.36);
-  background: rgba(116, 82, 204, 0.22);
 }
 
 .profile-status-sort-filter-option.is-active.is-pausado {
@@ -751,8 +747,9 @@
 }
 
 .profile-status-pill.is-planejando {
-  border-color: rgba(178, 146, 255, 0.32);
-  background: rgba(116, 82, 204, 0.16);
+  border-color: var(--border);
+  background: var(--muted);
+  color: var(--muted-foreground);
 }
 
 .profile-status-pill.is-pausado {
@@ -939,7 +936,7 @@ body.light .profile-status-search-input {
 }
 
 body.light .profile-status-search-input::placeholder {
-  color: color-mix(in srgb, var(--muted-foreground) 78%, transparent);
+  color: var(--muted-foreground);
 }
 
 body.light .profile-status-autosuggest-item.is-actionable:hover,
@@ -963,4 +960,229 @@ body.light .profile-status-favorite-toggle.is-active {
 
 body.light .profile-status-autosuggest-state.is-error {
   color: var(--destructive);
+}
+
+/* Semantic refresh layered over legacy status controls. */
+.profile-status-content,
+.profile-status-toolbar,
+.profile-status-search-shell,
+.profile-status-grid,
+.profile-status-card,
+.profile-status-card-link,
+.profile-status-card-body,
+.profile-status-card-actions {
+  min-width: 0;
+}
+
+.profile-status-summary {
+  min-width: 180px;
+}
+
+.profile-status-toolbar-label,
+.profile-status-search-field > span,
+.profile-status-control-field > span,
+.profile-status-sort-section-label {
+  color: var(--foreground);
+  font-size: 0.76rem;
+}
+
+.profile-status-search-helper,
+.profile-status-list-head p,
+.profile-status-list-head span,
+.profile-status-date,
+.profile-status-sort-trigger-meta {
+  color: var(--muted-foreground);
+}
+
+.profile-status-autosuggest,
+.profile-status-composer,
+.profile-status-empty,
+.profile-status-card,
+.profile-status-sort-menu,
+.profile-status-pagination {
+  border-color: var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-soft);
+  color: var(--foreground);
+  box-shadow: none;
+}
+
+.profile-status-autosuggest {
+  background: var(--popover);
+  box-shadow: var(--shadow-lg);
+}
+
+.profile-status-autosuggest-item,
+.profile-status-sort-option,
+.profile-status-sort-filter-option,
+.profile-status-sort-trigger,
+.profile-status-select,
+.profile-status-favorite-toggle {
+  border-color: var(--input-border);
+  border-radius: var(--radius-md);
+  background: var(--input);
+  color: var(--foreground);
+}
+
+.profile-status-autosuggest-item strong,
+.profile-status-composer-copy h3,
+.profile-status-card-body h3,
+.profile-status-empty h3,
+.profile-status-sort-trigger strong {
+  color: var(--foreground);
+}
+
+.profile-status-autosuggest-hint,
+.profile-status-composer-copy p,
+.profile-status-empty p,
+.profile-status-autosuggest-state {
+  color: var(--muted-foreground);
+}
+
+.profile-status-card {
+  overflow: clip;
+  transition:
+    transform var(--motion-base) var(--ease-out),
+    border-color var(--motion-fast) ease,
+    box-shadow var(--motion-base) ease,
+    opacity var(--motion-fast) ease;
+}
+
+.profile-status-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--ring);
+  box-shadow: var(--shadow-md);
+}
+
+.profile-status-card.is-favorite {
+  border-color: color-mix(in srgb, var(--primary) 52%, var(--border));
+  box-shadow:
+    inset 0 3px 0 color-mix(in srgb, var(--primary) 78%, transparent),
+    var(--shadow-sm);
+}
+
+.profile-status-card-link {
+  gap: 0.7rem;
+  padding: 0.7rem 0.7rem 0.35rem;
+}
+
+.profile-status-card-cover {
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--primary-gradient);
+}
+
+.profile-status-card-body h3,
+.profile-status-card-cta,
+.profile-status-date {
+  overflow-wrap: anywhere;
+}
+
+.profile-status-card-cta {
+  color: var(--muted-foreground);
+}
+
+.profile-status-card-actions {
+  padding: 0.2rem 0.7rem 0.7rem;
+}
+
+.profile-status-pill,
+.profile-status-favorite-pill,
+.profile-status-search-badge {
+  min-height: 28px;
+  border-color: var(--badge-border);
+  background: var(--badge);
+  color: var(--badge-foreground);
+}
+
+.profile-status-sort-menu {
+  background: var(--popover);
+  box-shadow: var(--shadow-lg);
+}
+
+.profile-status-sort-option:hover,
+.profile-status-sort-option.is-active,
+.profile-status-sort-filter-option:hover,
+.profile-status-sort-filter-option.is-active,
+.profile-status-favorite-toggle:hover:not(:disabled),
+.profile-status-favorite-toggle.is-active {
+  border-color: var(--ring);
+  background: var(--surface-active);
+  color: var(--foreground);
+}
+
+.profile-status-pagination {
+  max-width: 100%;
+  padding: 0.5rem;
+  overflow-x: auto;
+  border-radius: var(--radius-lg);
+}
+
+.profile-status-pagination button {
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: var(--radius-md);
+}
+
+.profile-status-skeleton-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+@media (max-width: 600px) {
+  .profile-status-card-link {
+    grid-template-columns: 88px minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 0.35rem 0.7rem;
+    padding: 0.7rem;
+  }
+
+  .profile-status-card-meta {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .profile-status-card-cover {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    width: 88px;
+    height: 132px;
+    aspect-ratio: auto;
+  }
+
+  .profile-status-card-body {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .profile-status-card-actions {
+    padding-top: 0.7rem;
+    border-top: 1px solid var(--border);
+  }
+
+  .profile-status-summary {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .profile-status-pagination {
+    justify-content: flex-start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .profile-status-card,
+  .profile-status-autosuggest-item,
+  .profile-status-sort-option,
+  .profile-status-sort-filter-option,
+  .profile-status-skeleton-card {
+    transition: none;
+    animation: none;
+  }
+
+  .profile-status-card:hover {
+    transform: none;
+  }
 }

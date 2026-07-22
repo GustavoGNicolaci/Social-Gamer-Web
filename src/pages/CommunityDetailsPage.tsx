@@ -3,6 +3,7 @@ import {
   useEffect,
   useMemo,
   useState,
+  type KeyboardEvent,
 } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { CommunityAboutCard } from '../components/communities/CommunityAboutCard'
@@ -37,6 +38,7 @@ import {
   type CommunitySummary,
 } from '../services/communityService'
 import { resolvePublicFileUrl } from '../services/storageService'
+import { DialogShell } from '../components/ui/DialogShell'
 import './CommunitiesPage.css'
 
 type CommunityTab = 'posts' | 'members' | 'about' | 'moderation' | 'settings' | 'memberSettings'
@@ -44,6 +46,26 @@ type RequestFilter = 'pendente' | 'all'
 type ReportFilter = CommunityReportStatus | 'all'
 
 const POST_PAGE_SIZE = 8
+
+function handleCommunityTabKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
+  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+
+  const tabList = event.currentTarget.closest('[role="tablist"]')
+  const tabs = Array.from(tabList?.querySelectorAll<HTMLButtonElement>('[role="tab"]') || [])
+  const currentIndex = tabs.indexOf(event.currentTarget)
+
+  if (currentIndex < 0 || tabs.length === 0) return
+
+  event.preventDefault()
+  const nextIndex = event.key === 'Home'
+    ? 0
+    : event.key === 'End'
+      ? tabs.length - 1
+      : (currentIndex + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length
+
+  tabs[nextIndex].focus()
+  tabs[nextIndex].click()
+}
 
 function getMemberName(member: CommunityMember) {
   return member.usuario?.username || member.usuario?.nome_completo || 'usuario'
@@ -325,7 +347,9 @@ function CommunityDetailsPage() {
     return (
       <div className="page-container">
         <div className="page-content">
-          <div className="communities-state-card">{t('communities.details.loading')}</div>
+          <div className="communities-state-card" role="status" aria-busy="true">
+            {t('communities.details.loading')}
+          </div>
         </div>
       </div>
     )
@@ -391,7 +415,7 @@ function CommunityDetailsPage() {
               {bannerUrl ? (
                 <>
                   <img className="community-media-backdrop" src={bannerUrl} alt="" aria-hidden="true" />
-                  <img className="community-media-foreground" src={bannerUrl} alt="" />
+                  <img className="community-media-foreground" src={bannerUrl} alt={community.nome} />
                 </>
               ) : (
                 <div className="community-details-banner-fallback">
@@ -434,7 +458,9 @@ function CommunityDetailsPage() {
           </section>
 
           {feedback ? (
-            <p className={`communities-feedback is-${feedback.tone}`}>{feedback.message}</p>
+            <p className={`communities-feedback is-${feedback.tone}`} role="status">
+              {feedback.message}
+            </p>
           ) : null}
 
           {visibleTabs.length === 0 ? (
@@ -444,12 +470,18 @@ function CommunityDetailsPage() {
             </section>
           ) : (
             <>
-              <nav className="community-tabs" aria-label={t('communities.tabs.label')}>
+              <nav className="community-tabs" role="tablist" aria-label={t('communities.tabs.label')}>
                 {visibleTabs.map(tab => (
                   <button
                     key={tab}
+                    id={`community-tab-${tab}`}
                     type="button"
+                    role="tab"
                     className={visibleActiveTab === tab ? 'is-active' : ''}
+                    aria-selected={visibleActiveTab === tab}
+                    aria-controls="community-active-panel"
+                    tabIndex={visibleActiveTab === tab ? 0 : -1}
+                    onKeyDown={handleCommunityTabKeyDown}
                     onClick={() => setActiveTab(tab)}
                   >
                     {t(`communities.tabs.${tab}`)}
@@ -457,7 +489,12 @@ function CommunityDetailsPage() {
                 ))}
               </nav>
 
-              <section className="community-tab-panel">
+              <section
+                id="community-active-panel"
+                className="community-tab-panel"
+                role="tabpanel"
+                aria-labelledby={`community-tab-${visibleActiveTab}`}
+              >
                 {visibleActiveTab === 'posts' ? (
                   <CommunityFeedSection
                     t={t}
@@ -608,12 +645,15 @@ function CommunityDetailsPage() {
           ) : null}
 
           {feedActions.lightbox.state ? (
-            <div
-              className="community-lightbox"
-              role="presentation"
-              onMouseDown={feedActions.lightbox.close}
+            <DialogShell
+              open
+              onClose={feedActions.lightbox.close}
+              titleId="community-lightbox-title"
+              className="community-lightbox-content"
             >
-              <div className="community-lightbox-content" onMouseDown={event => event.stopPropagation()}>
+                <span id="community-lightbox-title" className="sr-only">
+                  {feedActions.lightbox.state.alt}
+                </span>
                 <button
                   type="button"
                   className="community-lightbox-close"
@@ -626,8 +666,7 @@ function CommunityDetailsPage() {
                   src={feedActions.lightbox.state.url}
                   alt={feedActions.lightbox.state.alt}
                 />
-              </div>
-            </div>
+            </DialogShell>
           ) : null}
         </div>
       </div>

@@ -27,6 +27,8 @@ export function GameCoverImage({
       sizes={sizes}
       loading={eager ? 'eager' : 'lazy'}
       decoding={eager ? 'sync' : 'async'}
+      fetchPriority={eager ? 'high' : 'auto'}
+      draggable={false}
     />
   )
 }

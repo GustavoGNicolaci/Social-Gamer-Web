@@ -106,6 +106,7 @@ export function GameReviewCommentCard({
               disabled={!currentUserId || !comment.canLike || reactionPending}
               aria-label={likeButtonLabel}
               title={likeButtonLabel}
+              aria-pressed={comment.likedByCurrentUser}
             >
               <span className="game-review-reaction-icon">
                 <ReviewHeartIcon filled={comment.likedByCurrentUser} />
@@ -126,6 +127,7 @@ export function GameReviewCommentCard({
               disabled={!currentUserId || !comment.canDislike || reactionPending}
               aria-label={dislikeButtonLabel}
               title={dislikeButtonLabel}
+              aria-pressed={comment.dislikedByCurrentUser}
             >
               <span className="game-review-reaction-icon">
                 <ReviewThumbDownIcon filled={comment.dislikedByCurrentUser} />
@@ -146,6 +148,7 @@ export function GameReviewCommentCard({
                 onClick={() => onOpenReport('comment', comment.id, reviewId)}
                 aria-label={reportButtonLabel}
                 title={reportButtonLabel}
+                aria-pressed={Boolean(comment.currentUserReport)}
               >
                 <ReviewFlagIcon filled={Boolean(comment.currentUserReport)} />
               </button>

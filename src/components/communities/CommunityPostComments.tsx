@@ -279,13 +279,16 @@ export function CommunityPostComments({
           className="community-comment-form"
           onSubmit={handleSubmitComment}
         >
-          <textarea
-            value={commentText}
-            onChange={(event) => setCommentText(event.target.value)}
-            placeholder={t('communities.post.commentPlaceholder')}
-            maxLength={1200}
-            disabled={isSubmittingComment}
-          />
+          <label className="community-composer-field">
+            <span>{t('common.comment')}</span>
+            <textarea
+              value={commentText}
+              onChange={(event) => setCommentText(event.target.value)}
+              placeholder={t('communities.post.commentPlaceholder')}
+              maxLength={1200}
+              disabled={isSubmittingComment}
+            />
+          </label>
           <button
             type="submit"
             disabled={isSubmittingComment || !commentText.trim()}

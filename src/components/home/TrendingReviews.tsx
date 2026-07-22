@@ -4,6 +4,7 @@ import type { HomeTrendingReview } from '../../services/homeService'
 import { useI18n } from '../../i18n/I18nContext'
 import { getPublicProfilePath } from '../../utils/profileRoutes'
 import { formatCompactDate, formatCount } from './homeDisplayUtils'
+import { HomePanelState } from './HomePanelState'
 
 interface TrendingReviewsProps {
   items: HomeTrendingReview[]
@@ -30,17 +31,11 @@ export function TrendingReviews({ items, isLoading, errorMessage }: TrendingRevi
       </div>
 
       {isLoading ? (
-        <div className="home-empty-state">
-          <p>{t('home.trending.loading')}</p>
-        </div>
+        <HomePanelState message={t('home.trending.loading')} tone="loading" rows={4} />
       ) : errorMessage ? (
-        <div className="home-empty-state is-error">
-          <p>{errorMessage}</p>
-        </div>
+        <HomePanelState message={errorMessage} tone="error" />
       ) : items.length === 0 ? (
-        <div className="home-empty-state">
-          <p>{t('home.trending.empty')}</p>
-        </div>
+        <HomePanelState message={t('home.trending.empty')} />
       ) : (
         <div className="home-activity-list">
           {items.map(review => (
@@ -64,9 +59,11 @@ export function TrendingReviews({ items, isLoading, errorMessage }: TrendingRevi
               </div>
 
               <div className="home-card-title-row">
-                <Link to={`/games/${review.game.id}`} className="home-card-title-link">
-                  {review.game.title}
-                </Link>
+                <h4 className="home-card-title-heading">
+                  <Link to={`/games/${review.game.id}`} className="home-card-title-link">
+                    {review.game.title}
+                  </Link>
+                </h4>
                 {review.score !== null ? (
                   <span className="home-score-pill">{review.score}/10</span>
                 ) : null}

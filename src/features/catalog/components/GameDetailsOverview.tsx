@@ -1,5 +1,5 @@
 import { GameCoverImage } from '../../../components/GameCoverImage'
-import { formatLocalizedDate } from '../../../i18n'
+import RatingCircle from '../../../components/RatingCircle'
 import { useI18n } from '../../../i18n/I18nContext'
 import type { CatalogGameDetails } from '../../../services/gameCatalogService'
 import {
@@ -37,9 +37,9 @@ export function GameDetailsOverview({
   summary,
   userActions,
 }: GameDetailsOverviewProps) {
-  const { t, formatNumber } = useI18n()
+  const { t, formatDate, formatNumber, locale } = useI18n()
   const genres = normalizeGameList(game.generos)
-  const releaseDate = formatLocalizedDate(game.data_lancamento, {
+  const releaseDate = formatDate(game.data_lancamento, {
     fallback: t('common.notProvided'),
   })
   const description = game.description?.trim() || t('game.details.noDescription')
@@ -55,6 +55,12 @@ export function GameDetailsOverview({
   const totalCommentsLabel = summary.comments === 1
     ? t('game.details.comments.one')
     : t('game.details.comments.many', { count: formatNumber(summary.comments) })
+  const ratingAriaLabel = summary.average === null
+    ? t('catalog.noRatingFor', { title: game.titulo })
+    : t('catalog.averageFor', {
+        rating: averageRatingLabel,
+        title: game.titulo,
+      })
 
   return (
     <>
@@ -70,7 +76,7 @@ export function GameDetailsOverview({
                 alt={t('catalog.coverAlt', { title: game.titulo })}
                 className="game-details-cover-image"
                 width={320}
-                height={400}
+                height={480}
                 sizes="(max-width: 480px) 280px, (max-width: 900px) 320px, 320px"
                 eager
               />
@@ -87,12 +93,21 @@ export function GameDetailsOverview({
 
             <div className="game-details-cover-bottom">
               <div className="game-details-score-chip">
-                <span className="game-details-score-label">
-                  {t('game.details.averageRating')}
+                <RatingCircle
+                  value={summary.average}
+                  size={48}
+                  strokeWidth={4}
+                  ariaLabel={ratingAriaLabel}
+                  locale={locale}
+                />
+                <span className="game-details-score-copy">
+                  <span className="game-details-score-label">
+                    {t('game.details.averageRating')}
+                  </span>
+                  <strong>
+                    {summary.average !== null ? `${averageRatingLabel}/10` : averageRatingLabel}
+                  </strong>
                 </span>
-                <strong>
-                  {summary.average !== null ? `${averageRatingLabel}/10` : averageRatingLabel}
-                </strong>
               </div>
             </div>
           </div>

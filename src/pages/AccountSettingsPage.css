@@ -1,20 +1,21 @@
 .account-settings-page {
   display: grid;
-  gap: 1.35rem;
+  gap: 1.25rem;
+  min-width: 0;
 }
 
 .account-settings-header,
 .account-settings-state,
-.account-settings-card,
-.account-settings-modal {
+.account-settings-card {
   position: relative;
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 24px;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
   background:
-    radial-gradient(circle at top left, rgba(102, 126, 234, 0.18), transparent 34%),
-    linear-gradient(180deg, rgba(15, 18, 32, 0.95), rgba(9, 12, 24, 0.95));
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
+    radial-gradient(circle at 0 0, color-mix(in srgb, var(--primary) 14%, transparent), transparent 36%),
+    var(--surface-gradient);
+  color: var(--card-foreground);
+  box-shadow: var(--shadow-md);
 }
 
 .account-settings-header {
@@ -22,7 +23,11 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 1.25rem;
-  padding: 1.5rem;
+  padding: clamp(1.25rem, 3vw, 2rem);
+}
+
+.account-settings-header > div {
+  min-width: 0;
 }
 
 .account-settings-header h1,
@@ -30,7 +35,14 @@
 .account-settings-card h2,
 .account-settings-modal h2 {
   margin: 0;
-  color: #fff;
+  color: var(--foreground);
+  line-height: 1.15;
+  text-wrap: balance;
+}
+
+.account-settings-header h1 {
+  margin-top: 0.55rem;
+  font-size: clamp(1.85rem, 4vw, 2.7rem);
 }
 
 .account-settings-header p,
@@ -38,369 +50,375 @@
 .account-settings-card p,
 .account-settings-modal p {
   margin: 0;
-  color: rgba(238, 242, 255, 0.82);
+  color: var(--muted-foreground);
   line-height: 1.65;
+  overflow-wrap: anywhere;
 }
 
-.account-settings-header h1 {
-  margin-top: 0.6rem;
-  margin-bottom: 0.45rem;
+.account-settings-header p {
+  max-width: 68ch;
+  margin-top: 0.55rem;
 }
 
 .account-settings-state {
+  min-height: 240px;
   display: grid;
-  justify-items: center;
-  gap: 0.9rem;
-  padding: 2.5rem;
+  place-items: center;
+  align-content: center;
+  gap: 0.85rem;
+  padding: clamp(1.5rem, 5vw, 3rem);
   text-align: center;
 }
 
 .account-settings-kicker {
+  width: fit-content;
+  min-height: 28px;
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  width: fit-content;
-  border: 1px solid rgba(160, 177, 255, 0.24);
+  padding: 0.28rem 0.68rem;
+  border: 1px solid var(--badge-border);
   border-radius: 999px;
-  padding: 0.42rem 0.8rem;
-  background: rgba(126, 143, 255, 0.1);
-  color: #dbe4ff;
-  font-size: 0.8rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  background: var(--badge);
+  color: var(--badge-foreground);
+  font-size: 0.7rem;
+  font-weight: 850;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
 }
 
 .account-settings-kicker.is-danger {
-  border-color: rgba(255, 154, 154, 0.28);
-  background: rgba(255, 113, 113, 0.1);
-  color: #ffe1e1;
+  border-color: color-mix(in srgb, var(--destructive) 32%, var(--border));
+  background: var(--danger-surface);
+  color: var(--destructive-text);
 }
 
 .account-settings-layout {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1rem;
+  align-items: stretch;
 }
 
 .account-settings-card {
   display: grid;
   align-content: start;
   gap: 1rem;
-  padding: 1.35rem;
+  padding: clamp(1.15rem, 2.2vw, 1.5rem);
 }
 
-.account-settings-card::after,
-.account-settings-header::after {
-  content: '';
-  position: absolute;
-  right: -96px;
-  bottom: -116px;
-  width: 240px;
-  height: 240px;
-  border-radius: 50%;
-  background: rgba(84, 211, 194, 0.14);
-  filter: blur(20px);
-  pointer-events: none;
+.account-settings-card.is-danger-zone {
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  border-color: color-mix(in srgb, var(--destructive) 28%, var(--border));
+  background:
+    linear-gradient(120deg, var(--danger-surface), transparent 62%),
+    var(--surface-gradient);
 }
 
-.account-settings-card > *,
-.account-settings-header > * {
-  position: relative;
-  z-index: 1;
+.account-settings-card.is-danger-zone .account-settings-card-header,
+.account-settings-card.is-danger-zone > p {
+  grid-column: 1;
+}
+
+.account-settings-card.is-danger-zone > .account-settings-button {
+  grid-column: 2;
+  grid-row: 1 / span 2;
 }
 
 .account-settings-card-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 0.9rem;
+  min-width: 0;
+}
+
+.account-settings-card-header > div {
+  min-width: 0;
 }
 
 .account-settings-card-header h2 {
-  margin-top: 0.55rem;
-  font-size: 1.35rem;
+  margin-top: 0.5rem;
+  font-size: clamp(1.15rem, 2vw, 1.4rem);
 }
 
 .account-settings-status {
+  min-height: 34px;
   display: inline-flex;
   align-items: center;
-  min-height: 36px;
-  border: 1px solid rgba(160, 177, 255, 0.24);
+  flex: 0 0 auto;
+  padding: 0.38rem 0.7rem;
+  border: 1px solid var(--badge-border);
   border-radius: 999px;
-  padding: 0.45rem 0.75rem;
-  background: rgba(126, 143, 255, 0.1);
-  color: #dbe4ff;
-  font-size: 0.85rem;
+  background: var(--badge);
+  color: var(--badge-foreground);
+  font-size: 0.76rem;
   font-weight: 800;
 }
 
 .account-settings-status.is-public {
-  border-color: rgba(134, 239, 172, 0.24);
-  background: rgba(34, 197, 94, 0.1);
-  color: #d9ffe7;
+  border-color: color-mix(in srgb, var(--success) 32%, var(--border));
+  background: var(--success-surface);
+  color: var(--success-text);
 }
 
-.account-settings-status.is-friends,
-.account-settings-status.is-private {
-  border-color: rgba(160, 177, 255, 0.34);
-  background: rgba(126, 143, 255, 0.14);
-  color: #eef2ff;
-}
-
-.account-settings-form {
+.account-settings-form,
+.account-settings-privacy-options,
+.account-settings-modal-form {
   display: grid;
-  gap: 0.85rem;
+  gap: 0.75rem;
 }
 
 .account-settings-field {
   display: grid;
-  gap: 0.5rem;
+  gap: 0.45rem;
+  min-width: 0;
 }
 
 .account-settings-field > span {
-  color: rgba(200, 210, 255, 0.76);
-  font-size: 0.8rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  color: var(--foreground);
+  font-size: 0.78rem;
+  font-weight: 750;
 }
 
 .account-settings-field input {
   width: 100%;
-  min-height: 52px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.05);
-  color: #fff;
-  padding: 0.85rem 1rem;
+  min-width: 0;
+  min-height: 48px;
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-md);
+  background: var(--input);
+  color: var(--foreground);
+  padding: 0.75rem 0.9rem;
   font: inherit;
   transition:
-    border-color 0.2s ease,
-    box-shadow 0.2s ease,
-    background 0.2s ease;
+    border-color var(--motion-fast) ease,
+    background var(--motion-fast) ease,
+    box-shadow var(--motion-fast) ease;
 }
 
 .account-settings-field input::placeholder {
-  color: rgba(238, 242, 255, 0.42);
+  color: var(--muted-foreground);
 }
 
 .account-settings-field input:focus {
   outline: none;
-  border-color: rgba(126, 143, 255, 0.6);
-  background: rgba(255, 255, 255, 0.07);
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.18);
+  border-color: var(--ring);
+  background: var(--surface-raised);
+  box-shadow: var(--focus-ring);
 }
 
 .account-settings-button {
-  min-width: 220px;
-  min-height: 52px;
+  width: fit-content;
+  min-width: 0;
+  min-height: 44px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.45rem;
-  width: fit-content;
-  border-radius: 14px;
-  padding: 0.78rem 1rem;
-  color: #fff;
+  padding: 0.68rem 1rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  color: var(--foreground);
   font: inherit;
+  font-size: 0.88rem;
   font-weight: 800;
+  text-align: center;
   text-decoration: none;
   cursor: pointer;
   transition:
-    transform 0.2s ease,
-    opacity 0.2s ease,
-    border-color 0.2s ease,
-    background 0.2s ease,
-    box-shadow 0.2s ease;
+    transform var(--motion-fast) var(--ease-out),
+    border-color var(--motion-fast) ease,
+    background var(--motion-fast) ease,
+    box-shadow var(--motion-fast) ease;
 }
 
 .account-settings-button.is-primary {
-  border: none;
   background: var(--primary-gradient);
+  color: var(--primary-foreground);
+  box-shadow: var(--shadow-brand);
 }
 
 .account-settings-button.is-secondary {
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--border-strong);
+  background: var(--surface-soft);
 }
 
 .account-settings-button.is-danger {
-  border: 1px solid rgba(255, 154, 154, 0.32);
-  background: rgba(255, 90, 90, 0.16);
-  color: #ffe1e1;
+  border-color: color-mix(in srgb, var(--destructive) 38%, var(--border));
+  background: var(--danger-surface);
+  color: var(--destructive-text);
 }
 
 .account-settings-button:hover:not(:disabled) {
   transform: translateY(-1px);
-  border-color: rgba(191, 219, 254, 0.34);
-  opacity: 0.96;
-  box-shadow: 0 12px 24px rgba(9, 12, 24, 0.22);
+  border-color: var(--ring);
+  box-shadow: var(--shadow-sm);
 }
 
-.account-settings-button:active:not(:disabled),
-.account-settings-privacy-option:active:not(:disabled) {
-  transform: translateY(0) scale(0.98);
-}
-
-.account-settings-button:disabled {
-  opacity: 0.58;
+.account-settings-button:disabled,
+.account-settings-privacy-option:disabled {
+  opacity: 0.56;
   cursor: not-allowed;
-  transform: none;
-  box-shadow: none;
-}
-
-.account-settings-button:focus-visible,
-.account-settings-privacy-option:focus-visible,
-.account-settings-field input:focus-visible {
-  outline: 2px solid rgba(191, 219, 254, 0.85);
-  outline-offset: 2px;
 }
 
 .account-settings-form .account-settings-button,
-.account-settings-card > .account-settings-button {
+.account-settings-card:not(.is-danger-zone) > .account-settings-button {
   width: 100%;
-}
-
-.account-settings-privacy-options {
-  display: grid;
-  gap: 0.7rem;
 }
 
 .account-settings-privacy-option {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  min-height: 72px;
   display: grid;
   gap: 0.25rem;
-  width: 100%;
-  min-height: 76px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.06);
-  color: #fff;
-  padding: 0.85rem 1rem;
+  padding: 0.78rem 0.9rem 0.78rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-soft);
+  color: var(--foreground);
   font: inherit;
   text-align: left;
   cursor: pointer;
   transition:
-    transform 0.2s ease,
-    border-color 0.2s ease,
-    background 0.2s ease,
-    opacity 0.2s ease,
-    box-shadow 0.2s ease;
+    transform var(--motion-fast) var(--ease-out),
+    border-color var(--motion-fast) ease,
+    background var(--motion-fast) ease,
+    box-shadow var(--motion-fast) ease;
+}
+
+.account-settings-privacy-option::after {
+  content: '';
+  position: absolute;
+  top: 0.85rem;
+  right: 0.85rem;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--border-strong);
+  border-radius: 50%;
+  background: var(--surface);
 }
 
 .account-settings-privacy-option:hover:not(:disabled) {
   transform: translateY(-1px);
-  border-color: rgba(191, 219, 254, 0.34);
-  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--ring);
+  background: var(--surface-hover);
 }
 
 .account-settings-privacy-option.is-selected {
-  border-color: rgba(160, 177, 255, 0.48);
-  background:
-    radial-gradient(circle at top left, rgba(102, 126, 234, 0.2), transparent 34%),
-    rgba(255, 255, 255, 0.1);
-  box-shadow: 0 14px 28px rgba(9, 12, 24, 0.2);
+  border-color: color-mix(in srgb, var(--primary) 58%, var(--border));
+  background: var(--surface-active);
+  box-shadow: inset 3px 0 0 var(--primary);
 }
 
-.account-settings-privacy-option:disabled {
-  cursor: not-allowed;
-  opacity: 0.7;
-  transform: none;
+.account-settings-privacy-option.is-selected::after {
+  border-color: var(--primary);
+  background: var(--primary);
+  box-shadow: inset 0 0 0 2px var(--surface);
 }
 
 .account-settings-privacy-option strong {
-  font-size: 0.98rem;
-  font-weight: 800;
+  padding-right: 1.6rem;
+  font-size: 0.94rem;
 }
 
 .account-settings-privacy-option span {
-  color: rgba(238, 242, 255, 0.72);
-  font-size: 0.92rem;
+  color: var(--muted-foreground);
+  font-size: 0.86rem;
   line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .account-settings-feedback {
   margin: 0;
-  font-size: 0.94rem;
-  line-height: 1.55;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-soft);
+  font-size: 0.86rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .account-settings-feedback.is-success {
-  color: #c9ffe0;
+  border-color: color-mix(in srgb, var(--success) 30%, var(--border));
+  background: var(--success-surface);
+  color: var(--success-text);
 }
 
 .account-settings-feedback.is-error {
-  color: #ffd7d7;
+  border-color: color-mix(in srgb, var(--destructive) 30%, var(--border));
+  background: var(--danger-surface);
+  color: var(--destructive-text);
 }
 
 .account-settings-feedback.is-info {
-  color: #dbe7ff;
-}
-
-.account-settings-card.is-danger-zone {
-  border-color: rgba(255, 154, 154, 0.18);
-}
-
-.account-settings-modal-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  display: grid;
-  place-items: center;
-  padding: clamp(0.75rem, 3vw, 1.25rem);
-  overflow-x: hidden;
-  background: rgba(5, 7, 16, 0.74);
-  backdrop-filter: blur(8px);
+  border-color: color-mix(in srgb, var(--info) 30%, var(--border));
+  background: var(--info-surface);
+  color: var(--info);
 }
 
 .account-settings-modal {
-  display: grid;
-  gap: 1rem;
-  width: min(520px, calc(100vw - 24px));
-  max-height: calc(100vh - 24px);
-  max-height: calc(100dvh - 24px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding: 1.5rem;
+  width: min(100%, 540px);
+}
+
+.account-settings-modal-form {
+  padding: clamp(1.2rem, 4vw, 1.6rem);
 }
 
 .account-settings-modal-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 0.75rem;
+  gap: 0.7rem;
   flex-wrap: wrap;
+  padding-top: 0.25rem;
 }
 
-@media (max-width: 980px) {
+@media (max-width: 820px) {
   .account-settings-layout {
     grid-template-columns: 1fr;
+  }
+
+  .account-settings-card.is-danger-zone {
+    grid-column: auto;
   }
 }
 
 @media (max-width: 640px) {
-  .account-settings-modal-backdrop {
-    padding: 0.75rem;
-  }
-
   .account-settings-header {
     display: grid;
   }
 
-  .account-settings-header,
-  .account-settings-card,
-  .account-settings-state,
-  .account-settings-modal {
-    padding: 1.15rem;
+  .account-settings-header > .account-settings-button {
+    width: 100%;
+  }
+
+  .account-settings-card.is-danger-zone {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .account-settings-card.is-danger-zone .account-settings-card-header,
+  .account-settings-card.is-danger-zone > p,
+  .account-settings-card.is-danger-zone > .account-settings-button {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .account-settings-card.is-danger-zone > .account-settings-button,
+  .account-settings-modal-actions .account-settings-button {
+    width: 100%;
   }
 
   .account-settings-card-header {
     display: grid;
   }
 
-  .account-settings-button,
-  .account-settings-modal-actions .account-settings-button {
-    width: 100%;
-    min-width: 0;
+  .account-settings-status {
+    justify-self: start;
   }
 
   .account-settings-modal-actions {
@@ -408,113 +426,22 @@
   }
 }
 
-body.light .account-settings-header,
-body.light .account-settings-state,
-body.light .account-settings-card,
-body.light .account-settings-modal {
-  border-color: var(--border);
-  background:
-    radial-gradient(circle at top left, rgba(79, 70, 229, 0.08), transparent 34%),
-    var(--card);
-  color: var(--card-foreground);
-  box-shadow: 0 18px 42px var(--shadow-color);
+@media (max-width: 360px) {
+  .account-settings-header,
+  .account-settings-card,
+  .account-settings-state {
+    border-radius: var(--radius-lg);
+  }
 }
 
-body.light .account-settings-header h1,
-body.light .account-settings-state h1,
-body.light .account-settings-card h2,
-body.light .account-settings-modal h2,
-body.light .account-settings-privacy-option,
-body.light .account-settings-privacy-option strong {
-  color: var(--foreground);
-}
+@media (prefers-reduced-motion: reduce) {
+  .account-settings-button,
+  .account-settings-privacy-option {
+    transition: none;
+  }
 
-body.light .account-settings-header p,
-body.light .account-settings-state p,
-body.light .account-settings-card p,
-body.light .account-settings-modal p,
-body.light .account-settings-field > span,
-body.light .account-settings-privacy-option span {
-  color: var(--muted-foreground);
-}
-
-body.light .account-settings-kicker,
-body.light .account-settings-status {
-  border-color: var(--badge-border);
-  background: var(--badge);
-  color: var(--badge-foreground);
-}
-
-body.light .account-settings-status.is-public {
-  border-color: color-mix(in srgb, var(--success) 28%, var(--border));
-  background: var(--success-surface);
-  color: var(--success);
-}
-
-body.light .account-settings-kicker.is-danger,
-body.light .account-settings-card.is-danger-zone,
-body.light .account-settings-button.is-danger {
-  border-color: color-mix(in srgb, var(--destructive) 26%, var(--border));
-  background: var(--danger-surface);
-  color: var(--destructive);
-}
-
-body.light .account-settings-field input,
-body.light .account-settings-privacy-option,
-body.light .account-settings-button.is-secondary {
-  border-color: #94a3b8;
-  background: #f8fafc;
-  color: var(--foreground);
-}
-
-body.light .account-settings-field input::placeholder {
-  color: color-mix(in srgb, var(--muted-foreground) 78%, transparent);
-}
-
-body.light .account-settings-field input:focus,
-body.light .account-settings-privacy-option.is-selected {
-  border-color: var(--ring);
-  background: var(--surface-active);
-  box-shadow: var(--focus-ring);
-}
-
-body.light .account-settings-privacy-option:hover:not(:disabled),
-body.light .account-settings-button:hover:not(:disabled) {
-  border-color: #2563eb;
-  background: #dbeafe;
-  box-shadow: 0 14px 28px var(--shadow-color);
-}
-
-body.light .account-settings-privacy-option:active:not(:disabled),
-body.light .account-settings-button.is-secondary:active:not(:disabled) {
-  background: #bfdbfe;
-}
-
-body.light .account-settings-button:disabled,
-body.light .account-settings-privacy-option:disabled {
-  border-color: #cbd5e1;
-  background: #f1f5f9;
-  color: #64748b;
-  opacity: 0.78;
-}
-
-body.light .account-settings-button.is-primary {
-  background: var(--primary-gradient);
-  color: var(--primary-foreground);
-}
-
-body.light .account-settings-modal-backdrop {
-  background: var(--overlay);
-}
-
-body.light .account-settings-feedback.is-success {
-  color: var(--success);
-}
-
-body.light .account-settings-feedback.is-error {
-  color: var(--destructive);
-}
-
-body.light .account-settings-feedback.is-info {
-  color: var(--info);
+  .account-settings-button:hover:not(:disabled),
+  .account-settings-privacy-option:hover:not(:disabled) {
+    transform: none;
+  }
 }

@@ -71,13 +71,16 @@ export function CommunityFeedSection({
         <h2>{t('communities.post.createTitle')}</h2>
         {composer.canPost ? (
           <form className="community-post-form" onSubmit={actions.onCreatePost}>
-            <textarea
-              value={composer.text}
-              onChange={event => actions.onPostTextChange(event.target.value)}
-              placeholder={t('communities.post.placeholder')}
-              maxLength={4000}
-              disabled={composer.submitting}
-            />
+            <label className="community-composer-field">
+              <span>{t('communities.post.createTitle')}</span>
+              <textarea
+                value={composer.text}
+                onChange={event => actions.onPostTextChange(event.target.value)}
+                placeholder={t('communities.post.placeholder')}
+                maxLength={4000}
+                disabled={composer.submitting}
+              />
+            </label>
             <CommunityFilePicker
               label={t('communities.post.optionalImage')}
               buttonLabel={t('communities.upload.addImage')}

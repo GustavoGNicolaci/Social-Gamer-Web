@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { UserAvatar } from '../UserAvatar'
+import { DialogShell } from '../ui/DialogShell'
 import { useI18n } from '../../i18n/I18nContext'
 import {
   followUser,
@@ -194,7 +195,6 @@ export function ProfileConnectionsModal({
     followers: false,
     following: false,
   })
-  const previousFocusRef = useRef<HTMLElement | null>(null)
   const previousFollowersRefreshKeyRef = useRef(followersRefreshKey)
   const tabButtonRefs = useRef<Record<FollowListKind, HTMLButtonElement | null>>({
     followers: null,
@@ -345,42 +345,6 @@ export function ProfileConnectionsModal({
     }
   }, [activeTab, followersRefreshKey, loadTab])
 
-  useEffect(() => {
-    previousFocusRef.current =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null
-
-    const previousOverflow = document.body.style.overflow
-    const frameId = window.requestAnimationFrame(() => {
-      tabButtonRefs.current[initialTab]?.focus()
-    })
-
-    document.body.style.overflow = 'hidden'
-
-    return () => {
-      window.cancelAnimationFrame(frameId)
-      document.body.style.overflow = previousOverflow
-
-      if (previousFocusRef.current && document.contains(previousFocusRef.current)) {
-        previousFocusRef.current.focus()
-      }
-    }
-  }, [initialTab])
-
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        onClose()
-      }
-    }
-
-    document.addEventListener('keydown', handleKeyDown)
-
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [onClose])
-
   const handleToggleFollow = useCallback(
     async (listedUser: FollowListUser) => {
       if (!viewerId || listedUser.id === viewerId || pendingUserIds.includes(listedUser.id)) return
@@ -438,18 +402,14 @@ export function ProfileConnectionsModal({
     currentTabState.items.length === 0
 
   return (
-    <div
-      className="profile-connections-modal-backdrop"
-      onClick={onClose}
+    <DialogShell
+      open
+      onClose={onClose}
+      titleId={titleId}
+      descriptionId={descriptionId}
+      className="profile-connections-modal"
+      backdropClassName="profile-connections-modal-backdrop"
     >
-      <div
-        className="profile-connections-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        aria-describedby={descriptionId}
-        onClick={event => event.stopPropagation()}
-      >
         <div className="profile-connections-modal-glow profile-connections-modal-glow-left"></div>
         <div className="profile-connections-modal-glow profile-connections-modal-glow-right"></div>
 
@@ -490,6 +450,22 @@ export function ProfileConnectionsModal({
                 className={`profile-connections-tab-button${activeTab === tab.kind ? ' is-active' : ''}`}
                 aria-selected={activeTab === tab.kind}
                 aria-controls={`profile-connections-panel-${tab.kind}`}
+                tabIndex={activeTab === tab.kind ? 0 : -1}
+                data-dialog-autofocus={tab.kind === initialTab ? '' : undefined}
+                onKeyDown={event => {
+                  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+                  event.preventDefault()
+                  const currentIndex = CONNECTION_TABS.findIndex(item => item.kind === tab.kind)
+                  const nextIndex = event.key === 'Home'
+                    ? 0
+                    : event.key === 'End'
+                      ? CONNECTION_TABS.length - 1
+                      : (currentIndex + (event.key === 'ArrowRight' ? 1 : -1) + CONNECTION_TABS.length) % CONNECTION_TABS.length
+                  const nextKind = CONNECTION_TABS[nextIndex].kind
+                  setActionError(null)
+                  setActiveTab(nextKind)
+                  window.requestAnimationFrame(() => tabButtonRefs.current[nextKind]?.focus())
+                }}
                 onClick={() => {
                   setActionError(null)
                   setActiveTab(tab.kind)
@@ -617,7 +593,6 @@ export function ProfileConnectionsModal({
             )}
           </section>
         </div>
-      </div>
-    </div>
+    </DialogShell>
   )
 }

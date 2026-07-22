@@ -42,12 +42,20 @@ export const CATALOG_SORT_OPTIONS: Array<{
   { value: 'rating-asc', labelKey: 'catalog.sort.ratingAsc' },
 ]
 
-function getGamesGridColumns(viewportWidth: number) {
+function getGamesVisualColumns(viewportWidth: number) {
   if (viewportWidth <= 480) return 1
   if (viewportWidth <= 768) return 2
   if (viewportWidth <= 992) return 3
   if (viewportWidth <= 1200) return 4
   return 5
+}
+
+function getGamesPageSize(viewportWidth: number) {
+  if (viewportWidth <= 480) return 4
+  if (viewportWidth <= 768) return 8
+  if (viewportWidth <= 992) return 12
+  if (viewportWidth <= 1200) return 16
+  return 20
 }
 
 function getFacetLabelPrefix(
@@ -148,9 +156,12 @@ export function useGamesCatalogController(): GamesCatalogController {
   })
   const [facetFilters, setFacetFilters] = useState<CatalogFilterToken[]>([])
   const [currentPage, setCurrentPage] = useState(1)
-  const [gridColumns, setGridColumns] = useState(() =>
-    typeof window === 'undefined' ? 5 : getGamesGridColumns(window.innerWidth)
-  )
+  const [catalogLayout, setCatalogLayout] = useState(() => ({
+    visualColumns:
+      typeof window === 'undefined' ? 5 : getGamesVisualColumns(window.innerWidth),
+    pageSize:
+      typeof window === 'undefined' ? 20 : getGamesPageSize(window.innerWidth),
+  }))
   const [showGenresModal, setShowGenresModal] = useState(false)
   const [selectedGameGenres, setSelectedGameGenres] = useState<string[]>([])
   const [showFiltersModal, setShowFiltersModal] = useState(false)
@@ -159,7 +170,7 @@ export function useGamesCatalogController(): GamesCatalogController {
   const navbarQuery = searchParams.get('q')?.trim() || ''
   const catalogSort = getCatalogSortOption(searchParams.get('sort'))
   const trimmedModalSearch = filtersModalSearch.trim()
-  const itemsPerPage = gridColumns * 4
+  const itemsPerPage = catalogLayout.pageSize
 
   const genreFilterTokens = useMemo(
     () => facetFilters.filter(filter => filter.category === 'genre'),
@@ -264,36 +275,32 @@ export function useGamesCatalogController(): GamesCatalogController {
   useEffect(() => {
     if (typeof window === 'undefined') return
 
-    const syncGridColumns = () => {
-      setGridColumns(getGamesGridColumns(window.innerWidth))
+    const syncCatalogLayout = () => {
+      const nextVisualColumns = getGamesVisualColumns(window.innerWidth)
+      const nextPageSize = getGamesPageSize(window.innerWidth)
+
+      setCatalogLayout(currentLayout => {
+        if (
+          currentLayout.visualColumns === nextVisualColumns &&
+          currentLayout.pageSize === nextPageSize
+        ) {
+          return currentLayout
+        }
+
+        return {
+          visualColumns: nextVisualColumns,
+          pageSize: nextPageSize,
+        }
+      })
     }
 
-    syncGridColumns()
-    window.addEventListener('resize', syncGridColumns)
+    syncCatalogLayout()
+    window.addEventListener('resize', syncCatalogLayout)
 
     return () => {
-      window.removeEventListener('resize', syncGridColumns)
+      window.removeEventListener('resize', syncCatalogLayout)
     }
   }, [])
-
-  useEffect(() => {
-    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setShowGenresModal(false)
-        setShowFiltersModal(false)
-      }
-    }
-
-    if (!showGenresModal && !showFiltersModal) {
-      return
-    }
-
-    document.addEventListener('keydown', handleKeyDown)
-
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [showFiltersModal, showGenresModal])
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -471,9 +478,9 @@ export function useGamesCatalogController(): GamesCatalogController {
   const gridStyle = useMemo(
     () =>
       ({
-        '--gp-grid-columns': String(gridColumns),
+        '--gp-grid-columns': String(catalogLayout.visualColumns),
       }) as CSSProperties,
-    [gridColumns]
+    [catalogLayout.visualColumns]
   )
 
   const modalGroups = useMemo<CatalogFilterModalGroup[]>(

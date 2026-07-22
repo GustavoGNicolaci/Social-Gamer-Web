@@ -1,5 +1,6 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { DialogShell } from '../components/ui/DialogShell'
 import {
   useAuth,
   type ProfileUpdateError,
@@ -84,6 +85,29 @@ function SettingsFeedback({ feedback }: { feedback: FeedbackState | null }) {
   )
 }
 
+function handleChoiceGroupKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+  if (!['ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+    return
+  }
+
+  const options = Array.from(
+    event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="radio"]:not(:disabled)')
+  )
+  const currentIndex = options.indexOf(document.activeElement as HTMLButtonElement)
+
+  if (options.length === 0 || currentIndex < 0) return
+
+  event.preventDefault()
+  const nextIndex = event.key === 'Home'
+    ? 0
+    : event.key === 'End'
+      ? options.length - 1
+      : (currentIndex + (['ArrowRight', 'ArrowDown'].includes(event.key) ? 1 : -1) + options.length) % options.length
+
+  options[nextIndex].focus()
+  options[nextIndex].click()
+}
+
 function AccountDeletionModal({
   expectedUsername,
   feedback,
@@ -96,25 +120,8 @@ function AccountDeletionModal({
   onConfirm,
 }: AccountDeletionModalProps) {
   const { t } = useI18n()
+  const usernameInputRef = useRef<HTMLInputElement | null>(null)
   const canConfirm = username === expectedUsername && password.length > 0 && !isSubmitting
-
-  useEffect(() => {
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !isSubmitting) {
-        onClose()
-      }
-    }
-
-    window.addEventListener('keydown', handleKeyDown)
-
-    return () => {
-      document.body.style.overflow = previousOverflow
-      window.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [isSubmitting, onClose])
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault()
@@ -125,21 +132,19 @@ function AccountDeletionModal({
   }
 
   return (
-    <div
-      className="account-settings-modal-backdrop"
-      role="presentation"
-      onMouseDown={() => {
+    <DialogShell
+      open
+      className="account-settings-modal"
+      titleId="account-delete-title"
+      descriptionId="account-delete-description"
+      initialFocusRef={usernameInputRef}
+      onClose={() => {
         if (!isSubmitting) onClose()
       }}
     >
       <form
-        className="account-settings-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="account-delete-title"
-        aria-describedby="account-delete-description"
+        className="account-settings-modal-form"
         onSubmit={handleSubmit}
-        onMouseDown={event => event.stopPropagation()}
       >
         <span className="account-settings-kicker is-danger">{t('settings.delete.kicker')}</span>
         <h2 id="account-delete-title">{t('settings.delete.title')}</h2>
@@ -150,6 +155,7 @@ function AccountDeletionModal({
         <label className="account-settings-field">
           <span>{t('common.username')}</span>
           <input
+            ref={usernameInputRef}
             type="text"
             value={username}
             onChange={event => onChangeUsername(event.target.value)}
@@ -192,7 +198,7 @@ function AccountDeletionModal({
           </button>
         </div>
       </form>
-    </div>
+    </DialogShell>
   )
 }
 
@@ -410,7 +416,7 @@ function AccountSettingsPage() {
   return (
     <div className="page-container">
       <div className="page-content">
-        <main className="account-settings-page">
+        <div className="account-settings-page">
           <header className="account-settings-header">
             <div>
               <span className="account-settings-kicker">{t('common.myAccount')}</span>
@@ -450,6 +456,7 @@ function AccountSettingsPage() {
                 className="account-settings-privacy-options"
                 role="radiogroup"
                 aria-label={t('settings.privacy.title')}
+                onKeyDown={handleChoiceGroupKeyDown}
               >
                 {PRIVACY_OPTIONS.map(option => (
                   <button
@@ -460,6 +467,7 @@ function AccountSettingsPage() {
                     }`}
                     role="radio"
                     aria-checked={privacyMode === option.value}
+                    tabIndex={privacyMode === option.value ? 0 : -1}
                     onClick={() => void handleChangePrivacyMode(option.value)}
                     disabled={privacySaving}
                   >
@@ -490,6 +498,7 @@ function AccountSettingsPage() {
                 className="account-settings-privacy-options"
                 role="radiogroup"
                 aria-label={t('settings.language.title')}
+                onKeyDown={handleChoiceGroupKeyDown}
               >
                 {LANGUAGE_OPTIONS.map(option => (
                   <button
@@ -500,6 +509,7 @@ function AccountSettingsPage() {
                     }`}
                     role="radio"
                     aria-checked={locale === option.value}
+                    tabIndex={locale === option.value ? 0 : -1}
                     onClick={() => void handleChangeLocale(option.value)}
                     disabled={languageSaving}
                   >
@@ -573,7 +583,7 @@ function AccountSettingsPage() {
               </button>
             </article>
           </section>
-        </main>
+        </div>
 
         {isDeleteModalOpen ? (
           <AccountDeletionModal

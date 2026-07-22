@@ -10,13 +10,13 @@ import {
 
 vi.mock('../../../i18n/I18nContext', () => ({
   useI18n: () => ({
-    t: (key: string) => key,
+    t: (key: string, params?: Record<string, string>) =>
+      key === 'game.details.profilePanelCurrent' && params?.status
+        ? `${key}:${params.status}`
+        : key,
+    formatDate: () => '01/01/2026',
     formatNumber: (value: number) => String(value),
   }),
-}))
-
-vi.mock('../../../i18n', () => ({
-  formatLocalizedDate: () => '01/01/2026',
 }))
 
 vi.mock('../../../components/GameCoverImage', () => ({
@@ -198,5 +198,63 @@ describe('GameDetailsUserActions', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /game\.status\.zerado/ }))
     expect(onStatusSelect).toHaveBeenCalledWith('zerado')
+  })
+
+  it('oferece somente os quatro status atuais para novos registros', () => {
+    const { container } = render(
+      <MemoryRouter>
+        <GameDetailsUserActions
+          {...createActions({
+            authenticated: true,
+          })}
+        />
+      </MemoryRouter>
+    )
+
+    expect(
+      Array.from(
+        container.querySelectorAll<HTMLButtonElement>(
+          '.game-details-profile-status-button'
+        )
+      ).map(button => button.textContent)
+    ).toEqual([
+      expect.stringContaining('game.status.jogando'),
+      expect.stringContaining('game.status.zerado'),
+      expect.stringContaining('game.status.dropado'),
+      expect.stringContaining('game.status.pausado'),
+    ])
+    expect(
+      screen.queryByRole('button', { name: /game\.status\.planejando/ })
+    ).not.toBeInTheDocument()
+  })
+
+  it('mantem um status planejando legado visivel, removivel e fora das escolhas atuais', () => {
+    const onStatusSelect = vi.fn()
+    const { container } = render(
+      <MemoryRouter>
+        <GameDetailsUserActions
+          {...createActions({
+            authenticated: true,
+            status: {
+              current: 'planejando',
+              select: onStatusSelect,
+            },
+          })}
+        />
+      </MemoryRouter>
+    )
+
+    expect(screen.getByText(/profileStatus\.legacyStatus/)).toBeInTheDocument()
+    expect(
+      container.querySelectorAll('.game-details-profile-status-button')
+    ).toHaveLength(4)
+    expect(
+      screen.queryByRole('button', { name: /game\.status\.planejando/ })
+    ).not.toBeInTheDocument()
+
+    fireEvent.click(
+      screen.getByRole('button', { name: /profileStatus\.removeLegacyStatus/ })
+    )
+    expect(onStatusSelect).toHaveBeenCalledWith('planejando')
   })
 })

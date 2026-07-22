@@ -161,7 +161,14 @@ describe('ProfileGameStatusSection', () => {
     expect(screen.getByText('Status Game')).toBeInTheDocument()
     expect(document.querySelector('.profile-status-card')).toBeInTheDocument()
 
-    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'zerado' } })
+    const statusSelect = screen.getByRole('combobox') as HTMLSelectElement
+    expect(Array.from(statusSelect.options).map(option => option.value)).toEqual([
+      'jogando',
+      'zerado',
+      'dropado',
+      'pausado',
+    ])
+    fireEvent.change(statusSelect, { target: { value: 'zerado' } })
     await waitFor(() => {
       expect(onSaveStatus).toHaveBeenCalledWith({
         gameId: 1,
@@ -208,6 +215,15 @@ describe('ProfileGameStatusSection', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Searched Game/ }))
 
     expect(document.querySelector('.profile-status-composer')).toBeInTheDocument()
+    const composerStatusSelect = screen.getByRole('combobox')
+    expect(
+      Array.from((composerStatusSelect as HTMLSelectElement).options).map(
+        option => option.value
+      )
+    ).toEqual(['jogando', 'zerado', 'dropado', 'pausado'])
+    expect(
+      screen.queryByRole('option', { name: 'game.status.planejando' })
+    ).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'profileStatus.markFavorite' }))
     fireEvent.submit(screen.getByRole('button', { name: 'profileStatus.saveToProfile' }).closest('form')!)
 
@@ -254,11 +270,62 @@ describe('ProfileGameStatusSection', () => {
     })
 
     fireEvent.click(screen.getByRole('button', { name: /profileStatus.sortAria/ }))
+    expect(screen.getAllByRole('menuitemcheckbox')).toHaveLength(4)
+    expect(
+      screen.queryByRole('menuitemcheckbox', { name: 'game.status.planejando' })
+    ).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'game.status.jogando' }))
 
     expect(onControlsChange).toHaveBeenLastCalledWith({
       sortValue: 'oldest',
       statuses: ['jogando'],
+    })
+  })
+
+  it('permite trocar ou remover um status planejando legado sem oferece-lo novamente', async () => {
+    const onSaveStatus = vi.fn().mockResolvedValue({ ok: true })
+    const onDeleteStatus = vi.fn().mockResolvedValue({ ok: true })
+    const legacyItem: GameStatusItem = {
+      ...statusItem,
+      id: 'status-legacy',
+      jogo_id: 9,
+      status: 'planejando',
+      jogo: createCatalogGame(9, 'Legacy Status Game'),
+    }
+
+    renderInRouter(
+      <ProfileGameStatusSection
+        {...commonStatusProps}
+        items={[legacyItem]}
+        onSaveStatus={onSaveStatus}
+        onDeleteStatus={onDeleteStatus}
+      />
+    )
+
+    expect(screen.getAllByText('profileStatus.legacyStatus').length).toBeGreaterThan(0)
+    const statusSelect = screen.getByRole('combobox') as HTMLSelectElement
+    expect(statusSelect).toHaveValue('planejando')
+    expect(
+      screen.getByRole('option', { name: 'profileStatus.legacyStatus' })
+    ).toBeDisabled()
+    expect(
+      screen.queryByRole('option', { name: 'game.status.planejando' })
+    ).not.toBeInTheDocument()
+
+    fireEvent.change(statusSelect, { target: { value: 'zerado' } })
+    await waitFor(() => {
+      expect(onSaveStatus).toHaveBeenCalledWith({
+        gameId: 9,
+        status: 'zerado',
+        favorito: false,
+      })
+    })
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'profileStatus.removeLegacyStatus' })
+    )
+    await waitFor(() => {
+      expect(onDeleteStatus).toHaveBeenCalledWith('status-legacy')
     })
   })
 
@@ -318,9 +385,9 @@ describe('ProfileWishlistSection', () => {
   it('mantem a reordenacao otimista, a animacao FLIP e o rollback em caso de erro', async () => {
     Object.defineProperty(window, 'matchMedia', {
       configurable: true,
-      value: () => ({
-        matches: true,
-        media: '(pointer: fine)',
+      value: (query: string) => ({
+        matches: query === '(pointer: fine)',
+        media: query,
         onchange: null,
         addEventListener: vi.fn(),
         removeEventListener: vi.fn(),
@@ -411,6 +478,54 @@ describe('ProfileWishlistSection', () => {
     expect(screen.getByText('profileWishlist.orderSaveError')).toBeInTheDocument()
 
     delete (HTMLElement.prototype as { animate?: unknown }).animate
+  })
+
+  it('oferece reordenacao por botoes e preserva o mesmo rollback', async () => {
+    const saveOrder = createDeferred<{
+      error: { message: string; details: string; hint: string; code: string }
+    }>()
+    mocks.updateWishlistPriorities.mockReturnValue(saveOrder.promise)
+
+    renderInRouter(
+      <ProfileWishlistSection
+        {...commonWishlistProps}
+        items={[createWishlistItem(1), createWishlistItem(2), createWishlistItem(3)]}
+        totalCount={3}
+      />
+    )
+
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'profileWishlist.moveEarlier:Wishlist Game 2',
+      })
+    )
+
+    expect(
+      screen.getAllByRole('heading', { level: 3 }).map(heading => heading.textContent)
+    ).toEqual(['Wishlist Game 2', 'Wishlist Game 1', 'Wishlist Game 3'])
+    expect(mocks.updateWishlistPriorities).toHaveBeenCalledWith(
+      'user-1',
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'wishlist-2', prioridade: 1 }),
+        expect.objectContaining({ id: 'wishlist-1', prioridade: 2 }),
+      ])
+    )
+
+    await act(async () => {
+      saveOrder.resolve({
+        error: {
+          message: 'database unavailable',
+          details: '',
+          hint: '',
+          code: 'XX000',
+        },
+      })
+      await saveOrder.promise
+    })
+
+    expect(
+      screen.getAllByRole('heading', { level: 3 }).map(heading => heading.textContent)
+    ).toEqual(['Wishlist Game 1', 'Wishlist Game 2', 'Wishlist Game 3'])
   })
 })
 

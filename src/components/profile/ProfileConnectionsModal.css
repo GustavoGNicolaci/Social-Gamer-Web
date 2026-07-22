@@ -446,3 +446,136 @@ body.light .profile-connections-user-chip {
   background: var(--badge);
   color: var(--badge-foreground);
 }
+
+.profile-connections-modal-backdrop {
+  z-index: var(--z-modal);
+  overflow: auto;
+  background: var(--overlay);
+}
+
+.profile-connections-modal {
+  width: min(720px, calc(100vw - 2rem));
+  max-height: min(88dvh, 760px);
+  border-color: var(--border-strong);
+  border-radius: var(--radius-xl);
+  background:
+    radial-gradient(circle at 0 0, color-mix(in srgb, var(--primary) 14%, transparent), transparent 35%),
+    var(--popover);
+  color: var(--popover-foreground);
+  box-shadow: var(--shadow-xl);
+}
+
+.profile-connections-modal:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring), var(--shadow-xl);
+}
+
+.profile-connections-modal-copy h2,
+.profile-connections-state-card h3,
+.profile-connections-user-copy strong {
+  color: var(--foreground);
+}
+
+.profile-connections-modal-copy p,
+.profile-connections-state-card p,
+.profile-connections-user-copy span {
+  color: var(--muted-foreground);
+  overflow-wrap: anywhere;
+}
+
+.profile-connections-close-button,
+.profile-connections-tab-button,
+.profile-connections-state-card,
+.profile-connections-user-card {
+  border-color: var(--border);
+  background: var(--surface-soft);
+  color: var(--foreground);
+}
+
+.profile-connections-close-button {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.profile-connections-tab-button {
+  min-height: 52px;
+  border-radius: var(--radius-md);
+}
+
+.profile-connections-tab-button.is-active {
+  border-color: color-mix(in srgb, var(--primary) 56%, var(--border));
+  background: var(--primary-gradient);
+  color: var(--primary-foreground);
+  box-shadow: var(--shadow-brand);
+}
+
+.profile-connections-tab-button.is-active strong {
+  color: inherit;
+}
+
+.profile-connections-state-card,
+.profile-connections-user-card {
+  border-radius: var(--radius-lg);
+}
+
+.profile-connections-user-card {
+  min-width: 0;
+}
+
+.profile-connections-user-copy strong,
+.profile-connections-user-copy span {
+  overflow-wrap: anywhere;
+}
+
+.profile-connections-user-avatar {
+  border-color: var(--border-strong);
+  background: var(--primary-gradient);
+}
+
+.profile-connections-follow-button.is-following,
+.profile-connections-user-chip {
+  border-color: var(--badge-border);
+  background: var(--badge);
+  color: var(--badge-foreground);
+}
+
+@media (max-width: 640px) {
+  .profile-connections-modal-backdrop {
+    align-items: end;
+    padding: 0;
+  }
+
+  .profile-connections-modal {
+    width: 100%;
+    max-height: 92dvh;
+    border-width: 1px 0 0;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  }
+
+  .profile-connections-modal-content {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+
+  .profile-connections-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 360px) {
+  .profile-connections-tabs {
+    gap: 0.45rem;
+  }
+
+  .profile-connections-tab-button {
+    padding-inline: 0.7rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .profile-connections-close-button,
+  .profile-connections-tab-button {
+    transition: none;
+  }
+}

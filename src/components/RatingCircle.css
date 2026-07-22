@@ -8,8 +8,8 @@
   flex: 0 0 auto;
   border-radius: 50%;
   background:
-    radial-gradient(circle at 35% 25%, rgba(167, 139, 250, 0.22), transparent 34%),
-    rgba(17, 12, 34, 0.82);
+    radial-gradient(circle at 35% 25%, rgba(255, 194, 71, 0.2), transparent 34%),
+    rgba(11, 7, 21, 0.86);
   color: #fff;
   box-shadow:
     0 14px 26px rgba(0, 0, 0, 0.36),
@@ -36,9 +36,9 @@
 }
 
 .rating-circle-progress {
-  stroke: #a78bfa;
+  stroke: #ffc247;
   stroke-linecap: round;
-  filter: drop-shadow(0 0 5px rgba(167, 139, 250, 0.44));
+  filter: drop-shadow(0 0 5px rgba(255, 194, 71, 0.4));
   transition: stroke-dashoffset 0.24s ease;
 }
 
@@ -61,9 +61,9 @@
 
 body.light .rating-circle {
   background:
-    radial-gradient(circle at 35% 25%, rgba(199, 210, 254, 0.9), transparent 34%),
-    var(--primary);
-  color: var(--primary-foreground);
+    radial-gradient(circle at 35% 25%, rgba(255, 255, 255, 0.84), transparent 34%),
+    #4338ca;
+  color: #fff;
   box-shadow:
     0 14px 24px var(--shadow-color),
     inset 0 0 0 1px rgba(255, 255, 255, 0.22);
@@ -74,5 +74,11 @@ body.light .rating-circle-track {
 }
 
 body.light .rating-circle-progress {
-  stroke: #c4b5fd;
+  stroke: #ffd166;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rating-circle-progress {
+    transition: none;
+  }
 }

@@ -145,7 +145,13 @@ export function NotificationItem({ notification, onClick }: NotificationItemProp
       <span className="notification-item-copy">
         <span className="notification-item-title-row">
           <strong>{copy.title}</strong>
-          {!notification.is_read ? <span className="notification-unread-dot" /> : null}
+          {!notification.is_read ? (
+            <span className="notification-unread-dot">
+              <span className="sr-only">
+                {t('notifications.unreadCount', { count: 1 })}
+              </span>
+            </span>
+          ) : null}
         </span>
         <span className="notification-item-message">{copy.message}</span>
         <span className="notification-item-time">{relativeTime}</span>

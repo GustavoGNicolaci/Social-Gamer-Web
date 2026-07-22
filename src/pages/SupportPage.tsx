@@ -26,7 +26,7 @@ function SupportPage() {
   const { t } = useI18n()
 
   return (
-    <main className="page-container">
+    <div className="page-container">
       <div className="page-content support-page">
         <section className="support-hero">
           <div className="support-hero-copy">
@@ -40,7 +40,9 @@ function SupportPage() {
               <Mail />
             </div>
             <span>{t('support.contact.eyebrow')}</span>
-            <strong>{SUPPORT_EMAIL}</strong>
+            <a className="support-contact-link" href={`mailto:${SUPPORT_EMAIL}`}>
+              {SUPPORT_EMAIL}
+            </a>
             <p>{t('support.contact.note')}</p>
           </aside>
         </section>
@@ -102,12 +104,14 @@ function SupportPage() {
           </div>
           <div className="support-email-box">
             <Mail aria-hidden="true" />
-            <strong>{SUPPORT_EMAIL}</strong>
+            <a className="support-contact-link" href={`mailto:${SUPPORT_EMAIL}`}>
+              {SUPPORT_EMAIL}
+            </a>
             <span>{t('support.email.future')}</span>
           </div>
         </section>
       </div>
-    </main>
+    </div>
   )
 }
 

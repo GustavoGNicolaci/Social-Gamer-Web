@@ -1,4 +1,6 @@
+import { useId } from 'react'
 import { useI18n } from '../../../i18n/I18nContext'
+import { CatalogDialog } from './CatalogDialog'
 
 interface CatalogGenresModalProps {
   open: boolean
@@ -12,17 +14,23 @@ export function CatalogGenresModal({
   onClose,
 }: CatalogGenresModalProps) {
   const { t } = useI18n()
-
-  if (!open) return null
+  const titleId = useId()
+  const descriptionId = useId()
 
   return (
-    <div className="gp-modal" onClick={onClose}>
-      <div className="gp-modal-card" onClick={event => event.stopPropagation()}>
+    <CatalogDialog
+      open={open}
+      labelledBy={titleId}
+      describedBy={descriptionId}
+      onClose={onClose}
+    >
         <div className="gp-modal-head">
           <div>
             <span className="gp-badge">{t('catalog.categories')}</span>
-            <h3>{t('catalog.allGameGenres')}</h3>
-            <p className="gp-muted">{t('catalog.allGameGenresText')}</p>
+            <h3 id={titleId}>{t('catalog.allGameGenres')}</h3>
+            <p id={descriptionId} className="gp-muted">
+              {t('catalog.allGameGenresText')}
+            </p>
           </div>
 
           <button
@@ -30,8 +38,9 @@ export function CatalogGenresModal({
             className="gp-modal-close"
             aria-label={t('catalog.closeGenres')}
             onClick={onClose}
+            data-dialog-autofocus
           >
-            x
+            <span aria-hidden="true">&times;</span>
           </button>
         </div>
 
@@ -48,7 +57,6 @@ export function CatalogGenresModal({
             {t('common.close')}
           </button>
         </div>
-      </div>
-    </div>
+    </CatalogDialog>
   )
 }

@@ -1,6 +1,19 @@
 import type { TranslationDictionary } from '../types'
 
 export const ptBR: TranslationDictionary = {
+  'catalog.showAllGenresFor': 'Mostrar todos os gêneros de {title}',
+  'auth.showPassword': 'Mostrar {field}',
+  'auth.hidePassword': 'Ocultar {field}',
+  'app.skipToContent': 'Pular para o conteúdo principal',
+  'app.errorEyebrow': 'Algo saiu do jogo',
+  'app.errorTitle': 'Não foi possível carregar esta tela',
+  'app.errorText': 'O restante do site continua disponível. Recarregue a página ou volte para a Home para tentar novamente.',
+  'app.reload': 'Recarregar página',
+  'app.backHome': 'Voltar para a Home',
+  'app.notFoundEyebrow': 'Erro 404',
+  'app.notFoundTitle': 'Esta fase não existe',
+  'app.notFoundText': 'O endereço pode ter mudado ou o conteúdo não está mais disponível. Continue pelo catálogo ou retorne à Home.',
+
   'app.loadingPage': 'Carregando página...',
 
   'language.portuguese': 'Português',
@@ -803,6 +816,8 @@ export const ptBR: TranslationDictionary = {
   'profileStatus.notLoaded': ' {count} ainda não carregados.',
   'profileStatus.page': 'Página {page} de {total}',
   'profileStatus.updatedAt': 'Atualizado em {date}',
+  'profileStatus.legacyStatus': 'Status antigo',
+  'profileStatus.removeLegacyStatus': 'Remover status antigo',
   'profileStatus.savingLabel': 'Salvando...',
   'profileStatus.removingLabel': 'Removendo...',
   'profileStatus.moreGames': 'Ver mais jogos',
@@ -838,6 +853,8 @@ export const ptBR: TranslationDictionary = {
   'profileWishlist.addedAt': 'Adicionado em {date}',
   'profileWishlist.reorderAria': 'Reordenar {title}',
   'profileWishlist.dragTitle': 'Arraste para reorganizar',
+  'profileWishlist.moveEarlier': 'Mover {title} para antes',
+  'profileWishlist.moveLater': 'Mover {title} para depois',
   'profileWishlist.savingOrder': 'Salvando nova ordem...',
   'profileWishlist.loadingFull': 'Carregando lista completa para reordenar...',
   'profileWishlist.totalSaved': 'Total salvo',

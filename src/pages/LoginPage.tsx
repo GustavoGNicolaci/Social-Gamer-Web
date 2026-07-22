@@ -2,6 +2,8 @@ import { useEffect, useId, useState, type ChangeEvent, type FormEvent } from 're
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import AuthShell from '../components/auth/AuthShell'
 import AuthStatusBanner from '../components/auth/AuthStatusBanner'
+import { AuthSubmitButton } from '../components/auth/AuthSubmitButton'
+import { PasswordInput } from '../components/auth/PasswordInput'
 import { useAuth } from '../contexts/AuthContext'
 import { useI18n } from '../i18n/I18nContext'
 import { isValidEmailAddress } from '../utils/authErrorMessages'
@@ -141,23 +143,24 @@ function LoginPage() {
       {successMessage ? <AuthStatusBanner tone="success">{successMessage}</AuthStatusBanner> : null}
       {errorMessage ? <AuthStatusBanner tone="error">{errorMessage}</AuthStatusBanner> : null}
 
-      <form className="auth-form" onSubmit={handleLogin}>
+      <form className="auth-form" onSubmit={handleLogin} aria-busy={isSubmitting}>
         <div className="auth-field">
           <label htmlFor="login-email">{t('common.email')}</label>
           <input
             type="email"
             id="login-email"
             className={`auth-input${fieldErrors.email ? ' is-error' : ''}`}
-            placeholder="seu@email.com"
+            placeholder={t('common.email')}
             autoComplete="email"
             value={email}
             onChange={handleFieldChange('email', setEmail)}
             disabled={isSubmitting}
+            aria-required="true"
             aria-invalid={Boolean(fieldErrors.email)}
             aria-describedby={fieldErrors.email ? emailErrorId : undefined}
           />
           {fieldErrors.email ? (
-            <span id={emailErrorId} className="auth-field-error">
+            <span id={emailErrorId} className="auth-field-error" role="alert">
               {fieldErrors.email}
             </span>
           ) : null}
@@ -165,33 +168,32 @@ function LoginPage() {
 
         <div className="auth-field">
           <label htmlFor="login-password">{t('common.password')}</label>
-          <input
-            type="password"
+          <PasswordInput
             id="login-password"
+            fieldLabel={t('common.password')}
             className={`auth-input${fieldErrors.password ? ' is-error' : ''}`}
             placeholder={t('common.password')}
             autoComplete="current-password"
             value={password}
             onChange={handleFieldChange('password', setPassword)}
             disabled={isSubmitting}
+            aria-required="true"
             aria-invalid={Boolean(fieldErrors.password)}
             aria-describedby={fieldErrors.password ? passwordErrorId : undefined}
           />
           {fieldErrors.password ? (
-            <span id={passwordErrorId} className="auth-field-error">
+            <span id={passwordErrorId} className="auth-field-error" role="alert">
               {fieldErrors.password}
             </span>
           ) : null}
         </div>
 
         <div className="auth-actions">
-          <button
-            type="submit"
-            className="auth-button auth-button--primary"
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? t('auth.login.submitting') : t('auth.login.submit')}
-          </button>
+          <AuthSubmitButton
+            isSubmitting={isSubmitting}
+            idleLabel={t('auth.login.submit')}
+            busyLabel={t('auth.login.submitting')}
+          />
         </div>
       </form>
     </AuthShell>

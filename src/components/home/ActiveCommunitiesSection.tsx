@@ -3,6 +3,7 @@ import { MessageSquare, TrendingUp, Users } from 'lucide-react'
 import { useI18n } from '../../i18n/I18nContext'
 import { type HomeActiveCommunity } from '../../services/homeService'
 import { resolvePublicFileUrl } from '../../services/storageService'
+import { HomePanelState } from './HomePanelState'
 
 interface ActiveCommunitiesSectionProps {
   items: HomeActiveCommunity[]
@@ -59,7 +60,13 @@ export function ActiveCommunitiesSection({
       </div>
 
       {isLoading ? (
-        <div className="home-active-communities-grid" aria-label={t('home.communities.loading')}>
+        <div
+          className="home-active-communities-grid"
+          role="status"
+          aria-live="polite"
+          aria-busy="true"
+        >
+          <span className="home-sr-only">{t('home.communities.loading')}</span>
           {Array.from({ length: 3 }, (_, index) => (
             <div
               key={`active-community-skeleton-${index}`}
@@ -74,13 +81,9 @@ export function ActiveCommunitiesSection({
           ))}
         </div>
       ) : errorMessage ? (
-        <div className="home-empty-state is-error">
-          <p>{errorMessage}</p>
-        </div>
+        <HomePanelState message={errorMessage} tone="error" />
       ) : items.length === 0 ? (
-        <div className="home-empty-state">
-          <p>{t('home.communities.empty')}</p>
-        </div>
+        <HomePanelState message={t('home.communities.empty')} />
       ) : (
         <div className="home-active-communities-grid">
           {items.map(community => {

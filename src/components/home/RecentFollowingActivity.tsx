@@ -4,6 +4,7 @@ import type { HomeFollowingActivity } from '../../services/homeService'
 import { useI18n } from '../../i18n/I18nContext'
 import { getPublicProfilePath } from '../../utils/profileRoutes'
 import { formatCompactDate } from './homeDisplayUtils'
+import { HomePanelState } from './HomePanelState'
 
 interface RecentFollowingActivityProps {
   items: HomeFollowingActivity[]
@@ -36,24 +37,18 @@ export function RecentFollowingActivity({
       </div>
 
       {isLoading ? (
-        <div className="home-empty-state">
-          <p>{t('home.activity.loading')}</p>
-        </div>
+        <HomePanelState message={t('home.activity.loading')} tone="loading" rows={4} />
       ) : errorMessage ? (
-        <div className="home-empty-state is-error">
-          <p>{errorMessage}</p>
-        </div>
+        <HomePanelState message={errorMessage} tone="error" />
       ) : !isAuthenticated ? (
-        <div className="home-empty-state">
+        <div className="home-empty-state" role="status">
           <p>{t('home.activity.login')}</p>
           <Link to="/login" className="home-inline-link">
             {t('auth.login.submit')}
           </Link>
         </div>
       ) : items.length === 0 ? (
-        <div className="home-empty-state">
-          <p>{t('home.activity.empty')}</p>
-        </div>
+        <HomePanelState message={t('home.activity.empty')} />
       ) : (
         <div className="home-activity-list">
           {items.map(activity => (
@@ -83,9 +78,11 @@ export function RecentFollowingActivity({
                 )}
               </div>
 
-              <Link to={`/games/${activity.game.id}`} className="home-card-title-link">
-                {activity.game.title}
-              </Link>
+              <h4 className="home-card-title-heading">
+                <Link to={`/games/${activity.game.id}`} className="home-card-title-link">
+                  {activity.game.title}
+                </Link>
+              </h4>
               <p>{activity.summary}</p>
             </article>
           ))}

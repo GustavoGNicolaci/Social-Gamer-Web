@@ -1,4 +1,4 @@
-import { useEffect, useId, useState, type FormEvent } from 'react'
+import { useId, useState, type FormEvent } from 'react'
 import {
   REPORT_REASON_OPTIONS,
   type CurrentUserReportSummary,
@@ -6,6 +6,7 @@ import {
   type ReportTargetType,
 } from '../../services/reviewInteractionsService'
 import { useI18n } from '../../i18n/I18nContext'
+import { DialogShell } from '../ui/DialogShell'
 import './ContentReportModal.css'
 
 type FeedbackTone = 'success' | 'error' | 'info'
@@ -28,7 +29,6 @@ interface ContentReportModalProps {
 }
 
 const DEFAULT_REPORT_REASON: ReportReason = 'spam'
-
 export function ContentReportModal({
   currentReport,
   feedback,
@@ -47,25 +47,6 @@ export function ContentReportModal({
   const [description, setDescription] = useState(currentReport?.description || '')
   const isBusy = isSubmitting || isRemoving
 
-  useEffect(() => {
-    const previousOverflow = document.body.style.overflow
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !isBusy) {
-        event.preventDefault()
-        onClose()
-      }
-    }
-
-    document.body.style.overflow = 'hidden'
-    document.addEventListener('keydown', handleKeyDown)
-
-    return () => {
-      document.body.style.overflow = previousOverflow
-      document.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [isBusy, onClose])
-
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     void onSubmit({
@@ -80,22 +61,17 @@ export function ContentReportModal({
     : t('report.content.descriptionNew', { target: targetLabel })
 
   return (
-    <div
-      className="content-report-modal-backdrop"
-      onClick={() => {
-        if (!isBusy) {
-          onClose()
-        }
+    <DialogShell
+      open
+      onClose={() => {
+        if (!isBusy) onClose()
       }}
+      titleId={titleId}
+      descriptionId={descriptionId}
+      className="content-report-modal"
+      backdropClassName="content-report-modal-backdrop"
+      closeOnBackdrop={!isBusy}
     >
-      <div
-        className="content-report-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        aria-describedby={descriptionId}
-        onClick={event => event.stopPropagation()}
-      >
         <div className="content-report-modal-glow content-report-modal-glow-left"></div>
         <div className="content-report-modal-glow content-report-modal-glow-right"></div>
 
@@ -115,6 +91,8 @@ export function ContentReportModal({
               onClick={onClose}
               disabled={isBusy}
               aria-label={t('report.content.close')}
+              data-report-modal-autofocus
+              data-dialog-autofocus
             >
               <span aria-hidden="true">&times;</span>
             </button>
@@ -225,7 +203,6 @@ export function ContentReportModal({
             </form>
           )}
         </div>
-      </div>
-    </div>
+    </DialogShell>
   )
 }

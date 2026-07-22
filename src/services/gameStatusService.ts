@@ -1,4 +1,5 @@
 export {
+  SELECTABLE_STATUS_VALUES,
   STATUS_VALUES,
   type GameStatusEntry,
   type GameStatusError,

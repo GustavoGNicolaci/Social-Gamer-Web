@@ -13,7 +13,7 @@ import {
   type GameCatalogError,
 } from '../../../services/gameCatalogService'
 import {
-  STATUS_VALUES,
+  SELECTABLE_STATUS_VALUES,
   type GameStatusItem,
   type GameStatusSortValue,
   type GameStatusValue,
@@ -175,16 +175,21 @@ export function useProfileStatusSectionController({
   )
   const statusOptions = useMemo(
     () =>
-      STATUS_VALUES.map(value => ({
+      SELECTABLE_STATUS_VALUES.map(value => ({
         value,
         label: t(`game.status.${value}`),
       })),
     [t]
   )
   const getStatusLabel = useCallback(
-    (status: GameStatusValue) =>
-      statusOptions.find(option => option.value === status)?.label ||
-      t('common.status'),
+    (status: GameStatusValue) => {
+      if (status === 'planejando') return t('profileStatus.legacyStatus')
+
+      return (
+        statusOptions.find(option => option.value === status)?.label ||
+        t('common.status')
+      )
+    },
     [statusOptions, t]
   )
 

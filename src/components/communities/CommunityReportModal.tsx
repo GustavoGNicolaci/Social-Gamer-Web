@@ -1,5 +1,6 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { useI18n } from '../../i18n/I18nContext'
+import { DialogShell } from '../ui/DialogShell'
 import {
   COMMUNITY_REPORT_REASONS,
   type CommunityReportReason,
@@ -25,29 +26,21 @@ export function CommunityReportModal({
   const [reason, setReason] = useState<CommunityReportReason>('spam')
   const [description, setDescription] = useState('')
 
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
-    }
-
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [onClose])
-
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     await onSubmit({ reason, description })
   }
 
   return (
-    <div className="community-modal-backdrop" role="presentation" onMouseDown={onClose}>
-      <div
-        className="community-report-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="community-report-title"
-        onMouseDown={event => event.stopPropagation()}
-      >
+    <DialogShell
+      open
+      className="community-report-modal"
+      titleId="community-report-title"
+      descriptionId="community-report-description"
+      onClose={() => {
+        if (!isSubmitting) onClose()
+      }}
+    >
         <header className="community-report-modal-header">
           <div>
             <span className="communities-kicker">{t('communities.report.kicker')}</span>
@@ -56,9 +49,16 @@ export function CommunityReportModal({
                 ? t('communities.report.titlePost')
                 : t('communities.report.titleComment')}
             </h2>
-            <p>{t('communities.report.description', { target: targetLabel })}</p>
+            <p id="community-report-description">{t('communities.report.description', { target: targetLabel })}</p>
           </div>
-          <button type="button" className="community-lightbox-close" onClick={onClose} aria-label={t('common.close')}>
+          <button
+            type="button"
+            className="community-lightbox-close"
+            onClick={onClose}
+            aria-label={t('common.close')}
+            disabled={isSubmitting}
+            data-dialog-autofocus
+          >
             X
           </button>
         </header>
@@ -104,7 +104,6 @@ export function CommunityReportModal({
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </DialogShell>
   )
 }

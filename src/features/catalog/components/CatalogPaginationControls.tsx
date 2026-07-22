@@ -24,7 +24,8 @@ export function CatalogPaginationControls({
         onClick={() => onChangePage(Math.max(currentPage - 1, 1))}
         disabled={currentPage === 1}
       >
-        {t('catalog.previous')}
+        <span className="gp-pagination-arrow" aria-hidden="true">&lsaquo;</span>
+        <span>{t('catalog.previous')}</span>
       </button>
 
       {visiblePages.map(page => (
@@ -44,7 +45,8 @@ export function CatalogPaginationControls({
         onClick={() => onChangePage(Math.min(currentPage + 1, totalPages))}
         disabled={currentPage === totalPages}
       >
-        {t('catalog.next')}
+        <span>{t('catalog.next')}</span>
+        <span className="gp-pagination-arrow" aria-hidden="true">&rsaquo;</span>
       </button>
     </nav>
   )

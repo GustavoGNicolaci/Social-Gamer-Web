@@ -2,7 +2,6 @@ import { memo } from 'react'
 import { Link } from 'react-router-dom'
 import { GameCoverImage } from '../../../components/GameCoverImage'
 import RatingCircle from '../../../components/RatingCircle'
-import { formatLocalizedDate, formatLocalizedNumber } from '../../../i18n'
 import { useI18n } from '../../../i18n/I18nContext'
 import type { CatalogGamePreview } from '../domain/catalogTypes'
 
@@ -21,13 +20,6 @@ function formatList(value: string[] | string | null | undefined, fallback: strin
   return items.length > 0 ? items.join(', ') : fallback
 }
 
-function formatCatalogRating(value: number) {
-  return formatLocalizedNumber(value, {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 1,
-  })
-}
-
 function initial(value: string) {
   const first = value.trim().charAt(0)
   return first ? first.toUpperCase() : 'J'
@@ -37,7 +29,7 @@ export const CatalogGameCard = memo(function CatalogGameCard({
   game,
   onShowGenres,
 }: CatalogGameCardProps) {
-  const { t } = useI18n()
+  const { t, locale, formatDate, formatNumber } = useI18n()
   const genres = normalizeList(game.generos)
   const displayedGenres = genres.slice(0, 2)
   const hasMoreGenres = genres.length > 2
@@ -48,7 +40,10 @@ export const CatalogGameCard = memo(function CatalogGameCard({
     averageRating === null
       ? t('catalog.noRatingFor', { title: game.titulo })
       : t('catalog.averageFor', {
-          rating: formatCatalogRating(averageRating),
+          rating: formatNumber(averageRating, {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 1,
+          }),
           title: game.titulo,
         })
 
@@ -59,6 +54,8 @@ export const CatalogGameCard = memo(function CatalogGameCard({
           <GameCoverImage
             src={game.capa_url}
             alt={t('catalog.coverAlt', { title: game.titulo })}
+            width={320}
+            height={480}
             sizes="(max-width: 480px) 100vw, (max-width: 768px) 50vw, (max-width: 992px) 33vw, (max-width: 1200px) 25vw, 20vw"
           />
         ) : (
@@ -67,20 +64,29 @@ export const CatalogGameCard = memo(function CatalogGameCard({
 
         <div className="gp-cover-top">
           <span className="gp-date">
-            {formatLocalizedDate(game.data_lancamento, {
+            {formatDate(game.data_lancamento, {
               fallback: t('common.notProvided'),
             })}
           </span>
         </div>
 
         <div className="gp-cover-rating">
-          <RatingCircle value={averageRating} size={52} ariaLabel={ratingAriaLabel} />
+          <RatingCircle value={averageRating} size={52} ariaLabel={ratingAriaLabel} locale={locale} />
         </div>
       </Link>
 
       <div className="gp-game-body">
         <div className="gp-game-head">
-          <h3 title={game.titulo}>{game.titulo}</h3>
+          <Link
+            to={`/games/${game.id}`}
+            className="gp-game-details-link"
+            aria-label={`${game.titulo} — ${t('common.viewDetails')}`}
+          >
+            <h3 title={game.titulo}>{game.titulo}</h3>
+            <span className="gp-details-cta">
+              {t('common.viewDetails')}
+            </span>
+          </Link>
         </div>
 
         <div className="gp-tags">
@@ -95,7 +101,13 @@ export const CatalogGameCard = memo(function CatalogGameCard({
           )}
 
           {hasMoreGenres ? (
-            <button type="button" className="gp-more" onClick={() => onShowGenres(genres)}>
+            <button
+              type="button"
+              className="gp-more"
+              onClick={() => onShowGenres(genres)}
+              aria-haspopup="dialog"
+              aria-label={t('catalog.showAllGenresFor', { title: game.titulo })}
+            >
               +{genres.length - displayedGenres.length}
             </button>
           ) : null}
@@ -112,10 +124,6 @@ export const CatalogGameCard = memo(function CatalogGameCard({
           </div>
         </div>
       </div>
-
-      <Link to={`/games/${game.id}`} className="game-button gp-btn--primary">
-        {t('common.viewDetails')}
-      </Link>
     </article>
   )
 })

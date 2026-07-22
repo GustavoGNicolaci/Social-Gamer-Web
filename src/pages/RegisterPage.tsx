@@ -2,6 +2,8 @@ import { useEffect, useId, useState, type ChangeEvent, type FormEvent } from 're
 import { Link, useNavigate } from 'react-router-dom'
 import AuthShell from '../components/auth/AuthShell'
 import AuthStatusBanner from '../components/auth/AuthStatusBanner'
+import { AuthSubmitButton } from '../components/auth/AuthSubmitButton'
+import { PasswordInput } from '../components/auth/PasswordInput'
 import PasswordRequirementsPanel from '../components/auth/PasswordRequirementsPanel'
 import { useAuth, type RegisterFieldErrors } from '../contexts/AuthContext'
 import { useI18n } from '../i18n/I18nContext'
@@ -221,7 +223,7 @@ function RegisterPage() {
         <>
           {errors.submit ? <AuthStatusBanner tone="error">{errors.submit}</AuthStatusBanner> : null}
 
-          <form className="auth-form" onSubmit={handleRegister}>
+          <form className="auth-form" onSubmit={handleRegister} aria-busy={isSubmitting}>
             <div className="auth-form-grid auth-form-grid--dual">
               <div className="auth-field">
                 <label htmlFor="register-username">{t('common.username')}</label>
@@ -235,11 +237,12 @@ function RegisterPage() {
                   value={formData.username}
                   onChange={handleInputChange}
                   disabled={isSubmitting}
+                  aria-required="true"
                   aria-invalid={Boolean(errors.username)}
                   aria-describedby={errors.username ? usernameErrorId : undefined}
                 />
                 {errors.username ? (
-                  <span id={usernameErrorId} className="auth-field-error">
+                  <span id={usernameErrorId} className="auth-field-error" role="alert">
                     {errors.username}
                   </span>
                 ) : null}
@@ -261,7 +264,7 @@ function RegisterPage() {
                   aria-describedby={errors.name ? nameErrorId : undefined}
                 />
                 {errors.name ? (
-                  <span id={nameErrorId} className="auth-field-error">
+                  <span id={nameErrorId} className="auth-field-error" role="alert">
                     {errors.name}
                   </span>
                 ) : null}
@@ -275,16 +278,17 @@ function RegisterPage() {
                 id="register-email"
                 name="email"
                 className={`auth-input${errors.email ? ' is-error' : ''}`}
-                placeholder="seu@email.com"
+                placeholder={t('common.email')}
                 autoComplete="email"
                 value={formData.email}
                 onChange={handleInputChange}
                 disabled={isSubmitting}
+                aria-required="true"
                 aria-invalid={Boolean(errors.email)}
                 aria-describedby={errors.email ? emailErrorId : undefined}
               />
               {errors.email ? (
-                <span id={emailErrorId} className="auth-field-error">
+                <span id={emailErrorId} className="auth-field-error" role="alert">
                   {errors.email}
                 </span>
               ) : null}
@@ -294,10 +298,10 @@ function RegisterPage() {
               <div className="auth-password-fields">
                 <div className="auth-field">
                   <label htmlFor="register-password">{t('common.password')}</label>
-                  <input
-                    type="password"
+                  <PasswordInput
                     id="register-password"
                     name="password"
+                    fieldLabel={t('common.password')}
                     className={`auth-input${errors.password ? ' is-error' : ''}`}
                     placeholder={t('auth.createPasswordPlaceholder')}
                     autoComplete="new-password"
@@ -306,11 +310,12 @@ function RegisterPage() {
                     onFocus={() => setIsPasswordFocused(true)}
                     onBlur={() => setIsPasswordFocused(false)}
                     disabled={isSubmitting}
+                    aria-required="true"
                     aria-invalid={Boolean(errors.password)}
                     aria-describedby={passwordDescribedBy || undefined}
                   />
                   {errors.password ? (
-                    <span id={passwordErrorId} className="auth-field-error">
+                    <span id={passwordErrorId} className="auth-field-error" role="alert">
                       {errors.password}
                     </span>
                   ) : null}
@@ -318,21 +323,22 @@ function RegisterPage() {
 
                 <div className="auth-field">
                   <label htmlFor="register-confirm-password">{t('auth.confirmPassword')}</label>
-                  <input
-                    type="password"
+                  <PasswordInput
                     id="register-confirm-password"
                     name="confirmPassword"
+                    fieldLabel={t('auth.confirmPassword')}
                     className={`auth-input${errors.confirmPassword ? ' is-error' : ''}`}
                     placeholder={t('auth.confirmPasswordPlaceholder')}
                     autoComplete="new-password"
                     value={formData.confirmPassword}
                     onChange={handleInputChange}
                     disabled={isSubmitting}
+                    aria-required="true"
                     aria-invalid={Boolean(errors.confirmPassword)}
                     aria-describedby={confirmPasswordDescribedBy}
                   />
                   {errors.confirmPassword ? (
-                    <span id={confirmPasswordErrorId} className="auth-field-error">
+                    <span id={confirmPasswordErrorId} className="auth-field-error" role="alert">
                       {errors.confirmPassword}
                     </span>
                   ) : null}
@@ -350,13 +356,11 @@ function RegisterPage() {
             </div>
 
             <div className="auth-actions">
-              <button
-                type="submit"
-                className="auth-button auth-button--primary"
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? t('auth.register.submitting') : t('auth.register.submit')}
-              </button>
+              <AuthSubmitButton
+                isSubmitting={isSubmitting}
+                idleLabel={t('auth.register.submit')}
+                busyLabel={t('auth.register.submitting')}
+              />
             </div>
           </form>
         </>

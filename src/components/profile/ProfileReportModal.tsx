@@ -1,10 +1,11 @@
-import { useEffect, useId, useState, type FormEvent } from 'react'
+import { useId, useState, type FormEvent } from 'react'
 import {
   PROFILE_REPORT_REASON_OPTIONS,
   type CurrentUserProfileReportSummary,
   type ProfileReportReason,
 } from '../../services/profileReportService'
 import { useI18n } from '../../i18n/I18nContext'
+import { DialogShell } from '../ui/DialogShell'
 import '../reviews/ContentReportModal.css'
 
 type FeedbackTone = 'success' | 'error' | 'info'
@@ -46,25 +47,6 @@ export function ProfileReportModal({
   const [description, setDescription] = useState(() => currentReport?.description || '')
   const isBusy = isSubmitting || isRemoving
 
-  useEffect(() => {
-    const previousOverflow = document.body.style.overflow
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !isBusy) {
-        event.preventDefault()
-        onClose()
-      }
-    }
-
-    document.body.style.overflow = 'hidden'
-    document.addEventListener('keydown', handleKeyDown)
-
-    return () => {
-      document.body.style.overflow = previousOverflow
-      document.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [isBusy, onClose])
-
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     void onSubmit({
@@ -79,22 +61,17 @@ export function ProfileReportModal({
     : t('report.profile.descriptionNew', { target: reportedUserLabel })
 
   return (
-    <div
-      className="content-report-modal-backdrop"
-      onClick={() => {
-        if (!isBusy) {
-          onClose()
-        }
+    <DialogShell
+      open
+      onClose={() => {
+        if (!isBusy) onClose()
       }}
+      titleId={titleId}
+      descriptionId={descriptionId}
+      className="content-report-modal"
+      backdropClassName="content-report-modal-backdrop"
+      closeOnBackdrop={!isBusy}
     >
-      <div
-        className="content-report-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        aria-describedby={descriptionId}
-        onClick={event => event.stopPropagation()}
-      >
         <div className="content-report-modal-glow content-report-modal-glow-left"></div>
         <div className="content-report-modal-glow content-report-modal-glow-right"></div>
 
@@ -112,6 +89,7 @@ export function ProfileReportModal({
               onClick={onClose}
               disabled={isBusy}
               aria-label={t('report.profile.close')}
+              data-dialog-autofocus
             >
               <span aria-hidden="true">&times;</span>
             </button>
@@ -222,7 +200,6 @@ export function ProfileReportModal({
             </form>
           )}
         </div>
-      </div>
-    </div>
+    </DialogShell>
   )
 }

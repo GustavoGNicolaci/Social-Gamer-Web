@@ -319,6 +319,7 @@ export function CommunityPostCard({
           className={`community-action-button${post.currentUserReaction === 'curtida' ? ' is-active' : ''}`}
           onClick={() => void handleReaction('curtida')}
           disabled={!post.canInteract || pendingAction !== null}
+          aria-pressed={post.currentUserReaction === 'curtida'}
         >
           {iconThumbsUp(post.currentUserReaction === 'curtida')}
           <span>{t('communities.post.like')}</span>
@@ -330,6 +331,7 @@ export function CommunityPostCard({
           className={`community-action-button${post.currentUserReaction === 'dislike' ? ' is-active is-dislike' : ''}`}
           onClick={() => void handleReaction('dislike')}
           disabled={!post.canInteract || pendingAction !== null}
+          aria-pressed={post.currentUserReaction === 'dislike'}
         >
           {iconThumbsDown(post.currentUserReaction === 'dislike')}
           <span>{t('communities.post.dislike')}</span>
@@ -341,6 +343,7 @@ export function CommunityPostCard({
           className={`community-action-button${post.savedByCurrentUser ? ' is-saved' : ''}`}
           onClick={() => void handleSave()}
           disabled={!post.canInteract || pendingAction !== null}
+          aria-pressed={post.savedByCurrentUser}
         >
           {iconBookmark(post.savedByCurrentUser)}
           <span>{post.savedByCurrentUser ? t('communities.post.saved') : t('communities.post.save')}</span>

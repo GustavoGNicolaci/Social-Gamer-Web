@@ -18,8 +18,8 @@ function InstitutionalPage({ page }: InstitutionalPageProps) {
   const { t } = useI18n()
 
   return (
-    <main className="page-container">
-      <div className="page-content institutional-page">
+    <div className="page-container">
+      <div className={`page-content institutional-page institutional-page--${page}`}>
         <section className="institutional-hero">
           <span className="institutional-kicker">{t('institutional.kicker')}</span>
           <h1>{t(`institutional.${page}.title`)}</h1>
@@ -38,7 +38,7 @@ function InstitutionalPage({ page }: InstitutionalPageProps) {
           </Link>
         </section>
       </div>
-    </main>
+    </div>
   )
 }
 

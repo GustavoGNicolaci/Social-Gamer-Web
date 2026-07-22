@@ -194,4 +194,38 @@ describe('GameReviewsSection', () => {
     expect(section?.nextElementSibling).toBe(modal)
     expect(modal).toHaveTextContent('game.details.reviewTarget:public-author')
   })
+
+  it('oferece notas como radios e preserva navegacao por setas', () => {
+    const props = createProps()
+    const setScore = vi.fn()
+    props.form.authenticated = true
+    props.form.score = 5
+    props.form.setScore = setScore
+
+    render(
+      <MemoryRouter>
+        <GameReviewsSection {...props} />
+      </MemoryRouter>
+    )
+
+    const radios = screen.getAllByRole('radio')
+    expect(radios).toHaveLength(10)
+    expect(screen.getByRole('radio', { name: '5' })).toBeChecked()
+
+    fireEvent.keyDown(screen.getByRole('radio', { name: '5' }), {
+      key: 'ArrowRight',
+    })
+    expect(setScore).toHaveBeenCalledWith(6)
+    expect(screen.getByRole('radio', { name: '6' })).toHaveFocus()
+
+    fireEvent.keyDown(screen.getByRole('radio', { name: '5' }), {
+      key: 'ArrowDown',
+    })
+    expect(setScore).toHaveBeenLastCalledWith(6)
+
+    fireEvent.keyDown(screen.getByRole('radio', { name: '5' }), {
+      key: 'ArrowUp',
+    })
+    expect(setScore).toHaveBeenLastCalledWith(4)
+  })
 })

@@ -1,6 +1,5 @@
 import {
   useCallback,
-  useEffect,
   useState,
   type Dispatch,
   type SetStateAction,
@@ -57,17 +56,6 @@ export function useCommunityFeedActions({
     useState<CommunityFeedReportTarget | null>(null)
   const [reportSubmitting, setReportSubmitting] = useState(false)
   const [lightbox, setLightbox] = useState<LightboxState | null>(null)
-
-  useEffect(() => {
-    if (!lightbox) return
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setLightbox(null)
-    }
-
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [lightbox])
 
   const toggleReaction = useCallback(async (
     post: CommunityPost,

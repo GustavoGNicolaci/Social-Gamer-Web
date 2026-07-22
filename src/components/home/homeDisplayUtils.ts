@@ -2,7 +2,7 @@ import { formatLocalizedDate, formatLocalizedNumber, translate } from '../../i18
 
 export function formatCompactDate(
   value: string | null | undefined,
-  fallback = translate('common.loadingShort')
+  fallback = translate('common.noDate')
 ) {
   return formatLocalizedDate(value, {
     fallback,
@@ -36,5 +36,5 @@ export function getInitial(value: string, fallback = 'J') {
   return firstCharacter ? firstCharacter.toUpperCase() : fallback
 }
 
-export const getDefaultRelativeDateFallback = () => translate('common.loadingShort')
+export const getDefaultRelativeDateFallback = () => translate('common.noDate')
 export const getDefaultDateFallback = () => translate('common.noDate')

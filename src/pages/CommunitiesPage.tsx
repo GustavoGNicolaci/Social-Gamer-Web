@@ -211,51 +211,97 @@ function CommunitiesPage() {
                   </div>
                 </label>
 
-                <label className="communities-field">
-                  <span>{t('communities.field.theme')}</span>
-                  <select
-                    value={tipoFilter}
-                    onChange={event => {
-                      setTipoFilter(event.target.value)
-                      setCurrentPage(1)
-                    }}
-                  >
-                    <option value="">{t('communities.filter.allThemes')}</option>
-                    {tipoOptions.map(option => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <div className="communities-desktop-filters">
+                  <label className="communities-field">
+                    <span>{t('communities.field.theme')}</span>
+                    <select
+                      value={tipoFilter}
+                      onChange={event => {
+                        setTipoFilter(event.target.value)
+                        setCurrentPage(1)
+                      }}
+                    >
+                      <option value="">{t('communities.filter.allThemes')}</option>
+                      {tipoOptions.map(option => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
 
-                <label className="communities-field">
-                  <span>{t('communities.field.category')}</span>
-                  <select
-                    value={categoriaFilter}
-                    onChange={event => {
-                      setCategoriaFilter(event.target.value as CommunityCategoryValue | '')
-                      setCurrentPage(1)
-                    }}
-                  >
-                    <option value="">{t('communities.filter.allCategories')}</option>
-                    {COMMUNITY_CATEGORY_VALUES.map(option => (
-                      <option key={option} value={option}>
-                        {t(`communities.category.${option}`)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                  <label className="communities-field">
+                    <span>{t('communities.field.category')}</span>
+                    <select
+                      value={categoriaFilter}
+                      onChange={event => {
+                        setCategoriaFilter(event.target.value as CommunityCategoryValue | '')
+                        setCurrentPage(1)
+                      }}
+                    >
+                      <option value="">{t('communities.filter.allCategories')}</option>
+                      {COMMUNITY_CATEGORY_VALUES.map(option => (
+                        <option key={option} value={option}>
+                          {t(`communities.category.${option}`)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+
+                <details className="communities-mobile-filters">
+                  <summary>
+                    {t('communities.field.theme')} · {t('communities.field.category')}
+                  </summary>
+                  <div className="communities-mobile-filter-fields">
+                    <label className="communities-field">
+                      <span>{t('communities.field.theme')}</span>
+                      <select
+                        value={tipoFilter}
+                        onChange={event => {
+                          setTipoFilter(event.target.value)
+                          setCurrentPage(1)
+                        }}
+                      >
+                        <option value="">{t('communities.filter.allThemes')}</option>
+                        {tipoOptions.map(option => (
+                          <option key={option} value={option}>{option}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="communities-field">
+                      <span>{t('communities.field.category')}</span>
+                      <select
+                        value={categoriaFilter}
+                        onChange={event => {
+                          setCategoriaFilter(event.target.value as CommunityCategoryValue | '')
+                          setCurrentPage(1)
+                        }}
+                      >
+                        <option value="">{t('communities.filter.allCategories')}</option>
+                        {COMMUNITY_CATEGORY_VALUES.map(option => (
+                          <option key={option} value={option}>{t(`communities.category.${option}`)}</option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                </details>
               </div>
 
               {feedback ? (
-                <p className={`communities-feedback is-${feedback.tone}`}>{feedback.message}</p>
+                <p className={`communities-feedback is-${feedback.tone}`} role="status">
+                  {feedback.message}
+                </p>
               ) : null}
 
               {loading ? (
-                <div className="communities-state-card">{t('communities.loading')}</div>
+                <div className="communities-skeleton-grid" role="status" aria-label={t('communities.loading')}>
+                  {Array.from({ length: COMMUNITIES_PAGE_SIZE }, (_, index) => (
+                    <span key={`community-skeleton-${index}`} className="communities-skeleton-card" aria-hidden="true" />
+                  ))}
+                </div>
               ) : communities.length === 0 ? (
-                <div className="communities-state-card">
+                <div className="communities-state-card" role="status">
                   <Users size={22} aria-hidden="true" />
                   <span>{t('communities.empty')}</span>
                 </div>

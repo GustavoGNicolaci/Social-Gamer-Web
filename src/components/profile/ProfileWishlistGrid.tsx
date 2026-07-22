@@ -3,6 +3,7 @@ import type {
   DragEvent,
   MouseEvent,
 } from 'react'
+import { useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { GameCoverImage } from '../GameCoverImage'
 import { useI18n } from '../../i18n/I18nContext'
@@ -17,6 +18,10 @@ interface ProfileWishlistGridProps {
   columnsStyle: CSSProperties
   isOwnerView: boolean
   canReorder: boolean
+  canKeyboardReorder: boolean
+  firstOrderedItemId: string | null
+  lastOrderedItemId: string | null
+  focusItemId: string | null
   draggedItemId: string | null
   dropTargetId: string | null
   isSavingOrder: boolean
@@ -28,6 +33,7 @@ interface ProfileWishlistGridProps {
   onDragEnd: () => void
   onDragHandlePointerDown: (event: MouseEvent<HTMLButtonElement>) => void
   onDragHandleClick: (event: MouseEvent<HTMLButtonElement>) => void
+  onMoveItem: (itemId: string, direction: 'earlier' | 'later') => Promise<void>
   onViewportDragOver: (event: DragEvent<HTMLDivElement>) => void
   onViewportDragLeave: (event: DragEvent<HTMLDivElement>) => void
   onViewportDrop: () => void
@@ -50,6 +56,10 @@ export function ProfileWishlistGrid({
   columnsStyle,
   isOwnerView,
   canReorder,
+  canKeyboardReorder,
+  firstOrderedItemId,
+  lastOrderedItemId,
+  focusItemId,
   draggedItemId,
   dropTargetId,
   isSavingOrder,
@@ -61,6 +71,7 @@ export function ProfileWishlistGrid({
   onDragEnd,
   onDragHandlePointerDown,
   onDragHandleClick,
+  onMoveItem,
   onViewportDragOver,
   onViewportDragLeave,
   onViewportDrop,
@@ -69,6 +80,21 @@ export function ProfileWishlistGrid({
   onDeleteItem,
 }: ProfileWishlistGridProps) {
   const { t, formatDate } = useI18n()
+  const itemNodesRef = useRef(new Map<string, HTMLElement>())
+
+  useEffect(() => {
+    if (!focusItemId) return
+
+    const frameId = window.requestAnimationFrame(() => {
+      const card = itemNodesRef.current.get(focusItemId)
+      const focusTarget =
+        card?.querySelector<HTMLButtonElement>('.profile-wishlist-move-button:not(:disabled)')
+        ?? card?.querySelector<HTMLAnchorElement>('.profile-wishlist-card-link')
+      focusTarget?.focus({ preventScroll: true })
+    })
+
+    return () => window.cancelAnimationFrame(frameId)
+  }, [focusItemId, items])
   const formatWishlistDate = (value: string | null | undefined) =>
     formatDate(value, {
       day: '2-digit',
@@ -87,7 +113,11 @@ export function ProfileWishlistGrid({
     return (
       <article
         key={item.id}
-        ref={node => onRegisterItem(item.id, node)}
+        ref={node => {
+          onRegisterItem(item.id, node)
+          if (node) itemNodesRef.current.set(item.id, node)
+          else itemNodesRef.current.delete(item.id)
+        }}
         className={`profile-wishlist-card${isDraggedItem ? ' is-dragging' : ''}${isDropTarget ? ' is-drop-target' : ''}${isSavingOrder ? ' is-saving-order' : ''}${isRemovingItem ? ' is-removing' : ''}`}
         onDragOver={event => onDragOverItem(item.id, event)}
         onDrop={event => {
@@ -126,6 +156,41 @@ export function ProfileWishlistGrid({
             <span className="profile-wishlist-cta">{t('common.viewDetails')}</span>
           </div>
         </Link>
+
+        {canKeyboardReorder ? (
+          <div
+            className="profile-wishlist-order-controls"
+            role="group"
+            aria-label={t('profileWishlist.reorderAria', { title: visibleTitle })}
+          >
+            <button
+              type="button"
+              className="profile-wishlist-move-button"
+              onClick={() => void onMoveItem(item.id, 'earlier')}
+              aria-label={t('profileWishlist.moveEarlier', { title: visibleTitle })}
+              disabled={
+                isSavingOrder ||
+                isRemovingItem ||
+                firstOrderedItemId === item.id
+              }
+            >
+              <span aria-hidden="true">&larr;</span>
+            </button>
+            <button
+              type="button"
+              className="profile-wishlist-move-button"
+              onClick={() => void onMoveItem(item.id, 'later')}
+              aria-label={t('profileWishlist.moveLater', { title: visibleTitle })}
+              disabled={
+                isSavingOrder ||
+                isRemovingItem ||
+                lastOrderedItemId === item.id
+              }
+            >
+              <span aria-hidden="true">&rarr;</span>
+            </button>
+          </div>
+        ) : null}
 
         {isOwnerView ? (
           <div className="profile-wishlist-card-actions">

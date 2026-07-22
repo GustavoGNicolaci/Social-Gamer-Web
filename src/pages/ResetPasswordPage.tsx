@@ -2,6 +2,8 @@ import { useId, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import AuthShell from '../components/auth/AuthShell'
 import AuthStatusBanner from '../components/auth/AuthStatusBanner'
+import { AuthSubmitButton } from '../components/auth/AuthSubmitButton'
+import { PasswordInput } from '../components/auth/PasswordInput'
 import PasswordRequirementsPanel from '../components/auth/PasswordRequirementsPanel'
 import { useAuth } from '../contexts/AuthContext'
 import { useI18n } from '../i18n/I18nContext'
@@ -191,14 +193,14 @@ function ResetPasswordPage() {
     >
       {submitError ? <AuthStatusBanner tone="error">{submitError}</AuthStatusBanner> : null}
 
-      <form className="auth-form" onSubmit={handleSubmit}>
+      <form className="auth-form" onSubmit={handleSubmit} aria-busy={isSubmitting}>
         <div className="auth-password-section">
           <div className="auth-password-fields">
             <div className="auth-field">
               <label htmlFor="reset-password">{t('auth.reset.newPassword')}</label>
-              <input
-                type="password"
+              <PasswordInput
                 id="reset-password"
+                fieldLabel={t('auth.reset.newPassword')}
                 className={`auth-input${passwordError ? ' is-error' : ''}`}
                 placeholder={t('auth.reset.newPasswordPlaceholder')}
                 autoComplete="new-password"
@@ -207,11 +209,12 @@ function ResetPasswordPage() {
                 onFocus={() => setIsPasswordFocused(true)}
                 onBlur={() => setIsPasswordFocused(false)}
                 disabled={isSubmitting}
+                aria-required="true"
                 aria-invalid={Boolean(passwordError)}
                 aria-describedby={passwordDescribedBy || undefined}
               />
               {passwordError ? (
-                <span id={passwordErrorId} className="auth-field-error">
+                <span id={passwordErrorId} className="auth-field-error" role="alert">
                   {passwordError}
                 </span>
               ) : null}
@@ -219,20 +222,21 @@ function ResetPasswordPage() {
 
             <div className="auth-field">
               <label htmlFor="reset-confirm-password">{t('auth.reset.confirmNewPassword')}</label>
-              <input
-                type="password"
+              <PasswordInput
                 id="reset-confirm-password"
+                fieldLabel={t('auth.reset.confirmNewPassword')}
                 className={`auth-input${confirmPasswordError ? ' is-error' : ''}`}
                 placeholder={t('auth.reset.confirmNewPasswordPlaceholder')}
                 autoComplete="new-password"
                 value={confirmPassword}
                 onChange={(event) => handleConfirmPasswordChange(event.target.value)}
                 disabled={isSubmitting}
+                aria-required="true"
                 aria-invalid={Boolean(confirmPasswordError)}
                 aria-describedby={confirmPasswordDescribedBy}
               />
               {confirmPasswordError ? (
-                <span id={confirmPasswordErrorId} className="auth-field-error">
+                <span id={confirmPasswordErrorId} className="auth-field-error" role="alert">
                   {confirmPasswordError}
                 </span>
               ) : null}
@@ -250,9 +254,11 @@ function ResetPasswordPage() {
         </div>
 
         <div className="auth-actions">
-          <button type="submit" className="auth-button auth-button--primary" disabled={isSubmitting}>
-            {isSubmitting ? t('auth.reset.submitting') : t('auth.reset.submit')}
-          </button>
+          <AuthSubmitButton
+            isSubmitting={isSubmitting}
+            idleLabel={t('auth.reset.submit')}
+            busyLabel={t('auth.reset.submitting')}
+          />
         </div>
       </form>
     </AuthShell>

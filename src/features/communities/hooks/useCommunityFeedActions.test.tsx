@@ -191,7 +191,7 @@ describe('useCommunityFeedActions', () => {
     })
   })
 
-  it('closes the image lightbox with Escape', () => {
+  it('opens and closes the image lightbox state', () => {
     const { result } = renderActions()
 
     act(() => {
@@ -203,9 +203,7 @@ describe('useCommunityFeedActions', () => {
     })
 
     act(() => {
-      document.dispatchEvent(
-        new KeyboardEvent('keydown', { key: 'Escape' }),
-      )
+      result.current.lightbox.close()
     })
     expect(result.current.lightbox.state).toBeNull()
   })

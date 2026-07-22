@@ -1,9 +1,9 @@
 import type { FormEvent } from 'react'
 import { Link } from 'react-router-dom'
+import RatingCircle from '../../../components/RatingCircle'
 import { UserAvatar } from '../../../components/UserAvatar'
 import { useI18n } from '../../../i18n/I18nContext'
 import { getOptionalPublicProfilePath } from '../../../utils/profileRoutes'
-import { REVIEW_SCORE_OPTIONS } from '../domain/reviewConstants'
 import type { ReviewComment, ReviewItem } from '../domain/reviewModels'
 import type { ReportTargetType } from '../domain/reviewInteractions'
 import { GameReviewComments } from './GameReviewComments'
@@ -67,7 +67,7 @@ export function GameReviewCard({
   onSubmitComment,
   onCommentTextChange,
 }: GameReviewCardProps) {
-  const { t, formatNumber } = useI18n()
+  const { t, formatNumber, locale } = useI18n()
   const avaliadorNome = getReviewUserName(review.usuario, t('common.username'))
   const avaliadorProfilePath = getOptionalPublicProfilePath(review.usuario?.username)
   const isOwnerReview = review.usuario_id === currentUserId
@@ -134,22 +134,20 @@ export function GameReviewCard({
               onClick={() => onOpenReportModal('review', review.id, review.id)}
               aria-label={reportButtonLabel}
               title={reportButtonLabel}
+              aria-pressed={Boolean(review.currentUserReport)}
             >
               <ReviewFlagIcon filled={Boolean(review.currentUserReport)} />
             </button>
           ) : null}
 
           <div className="game-review-score">
-            <div className="game-review-score-grid">
-              {REVIEW_SCORE_OPTIONS.map(score => (
-                <span
-                  key={score}
-                  className={`game-review-score-pill${score <= review.nota ? ' is-filled' : ''}`}
-                >
-                  {score}
-                </span>
-              ))}
-            </div>
+            <RatingCircle
+              value={review.nota}
+              size={54}
+              strokeWidth={4}
+              ariaLabel={`${t('game.details.averageRating')}: ${formatReviewScore(review.nota)}/10`}
+              locale={locale}
+            />
             <span className="game-review-score-label">
               {formatReviewScore(review.nota)}/10
             </span>
@@ -174,6 +172,7 @@ export function GameReviewCard({
             disabled={!currentUserId || !review.canLike || isReviewReactionPending}
             aria-label={likeButtonLabel}
             title={likeButtonLabel}
+            aria-pressed={review.likedByCurrentUser}
           >
             <span className="game-review-reaction-icon">
               <ReviewHeartIcon filled={review.likedByCurrentUser} />
@@ -199,6 +198,7 @@ export function GameReviewCard({
             disabled={!currentUserId || !review.canDislike || isReviewReactionPending}
             aria-label={dislikeButtonLabel}
             title={dislikeButtonLabel}
+            aria-pressed={review.dislikedByCurrentUser}
           >
             <span className="game-review-reaction-icon">
               <ReviewThumbDownIcon filled={review.dislikedByCurrentUser} />

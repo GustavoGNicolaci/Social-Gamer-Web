@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { AlertTriangle, ArrowLeft, Gamepad2 } from 'lucide-react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { GameDetailsOverview } from '../features/catalog/components/GameDetailsOverview'
@@ -99,10 +100,30 @@ function GameDetailsPage() {
     return (
       <div className="page-container">
         <div className="page-content game-details-page">
-          <section className="game-details-state-card">
-            <span className="game-details-state-badge">{t('game.details.badge')}</span>
-            <h1>{t('game.details.loadingTitle')}</h1>
-            <p>{t('game.details.loadingText')}</p>
+          <section
+            className="game-details-loading"
+            role="status"
+            aria-live="polite"
+            aria-busy="true"
+          >
+            <div className="game-details-state-card">
+              <span className="game-details-state-badge">
+                <Gamepad2 size={15} aria-hidden="true" />
+                {t('game.details.badge')}
+              </span>
+              <h1>{t('game.details.loadingTitle')}</h1>
+              <p>{t('game.details.loadingText')}</p>
+            </div>
+
+            <div className="game-details-loading-hero" aria-hidden="true">
+              <span className="game-details-skeleton game-details-skeleton-cover" />
+              <div className="game-details-loading-copy">
+                <span className="game-details-skeleton game-details-skeleton-kicker" />
+                <span className="game-details-skeleton game-details-skeleton-title" />
+                <span className="game-details-skeleton game-details-skeleton-line" />
+                <span className="game-details-skeleton game-details-skeleton-line is-short" />
+              </div>
+            </div>
           </section>
         </div>
       </div>
@@ -113,12 +134,16 @@ function GameDetailsPage() {
     return (
       <div className="page-container">
         <div className="page-content game-details-page">
-          <section className="game-details-state-card">
+          <section className="game-details-state-card is-error" role="alert">
+            <span className="game-details-state-icon" aria-hidden="true">
+              <AlertTriangle size={28} />
+            </span>
             <span className="game-details-state-badge">{t('game.details.badge')}</span>
             <h1>{t('game.details.notFoundTitle')}</h1>
             <p>{t('game.details.notFoundText')}</p>
             <div className="game-details-state-actions">
               <Link to="/games" className="game-button game-details-secondary-button">
+                <ArrowLeft size={18} aria-hidden="true" />
                 {t('common.goBackToCatalog')}
               </Link>
             </div>

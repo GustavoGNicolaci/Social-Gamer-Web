@@ -127,6 +127,10 @@ describe('GameReviewCard', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'game.details.likeReview' }))
     expect(props.onToggleReviewLike).toHaveBeenCalledWith(review)
+    expect(screen.getByRole('button', { name: 'game.details.likeReview' })).toHaveAttribute(
+      'aria-pressed',
+      'false'
+    )
 
     fireEvent.click(screen.getByRole('button', { name: 'game.details.moreCommentsAria:1' }))
     expect(props.onExpandComments).toHaveBeenCalledWith('review-1', 2)

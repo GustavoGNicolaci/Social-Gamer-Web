@@ -46,6 +46,7 @@ export function GameReviewComments({
   const { t, formatNumber } = useI18n()
   const visibleComments = review.comentarios.slice(0, visibleCommentCount)
   const hiddenCommentsCount = Math.max(totalCommentCount - visibleComments.length, 0)
+  const commentInputId = `game-review-comment-${review.id}`
 
   return (
     <div className="game-review-comments">
@@ -86,7 +87,11 @@ export function GameReviewComments({
           onSubmit={event => onSubmitComment(review.id, event)}
           className="game-review-comment-form"
         >
+          <label htmlFor={commentInputId} className="game-details-visually-hidden">
+            {t('game.details.commentPlaceholder')}
+          </label>
           <textarea
+            id={commentInputId}
             className="game-review-comment-input"
             value={commentText}
             onChange={event => onCommentTextChange(review.id, event.target.value)}

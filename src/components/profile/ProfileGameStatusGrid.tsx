@@ -112,8 +112,11 @@ export function ProfileGameStatusGrid({
       year: 'numeric',
       fallback: t('profile.dateFallback'),
     })
-  const getStatusLabel = (status: GameStatusValue) =>
-    statusOptions.find(option => option.value === status)?.label || t('common.status')
+  const getStatusLabel = (status: GameStatusValue) => {
+    if (status === 'planejando') return t('profileStatus.legacyStatus')
+
+    return statusOptions.find(option => option.value === status)?.label || t('common.status')
+  }
 
   return (
     <>
@@ -207,6 +210,11 @@ export function ProfileGameStatusGrid({
                         )
                       }}
                     >
+                      {item.status === 'planejando' ? (
+                        <option value="planejando" disabled>
+                          {t('profileStatus.legacyStatus')}
+                        </option>
+                      ) : null}
                       {statusOptions.map(option => (
                         <option key={`${item.id}-${option.value}`} value={option.value}>
                           {option.label}
@@ -236,7 +244,9 @@ export function ProfileGameStatusGrid({
                       onClick={() => void onDeleteItem(item)}
                       disabled={isBusyItem}
                     >
-                      {t('common.remove')}
+                      {item.status === 'planejando'
+                        ? t('profileStatus.removeLegacyStatus')
+                        : t('common.remove')}
                     </button>
 
                     {isBusyItem ? (

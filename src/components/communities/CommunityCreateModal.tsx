@@ -19,6 +19,7 @@ import {
 import { uploadCommunityBannerImage } from '../../services/storageService'
 import { GameCoverImage } from '../GameCoverImage'
 import { CommunityFilePicker } from './CommunityFilePicker'
+import { DialogShell } from '../ui/DialogShell'
 
 interface CommunityDraft {
   nome: string
@@ -110,25 +111,6 @@ export function CommunityCreateModal({
     setFeedback(null)
     onClose()
   }, [onClose, resetForm, submitting])
-
-  useEffect(() => {
-    const previousOverflow = document.body.style.overflow
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        handleClose()
-      }
-    }
-
-    document.body.style.overflow = 'hidden'
-    document.addEventListener('keydown', handleKeyDown)
-
-    return () => {
-      document.body.style.overflow = previousOverflow
-      document.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [handleClose])
 
   useEffect(
     () => () => {
@@ -237,15 +219,13 @@ export function CommunityCreateModal({
   }
 
   return (
-    <div className="communities-create-modal-backdrop" role="presentation" onMouseDown={handleClose}>
-      <div
-        className="communities-create-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        aria-describedby={descriptionId}
-        onMouseDown={event => event.stopPropagation()}
-      >
+    <DialogShell
+      open
+      className="communities-create-modal"
+      titleId={titleId}
+      descriptionId={descriptionId}
+      onClose={handleClose}
+    >
         <header className="communities-create-modal-header">
           <div className="communities-create-modal-title-row">
             <span className="communities-create-modal-icon" aria-hidden="true">
@@ -487,7 +467,6 @@ export function CommunityCreateModal({
             </div>
           </form>
         )}
-      </div>
-    </div>
+    </DialogShell>
   )
 }
